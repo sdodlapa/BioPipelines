@@ -188,6 +188,8 @@ rule apply_bqsr:
             --bqsr-recal-file {input.table} \
             -O {output.bam} \
             2> {log}
+        
+        samtools index -o {output.bai} {output.bam}
         """
 
 
@@ -212,6 +214,8 @@ rule call_variants:
             -O {output.vcf} \
             --native-pair-hmm-threads {threads} \
             2> {log}
+        
+        tabix -f -p vcf {output.vcf}
         """
 
 
@@ -234,6 +238,8 @@ rule filter_variants:
             --filter-expression "QD < 2.0 || FS > 60.0 || MQ < 40.0 || MQRankSum < -12.5 || ReadPosRankSum < -8.0" \
             --filter-name "basic_snp_filter" \
             2> {log}
+        
+        tabix -f -p vcf {output.vcf}
         """
 
 
@@ -256,7 +262,7 @@ rule annotate_variants:
         snpEff -v {params.genome} {input.vcf} \
             -stats {output.html} 2> {log} | \
         bgzip > {output.vcf}
-        tabix -p vcf {output.vcf}
+        tabix -f -p vcf {output.vcf}
         """
 
 
