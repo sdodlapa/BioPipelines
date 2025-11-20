@@ -1,0 +1,7 @@
+name: alignment
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - star=2.7.10b
+  - samtools=1.17

@@ -53,6 +53,10 @@ data/references/*
 .snakemake/
 *.log
 
+# SLURM job files
+slurm_*.out
+slurm_*.err
+
 # Results and benchmarks
 benchmarks/results/*
 !benchmarks/results/.gitkeep

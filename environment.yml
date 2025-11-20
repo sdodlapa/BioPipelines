@@ -35,7 +35,7 @@ dependencies:
   
   # Annotation
   - snpeff=5.1
-  - vep=110
+  # vep - install separately if needed
   
   # ChIP-seq tools
   - macs2=2.2.7.1
@@ -44,7 +44,7 @@ dependencies:
   
   # Python packages
   - pip
-  - numpy>=1.24
+  - numpy>=1.21,<1.24  # Compatible with deeptools
   - pandas>=2.0
   - scipy>=1.10
   - matplotlib>=3.7

@@ -1,0 +1,44 @@
+# RNA-seq Differential Expression Pipeline Configuration
+
+# Sample groups and replicates
+samples:
+  treatment:
+    - treat_rep1
+    - treat_rep2
+    - treat_rep3
+  control:
+    - ctrl_rep1
+    - ctrl_rep2
+    - ctrl_rep3
+
+# Reference genome and annotations
+reference:
+  genome: "/home/sdodl001_odu_edu/references/genomes/hg38/hg38.fa"
+  gtf: "/home/sdodl001_odu_edu/references/annotations/gencode.v45.annotation.gtf"
+  
+# STAR index directory
+star_index: "/home/sdodl001_odu_edu/references/indexes/star"
+
+# Pipeline parameters
+trim:
+  min_length: 50
+  quality_cutoff: 20
+
+alignment:
+  threads: 8
+  
+quantification:
+  threads: 4
+  feature_type: "exon"
+  id_attribute: "gene_id"
+
+differential_expression:
+  adjusted_pvalue: 0.05
+  log2_fold_change: 1.0
+
+# Visualization
+plots:
+  volcano_plot: true
+  ma_plot: true
+  heatmap_top_genes: 50
+  pca_plot: true

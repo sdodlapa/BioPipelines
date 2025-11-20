@@ -1,0 +1,36 @@
+# ChIP-seq Peak Calling Pipeline Configuration
+
+# Samples and inputs
+samples:
+  - sample1
+  - sample2
+  - sample3
+
+# Input control sample
+input_control: "input"
+
+# Reference genome
+reference:
+  genome: "/home/sdodl001_odu_edu/references/genomes/hg38/hg38.fa"
+  genome_size: "hs"  # or provide number for MACS2
+  blacklist: "/home/sdodl001_odu_edu/references/annotations/hg38-blacklist.v2.bed"
+
+# Pipeline parameters
+trimming:
+  min_length: 50
+  quality_cutoff: 20
+
+alignment:
+  threads: 8
+
+peak_calling:
+  q_value: 0.05
+  genome_size: "2.7e9"  # Human genome size
+  broad_peaks: false  # Set to true for histone marks
+
+motif_analysis:
+  size: 200  # Region size for motif finding
+  length: "8,10,12"  # Motif lengths to search
+
+differential_binding:
+  fdr: 0.05

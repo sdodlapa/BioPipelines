@@ -124,7 +124,7 @@ rule mark_duplicates:
         bam=f"{PROCESSED_DIR}/{{sample}}.sorted.bam"
     output:
         bam=f"{PROCESSED_DIR}/{{sample}}.dedup.bam",
-        bai=f"{PROCESSED_DIR}/{{sample}}.dedup.bam.bai",
+        bai=f"{PROCESSED_DIR}/{{sample}}.dedup.bai",
         metrics=f"{QC_DIR}/picard/{{sample}}.dedup_metrics.txt"
     conda:
         "envs/alignment.yaml"

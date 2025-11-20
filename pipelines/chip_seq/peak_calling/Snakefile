@@ -1,0 +1,226 @@
+"""
+ChIP-seq Peak Calling and Analysis Pipeline
+==========================================
+
+Workflow steps:
+1. Quality Control (FastQC)
+2. Read Trimming (fastp  
+3. Alignment (BWA or Bowtie2)
+4. Remove Duplicates (Picard)
+5. Peak Calling (MACS2)
+6. Motif Analysis (HOMER)
+7. Signal Tracks (deepTools)
+8. MultiQC Report
+
+Usage:
+    snakemake --cores 8 --use-conda
+"""
+
+# Load configuration
+configfile: "config.yaml"
+
+# Get samples
+SAMPLES = config["samples"]
+INPUT = config["input_control"]
+ALL_SAMPLES = SAMPLES + [INPUT]
+
+# Paths
+REFERENCE = config["reference"]["genome"]
+BLACKLIST = config["reference"].get("blacklist", None)
+
+QC_DIR = "../../../data/results/chip_seq/qc"
+PROCESSED_DIR = "../../../data/processed/chip_seq"
+RESULTS_DIR = "../../../data/results/chip_seq"
+
+# Final outputs
+rule all:
+    input:
+        # Peak files
+        expand(f"{RESULTS_DIR}/peaks/{{sample}}_peaks.narrowPeak", sample=SAMPLES),
+        # Motif analysis
+        expand(f"{RESULTS_DIR}/motifs/{{sample}}/homerResults.html", sample=SAMPLES),
+        # Signal tracks
+        expand(f"{RESULTS_DIR}/bigwig/{{sample}}.bw", sample=SAMPLES),
+        # MultiQC
+        f"{RESULTS_DIR}/multiqc_report.html"
+
+
+rule fastqc_raw:
+    input:
+        "../../../data/raw/chip_seq/{sample}.fastq.gz"
+    output:
+        f"{QC_DIR}/fastqc_raw/{{sample}}_fastqc.html"
+    conda:
+        "envs/qc.yaml"
+    threads: 2
+    log:
+        f"{QC_DIR}/logs/fastqc_raw/{{sample}}.log"
+    shell:
+        """
+        mkdir -p {QC_DIR}/fastqc_raw
+        fastqc -t {threads} {input} -o {QC_DIR}/fastqc_raw/ 2> {log}
+        """
+
+
+rule trim_reads:
+    input:
+        "../../../data/raw/chip_seq/{sample}.fastq.gz"
+    output:
+        fastq=f"{PROCESSED_DIR}/{{sample}}.trimmed.fastq.gz",
+        html=f"{QC_DIR}/fastp/{{sample}}.html",
+        json=f"{QC_DIR}/fastp/{{sample}}.json"
+    conda:
+        "envs/preprocessing.yaml"
+    threads: 4
+    log:
+        f"{QC_DIR}/logs/trim/{{sample}}.log"
+    shell:
+        """
+        fastp -i {input} -o {output.fastq} \\
+              --thread {threads} \\
+              --html {output.html} \\
+              --json {output.json} \\
+              --cut_right \\
+              --cut_right_window_size 4 \\
+              --cut_right_mean_quality 20 \\
+              --length_required 50 \\
+              2> {log}
+        """
+
+
+rule align_reads:
+    input:
+        fastq=f"{PROCESSED_DIR}/{{sample}}.trimmed.fastq.gz",
+        ref=REFERENCE
+    output:
+        bam=temp(f"{PROCESSED_DIR}/{{sample}}.sorted.bam")
+    conda:
+        "envs/alignment.yaml"
+    threads: 8
+    log:
+        f"{QC_DIR}/logs/align/{{sample}}.log"
+    shell:
+        """
+        bwa mem -t {threads} {input.ref} {input.fastq} 2> {log} | \\
+        samtools sort -@ {threads} -o {output.bam} - 2>> {log}
+        samtools index {output.bam}
+        """
+
+
+rule mark_duplicates:
+    input:
+        f"{PROCESSED_DIR}/{{sample}}.sorted.bam"
+    output:
+        bam=f"{PROCESSED_DIR}/{{sample}}.dedup.bam",
+        metrics=f"{QC_DIR}/picard/{{sample}}.dedup_metrics.txt"
+    conda:
+        "envs/alignment.yaml"
+    log:
+        f"{QC_DIR}/logs/dedup/{{sample}}.log"
+    shell:
+        """
+        picard MarkDuplicates \\
+            INPUT={input} \\
+            OUTPUT={output.bam} \\
+            METRICS_FILE={output.metrics} \\
+            REMOVE_DUPLICATES=true \\
+            CREATE_INDEX=true \\
+            2> {log}
+        """
+
+
+rule call_peaks:
+    input:
+        treatment=f"{PROCESSED_DIR}/{{sample}}.dedup.bam",
+        control=f"{PROCESSED_DIR}/{INPUT}.dedup.bam"
+    output:
+        peaks=f"{RESULTS_DIR}/peaks/{{sample}}_peaks.narrowPeak",
+        summits=f"{RESULTS_DIR}/peaks/{{sample}}_summits.bed"
+    params:
+        name="{sample}",
+        outdir=f"{RESULTS_DIR}/peaks",
+        qvalue=config["peak_calling"]["q_value"],
+        gsize=config["peak_calling"]["genome_size"],
+        broad="" if not config["peak_calling"]["broad_peaks"] else "--broad"
+    conda:
+        "envs/peak_calling.yaml"
+    log:
+        f"{QC_DIR}/logs/peaks/{{sample}}.log"
+    shell:
+        """
+        macs2 callpeak \\
+            -t {input.treatment} \\
+            -c {input.control} \\
+            -f BAM \\
+            -g {params.gsize} \\
+            -n {params.name} \\
+            --outdir {params.outdir} \\
+            -q {params.qvalue} \\
+            {params.broad} \\
+            2> {log}
+        """
+
+
+rule homer_motifs:
+    input:
+        peaks=f"{RESULTS_DIR}/peaks/{{sample}}_peaks.narrowPeak",
+        genome=REFERENCE
+    output:
+        f"{RESULTS_DIR}/motifs/{{sample}}/homerResults.html"
+    params:
+        outdir=f"{RESULTS_DIR}/motifs/{{sample}}",
+        size=config["motif_analysis"]["size"],
+        length=config["motif_analysis"]["length"]
+    conda:
+        "envs/peak_calling.yaml"
+    threads: 8
+    log:
+        f"{QC_DIR}/logs/motifs/{{sample}}.log"
+    shell:
+        """
+        findMotifsGenome.pl \\
+            {input.peaks} \\
+            {input.genome} \\
+            {params.outdir} \\
+            -size {params.size} \\
+            -len {params.length} \\
+            -p {threads} \\
+            2> {log}
+        """
+
+
+rule create_bigwig:
+    input:
+        f"{PROCESSED_DIR}/{{sample}}.dedup.bam"
+    output:
+        f"{RESULTS_DIR}/bigwig/{{sample}}.bw"
+    conda:
+        "envs/visualization.yaml"
+    threads: 4
+    log:
+        f"{QC_DIR}/logs/bigwig/{{sample}}.log"
+    shell:
+        """
+        bamCoverage -b {input} -o {output} \\
+            -p {threads} \\
+            --binSize 10 \\
+            --normalizeUsing RPKM \\
+            2> {log}
+        """
+
+
+rule multiqc:
+    input:
+        expand(f"{QC_DIR}/fastqc_raw/{{sample}}_fastqc.html", sample=ALL_SAMPLES),
+        expand(f"{QC_DIR}/fastp/{{sample}}.json", sample=ALL_SAMPLES),
+        expand(f"{QC_DIR}/picard/{{sample}}.dedup_metrics.txt", sample=ALL_SAMPLES)
+    output:
+        f"{RESULTS_DIR}/multiqc_report.html"
+    conda:
+        "envs/qc.yaml"
+    log:
+        f"{QC_DIR}/logs/multiqc.log"
+    shell:
+        """
+        multiqc {QC_DIR} -o {RESULTS_DIR} -f 2> {log}
+        """
