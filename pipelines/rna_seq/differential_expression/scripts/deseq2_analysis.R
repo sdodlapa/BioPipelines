@@ -30,7 +30,7 @@ top_genes <- as.numeric(snakemake@params[["top_genes"]])
 
 # Read count matrix
 message("Reading count data...")
-count_data <- read.table(counts_file, header=TRUE, row.names=1, skip=1)
+count_data <- read.table(counts_file, header=TRUE, row.names=1, skip=1, check.names=FALSE)
 
 # Remove first 5 columns (Chr, Start, End, Strand, Length)
 count_data <- count_data[, -(1:5)]
