@@ -4,7 +4,7 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # QC tools (most already in biopipelines)
-  - fastqc>=0.12.1
-  - multiqc>=1.14
-  - python>=3.10
+  # QC tools (pinned versions to avoid dependency conflicts)
+  - python=3.10
+  - fastqc=0.12.1
+  - multiqc=1.14
