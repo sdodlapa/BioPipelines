@@ -48,7 +48,17 @@ coldata <- data.frame(
 )
 rownames(coldata) <- coldata$sample
 
-# Ensure samples match
+# Debug: Print available columns and expected samples
+message("Available columns in count data: ", paste(colnames(count_data), collapse=", "))
+message("Expected samples from config: ", paste(rownames(coldata), collapse=", "))
+
+# Check if all expected samples are present
+missing_samples <- setdiff(rownames(coldata), colnames(count_data))
+if (length(missing_samples) > 0) {
+  stop("Missing samples in count data: ", paste(missing_samples, collapse=", "))
+}
+
+# Ensure samples match (only keep samples that exist in both)
 count_data <- count_data[, rownames(coldata)]
 
 # Create DESeq2 dataset

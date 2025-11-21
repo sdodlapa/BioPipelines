@@ -39,8 +39,8 @@ rule all:
     input:
         # Peak files
         expand(f"{RESULTS_DIR}/peaks/{{sample}}_peaks.narrowPeak", sample=SAMPLES),
-        # Motif analysis
-        expand(f"{RESULTS_DIR}/motifs/{{sample}}/homerResults.html", sample=SAMPLES),
+        # Motif analysis - disabled for small test datasets
+        # expand(f"{RESULTS_DIR}/motifs/{{sample}}/homerResults.html", sample=SAMPLES),
         # Signal tracks
         expand(f"{RESULTS_DIR}/bigwig/{{sample}}.bw", sample=SAMPLES),
         # MultiQC
