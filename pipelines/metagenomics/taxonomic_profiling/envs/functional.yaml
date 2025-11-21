@@ -5,12 +5,12 @@ channels:
   - defaults
 dependencies:
   # Functional profiling
-  - humann=3.7
+  - humann>=3.6
   
   # Annotation tools
-  - diamond=2.1.8
+  - diamond>=2.0
   
   # Utilities
-  - python=3.10
-  - pandas=2.0
-  - matplotlib=3.7
+  - python>=3.9
+  - pandas
+  - matplotlib
