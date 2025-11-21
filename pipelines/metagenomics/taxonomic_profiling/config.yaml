@@ -4,7 +4,6 @@
 # Sample information
 samples:
   - sample1
-  - sample2
 
 # Data directories
 data_dir: "/scratch/sdodl001/BioPipelines/data"
