@@ -74,7 +74,12 @@ rule fastqc_raw:
                   if SAMPLE_LAYOUT[w.sample] == "PE"
                   else [f"{RAW_DIR}/{w.sample}.fastq.gz"]
     output:
-        f"{QC_DIR}/fastqc_raw/{{sample}}_fastqc.done"
+        html=lambda w: (f"{QC_DIR}/fastqc_raw/{w.sample}_R1_fastqc.html" 
+                       if SAMPLE_LAYOUT[w.sample] == "PE" 
+                       else f"{QC_DIR}/fastqc_raw/{w.sample}_fastqc.html"),
+        zip=lambda w: (f"{QC_DIR}/fastqc_raw/{w.sample}_R1_fastqc.zip" 
+                      if SAMPLE_LAYOUT[w.sample] == "PE" 
+                      else f"{QC_DIR}/fastqc_raw/{w.sample}_fastqc.zip")
     conda:
         "envs/qc.yaml"
     threads: 2
@@ -86,7 +91,6 @@ rule fastqc_raw:
         """
         mkdir -p {params.outdir}
         fastqc -t {threads} {input} -o {params.outdir}/ 2> {log}
-        touch {output}
         """
 rule trim_reads:
     input:
