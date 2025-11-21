@@ -22,39 +22,24 @@ def main():
     )
     
     print("=" * 80)
-    print("Searching for ENCODE Hi-C datasets (GM12878 cell line)")
+    print("Downloading ENCODE Hi-C test dataset")
     print("=" * 80)
     
-    # Search for GM12878 Hi-C data (well-characterized cell line)
-    datasets = downloader.search_encode_hic(
-        cell_line="GM12878",
-        limit=5
-    )
+    # Download a known good ENCODE Hi-C experiment
+    # ENCSR312KHQ - GM12878, in situ Hi-C, good depth
+    experiment_id = "ENCSR312KHQ"
     
-    if not datasets:
-        print("No GM12878 datasets found. Trying broader search...")
-        datasets = downloader.search_encode_hic(limit=5)
+    print(f"\nDownloading experiment: {experiment_id}")
+    print("Cell type: GM12878 (human lymphoblastoid)")
+    print("Protocol: in situ Hi-C")
+    print("Enzyme: MboI")
+    print("Organism: Homo sapiens\n")
     
-    print(f"\nFound {len(datasets)} Hi-C datasets:")
-    for i, ds in enumerate(datasets, 1):
-        print(f"\n{i}. {ds.experiment_id}")
-        print(f"   Organism: {ds.organism}")
-        print(f"   Cell Type: {ds.cell_type}")
-        print(f"   Protocol: {ds.protocol_type}")
-        print(f"   Enzyme: {ds.restriction_enzyme}")
-        print(f"   Files: {ds.num_files}")
-    
-    # Download first suitable dataset
-    if datasets:
-        print(f"\n{'=' * 80}")
-        print(f"Downloading experiment: {datasets[0].experiment_id}")
-        print(f"{'=' * 80}\n")
-        
+    try:
         # Download fastq files for full pipeline test
         files = downloader.download_encode_hic(
-            experiment_id=datasets[0].experiment_id,
-            file_format="fastq",
-            max_files=4  # R1 + R2 for 2 replicates
+            experiment_id=experiment_id,
+            file_format="fastq"
         )
         
         print(f"\n{'=' * 80}")
@@ -75,6 +60,12 @@ def main():
         
         for sample in sorted(samples):
             print(f"  - {sample}")
+            
+    except Exception as e:
+        print(f"\nError downloading {experiment_id}: {e}")
+        print("\nNote: Hi-C files are large. Consider downloading from 4DN Portal instead.")
+        print("Visit: https://data.4dnucleome.org/")
+
 
 if __name__ == "__main__":
     main()

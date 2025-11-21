@@ -22,38 +22,22 @@ def main():
     )
     
     print("=" * 80)
-    print("Searching for ENCODE WGBS datasets (brain tissue)")
+    print("Downloading ENCODE WGBS test dataset")
     print("=" * 80)
     
-    # Search for brain WGBS data
-    datasets = downloader.search_encode_wgbs(
-        tissue="brain",
-        assay_type="WGBS",
-        limit=5
-    )
+    # Download a known good ENCODE experiment (GM12878 WGBS)
+    # ENCSR765JPC - GM12878 cell line, small dataset, good for testing
+    experiment_id = "ENCSR765JPC"
     
-    if not datasets:
-        print("No datasets found. Trying broader search...")
-        datasets = downloader.search_encode_wgbs(limit=5)
+    print(f"\nDownloading experiment: {experiment_id}")
+    print("Cell type: GM12878 (human lymphoblastoid)")
+    print("Organism: Homo sapiens")
+    print("Assay: WGBS (whole-genome bisulfite sequencing)\n")
     
-    print(f"\nFound {len(datasets)} WGBS datasets:")
-    for i, ds in enumerate(datasets, 1):
-        print(f"\n{i}. {ds.experiment_id}")
-        print(f"   Organism: {ds.organism}")
-        print(f"   Tissue: {ds.tissue}")
-        print(f"   Cell Type: {ds.cell_type}")
-        print(f"   Assay: {ds.assay_type}")
-        print(f"   Files: {ds.num_files}")
-    
-    # Download first suitable dataset (small size preferred)
-    if datasets:
-        print(f"\n{'=' * 80}")
-        print(f"Downloading experiment: {datasets[0].experiment_id}")
-        print(f"{'=' * 80}\n")
-        
+    try:
         files = downloader.download_encode_experiment(
-            experiment_id=datasets[0].experiment_id,
-            max_files=2  # Just 2 replicates for testing
+            experiment_id=experiment_id,
+            file_type="fastq"
         )
         
         print(f"\n{'=' * 80}")
@@ -66,6 +50,23 @@ def main():
         for f in files:
             sample_name = f.stem.replace('.fastq', '').replace('.gz', '')
             print(f"  - {sample_name}")
+            
+    except Exception as e:
+        print(f"\nError downloading {experiment_id}: {e}")
+        print("\nTrying alternative experiment: ENCSR890UQO")
+        
+        # Backup: try another experiment
+        files = downloader.download_encode_experiment(
+            experiment_id="ENCSR890UQO",
+            file_type="fastq"
+        )
+        
+        print(f"\n{'=' * 80}")
+        print(f"Downloaded {len(files)} files successfully!")
+        print(f"{'=' * 80}")
+        for f in files:
+            print(f"  - {f}")
+
 
 if __name__ == "__main__":
     main()
