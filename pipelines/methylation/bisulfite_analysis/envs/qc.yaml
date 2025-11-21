@@ -4,7 +4,6 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # QC tools (pinned versions to avoid dependency conflicts)
+  # Minimal QC tools (multiqc will use base env)
   - python=3.10
   - fastqc=0.12.1
-  - multiqc=1.14
