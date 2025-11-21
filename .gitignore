@@ -79,3 +79,10 @@ htmlcov/
 .Rhistory
 .RData
 .Rproj.user
+
+# Job output files
+*.out
+*.err
+*.json
+*_R2.fastq.gz
+pipelines/**/*.fastq.gz
