@@ -74,12 +74,7 @@ rule fastqc_raw:
                   if SAMPLE_LAYOUT[w.sample] == "PE"
                   else [f"{RAW_DIR}/{w.sample}.fastq.gz"]
     output:
-        html=lambda w: (f"{QC_DIR}/fastqc_raw/{w.sample}_R1_fastqc.html" 
-                       if SAMPLE_LAYOUT[w.sample] == "PE" 
-                       else f"{QC_DIR}/fastqc_raw/{w.sample}_fastqc.html"),
-        zip=lambda w: (f"{QC_DIR}/fastqc_raw/{w.sample}_R1_fastqc.zip" 
-                      if SAMPLE_LAYOUT[w.sample] == "PE" 
-                      else f"{QC_DIR}/fastqc_raw/{w.sample}_fastqc.zip")
+        done=f"{QC_DIR}/fastqc_raw/{{sample}}.done"
     conda:
         "envs/qc.yaml"
     threads: 2
@@ -91,6 +86,7 @@ rule fastqc_raw:
         """
         mkdir -p {params.outdir}
         fastqc -t {threads} {input} -o {params.outdir}/ 2> {log}
+        touch {output.done}
         """
 rule trim_reads:
     input:
@@ -255,10 +251,7 @@ rule create_bigwig:
 
 rule multiqc:
     input:
-        # Dynamically include FastQC outputs based on SE/PE layout
-        lambda w: [f"{QC_DIR}/fastqc_raw/{s}_R1_fastqc.html" for s in ALL_SAMPLES if SAMPLE_LAYOUT[s] == "PE"] +
-                  [f"{QC_DIR}/fastqc_raw/{s}_R2_fastqc.html" for s in ALL_SAMPLES if SAMPLE_LAYOUT[s] == "PE"] +
-                  [f"{QC_DIR}/fastqc_raw/{s}_fastqc.html" for s in ALL_SAMPLES if SAMPLE_LAYOUT[s] == "SE"],
+        fastqc=expand(f"{QC_DIR}/fastqc_raw/{{sample}}.done", sample=ALL_SAMPLES),
         fastp=expand(f"{QC_DIR}/fastp/{{sample}}.json", sample=ALL_SAMPLES),
         dedup=expand(f"{QC_DIR}/picard/{{sample}}.dedup_metrics.txt", sample=ALL_SAMPLES)
     output:
