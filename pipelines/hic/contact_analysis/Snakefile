@@ -120,8 +120,7 @@ rule trim_reads:
 rule align_reads:
     input:
         r1=f"{PROCESSED_DIR}/{{sample}}_R1.trimmed.fastq.gz",
-        r2=f"{PROCESSED_DIR}/{{sample}}_R2.trimmed.fastq.gz",
-        index=BOWTIE2_INDEX
+        r2=f"{PROCESSED_DIR}/{{sample}}_R2.trimmed.fastq.gz"
     output:
         bam=temp(f"{PROCESSED_DIR}/{{sample}}.aligned.bam")
     params:
