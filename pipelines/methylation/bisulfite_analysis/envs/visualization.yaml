@@ -1,13 +1,13 @@
 name: methylation_viz
 channels:
-  - bioconda
   - conda-forge
+  - bioconda
   - defaults
 dependencies:
-  # Python visualization (minimal for faster resolution)
-  - python=3.10
-  - matplotlib=3.7
-  - seaborn=0.12
-  - pandas=2.0
+  # Python visualization (relaxed versions)
+  - python>=3.9
+  - matplotlib
+  - seaborn
+  - pandas
   - numpy
   - scipy
