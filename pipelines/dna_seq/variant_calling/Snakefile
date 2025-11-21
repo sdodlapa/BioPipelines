@@ -141,7 +141,7 @@ rule mark_duplicates:
             VALIDATION_STRINGENCY=LENIENT \
             2> {log}
         # Add read group to the dedup BAM (required for GATK)
-        samtools addreplacerg -r '@RG\tID:{sample}\tSM:{sample}\tPL:ILLUMINA' -o {output.bam} {output.bam}.tmp
+        samtools addreplacerg -r '@RG\tID:{wildcards.sample}\tSM:{wildcards.sample}\tPL:ILLUMINA' -o {output.bam} {output.bam}.tmp
         rm {output.bam}.tmp
         """
 

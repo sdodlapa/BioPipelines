@@ -3,5 +3,5 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - star=2.7.10b
+  - bwa=0.7.17
   - samtools=1.17
