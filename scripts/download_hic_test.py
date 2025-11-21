@@ -23,6 +23,9 @@ def main():
     
     print("=" * 80)
     print("Downloading ENCODE Hi-C test dataset")
+    print("Experiment: ENCSR312KHQ (SK-MEL-5 melanoma cell line)")
+    print("Expected size: ~27.71 GB (4 paired-end fastq files)")
+    print("Estimated time: 30-60 minutes")
     print("=" * 80)
     
     # Download a known good ENCODE Hi-C experiment
@@ -39,7 +42,7 @@ def main():
         # Download fastq files for full pipeline test
         files = downloader.download_encode_hic(
             experiment_id=experiment_id,
-            file_format="fastq"
+            file_type="fastq"
         )
         
         print(f"\n{'=' * 80}")

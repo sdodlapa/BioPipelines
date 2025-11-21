@@ -4,7 +4,6 @@
 # Sample information
 samples:
   - sample1
-  - sample2
 
 # Data directories
 data_dir: "/scratch/sdodl001/BioPipelines/data"
@@ -32,7 +31,7 @@ params:
     min_length: 50
     clip_r1: 10  # Clip bases from 5' end of read 1
     clip_r2: 10  # Clip bases from 5' end of read 2
-    rrbs: false  # Set to true for RRBS
+    rrbs: true  # Set to true for RRBS
   
   # Bismark alignment
   alignment:
@@ -69,10 +68,9 @@ params:
 
 # Comparisons for DMR analysis
 # Format: [group1_samples, group2_samples, comparison_name]
-comparisons:
-  - [["sample1"], ["sample2"], "sample1_vs_sample2"]
-  # Add more comparisons as needed
-  # - [["control1", "control2"], ["treatment1", "treatment2"], "control_vs_treatment"]
+comparisons: []
+  # Need at least 2 samples for DMR calling
+  # - [["sample1"], ["sample2"], "sample1_vs_sample2"]
 
 # QC thresholds
 qc:
