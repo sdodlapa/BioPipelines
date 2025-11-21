@@ -21,6 +21,10 @@ echo "========================================="
 # Activate conda environment
 source ~/miniconda3/bin/activate ~/envs/biopipelines
 
+# Clean conda cache to prevent corrupted package issues
+echo "Cleaning conda cache..."
+conda clean --packages -y 2>/dev/null || true
+
 # Navigate to pipeline directory
 cd ~/BioPipelines/pipelines/rna_seq/differential_expression
 
