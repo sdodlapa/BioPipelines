@@ -1,0 +1,127 @@
+# Metagenomics Taxonomic Profiling & Functional Analysis Pipeline
+# ================================================================
+
+# Sample information
+samples:
+  - sample1
+  - sample2
+
+# Data directories
+data_dir: "/scratch/sdodl001/BioPipelines/data"
+raw_dir: "/scratch/sdodl001/BioPipelines/data/raw/metagenomics"
+processed_dir: "/scratch/sdodl001/BioPipelines/data/processed/metagenomics"
+results_dir: "/scratch/sdodl001/BioPipelines/data/results/metagenomics"
+qc_dir: "/scratch/sdodl001/BioPipelines/data/results/metagenomics/qc"
+
+# Reference databases
+references:
+  # Host genome for removal (human by default)
+  host_genome: "/scratch/sdodl001/BioPipelines/data/references/hg38.fa"
+  host_index: "/scratch/sdodl001/BioPipelines/data/references/bowtie2_index/hg38"
+  
+  # Kraken2 database (standard: 8 GB, standard-8: 8GB, standard-16: 16GB)
+  # Download with: kraken2-build --standard --db kraken2_db
+  kraken2_db: "/scratch/sdodl001/BioPipelines/data/references/kraken2_db"
+  
+  # MetaPhlAn4 database (automatically downloaded on first run)
+  metaphlan_db: "/scratch/sdodl001/BioPipelines/data/references/metaphlan_db"
+  
+  # HUMAnN3 databases (ChocoPhlAn + UniRef)
+  humann_db: "/scratch/sdodl001/BioPipelines/data/references/humann_db"
+
+# Analysis parameters
+params:
+  # Quality control & trimming
+  trim:
+    quality: 20
+    min_length: 50
+    adapter_removal: true
+    
+  # Host DNA removal
+  host_removal:
+    enabled: true  # Set false to skip (e.g., for environmental samples)
+    sensitivity: "sensitive"  # fast, sensitive, very-sensitive
+    
+  # Taxonomic profiling
+  kraken2:
+    confidence: 0.1  # Confidence score threshold
+    min_base_quality: 0
+    min_hit_groups: 2  # Minimum number of hit groups
+    
+  bracken:
+    read_length: 150  # Must match your sequencing read length
+    taxonomic_level: "S"  # S=species, G=genus, F=family
+    threshold: 10  # Minimum reads for taxonomy assignment
+    
+  metaphlan:
+    taxonomic_level: "a"  # a=all, k=kingdom, p=phylum, c=class, etc.
+    min_cu_len: 2000  # Minimum total nucleotide length
+    stat: "tavg_g"  # Statistical approach
+    
+  # Functional profiling
+  humann:
+    nucleotide_db: "chocophlan"  # chocophlan pangenome database
+    protein_db: "uniref90"  # uniref90, uniref50 (smaller, faster)
+    search_mode: "uniref90"
+    pathways: "metacyc"  # metacyc, kegg
+    
+  # Assembly & binning
+  assembly:
+    enabled: false  # Set true to enable assembly (slower, more storage)
+    assembler: "megahit"  # megahit, metaspades
+    min_contig_len: 1000
+    
+  binning:
+    enabled: false  # Set true to enable binning
+    min_bin_size: 200000  # 200 kb
+    completeness_threshold: 50  # CheckM completeness %
+    contamination_threshold: 10  # CheckM contamination %
+
+# Comparisons for differential abundance analysis
+# Format: [control_samples, treatment_samples, comparison_name]
+comparisons:
+  - [["sample1"], ["sample2"], "sample1_vs_sample2"]
+  # Add more comparisons as needed
+  # - [["control1", "control2"], ["treatment1", "treatment2"], "control_vs_treatment"]
+
+# QC thresholds
+qc:
+  min_reads: 1000000  # Minimum 1M reads
+  min_read_length: 50
+  max_host_contamination: 0.5  # 50% host reads is concerning
+
+# Visualization options
+visualization:
+  krona: true  # Interactive taxonomic charts
+  heatmaps: true
+  pathway_plots: true
+  diversity_metrics: true  # Alpha/beta diversity
+
+# Resources (adjust based on your cluster)
+resources:
+  threads:
+    trim: 4
+    host_removal: 8
+    kraken2: 16
+    metaphlan: 8
+    humann: 16
+    assembly: 24
+    binning: 16
+    
+  memory:
+    trim: "8G"
+    host_removal: "16G"
+    kraken2: "32G"  # Needs 8-16 GB for standard DB
+    metaphlan: "16G"
+    humann: "32G"
+    assembly: "64G"
+    binning: "32G"
+    
+  time:
+    trim: "1:00:00"
+    host_removal: "2:00:00"
+    kraken2: "2:00:00"
+    metaphlan: "4:00:00"
+    humann: "8:00:00"
+    assembly: "12:00:00"
+    binning: "6:00:00"

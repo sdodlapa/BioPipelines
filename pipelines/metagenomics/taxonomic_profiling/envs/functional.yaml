@@ -1,0 +1,16 @@
+name: metagenomics_functional
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Functional profiling
+  - humann=3.7
+  
+  # Annotation tools
+  - diamond=2.1.8
+  
+  # Utilities
+  - python=3.10
+  - pandas=2.0
+  - matplotlib=3.7

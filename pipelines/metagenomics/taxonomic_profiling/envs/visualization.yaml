@@ -1,0 +1,21 @@
+name: metagenomics_visualization
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Visualization
+  - krona=2.8.1
+  - r-base=4.3
+  - r-ggplot2
+  - r-pheatmap
+  - r-vegan
+  - r-phyloseq
+  
+  # Python visualization
+  - python=3.10
+  - matplotlib=3.7
+  - seaborn=0.12
+  - plotly
+  - pandas=2.0
+  - scipy

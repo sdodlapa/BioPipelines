@@ -1,0 +1,20 @@
+name: metagenomics_preprocessing
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # QC and preprocessing
+  - fastqc=0.12.1
+  - multiqc=1.14
+  - fastp=0.23.4
+  - trimmomatic=0.39
+  
+  # Host removal
+  - bowtie2=2.5.1
+  - samtools=1.17
+  
+  # General utilities
+  - python=3.10
+  - pigz
+  - seqtk
