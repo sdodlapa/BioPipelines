@@ -4,14 +4,12 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Hi-C specific tools only
-  - hic-straw>=1.3
-  - pairtools>=1.0
-  - pairix>=0.3
+  # Hi-C specific tools only - MINIMAL
   - cooler>=0.9
-  - hicexplorer>=3.7
+  - pairtools>=1.0
   
   # Utilities
   - python>=3.10
   - numpy
+  # Note: hic-straw, pairix, hicexplorer removed (unsolvable conflicts)
   # Note: bowtie2, samtools, bwa, bedtools, bgzip, tabix, scipy, pysam, pandas from base env
