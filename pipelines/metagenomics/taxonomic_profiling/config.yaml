@@ -58,6 +58,9 @@ params:
     stat: "tavg_g"  # Statistical approach
     
   # Functional profiling
+  functional_profiling:
+    enabled: false  # Set true to enable HUMAnN (requires solving conda conflicts)
+  
   humann:
     nucleotide_db: "chocophlan"  # chocophlan pangenome database
     protein_db: "uniref90"  # uniref90, uniref50 (smaller, faster)

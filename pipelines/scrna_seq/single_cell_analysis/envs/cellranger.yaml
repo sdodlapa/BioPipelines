@@ -1,0 +1,12 @@
+name: scrna_cellranger
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  - python>=3.9
+  # Note: CellRanger typically installed separately as binary
+  # This env provides support tools
+  - h5py>=3.7
+  - pandas>=1.5
+  - numpy>=1.23

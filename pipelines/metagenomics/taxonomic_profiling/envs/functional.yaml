@@ -4,16 +4,12 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Functional profiling (use exact versions for compatibility)
-  - humann=3.6
-  - metaphlan=4.0
-  - phylophlan=3.0
-  - biopython=1.79
-  
-  # Annotation tools
+  # Skip humann for now - install separately with pip if needed
+  # Functional profiling tools
   - diamond>=2.0
   
   # Utilities
-  - python=3.9
+  - python>=3.9
   - pandas
   - matplotlib
+  - biopython>=1.79

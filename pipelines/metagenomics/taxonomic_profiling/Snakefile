@@ -38,6 +38,7 @@ HUMANN_DB = config["references"]["humann_db"]
 ASSEMBLY_ENABLED = config["params"]["assembly"]["enabled"]
 BINNING_ENABLED = config["params"]["binning"]["enabled"]
 HOST_REMOVAL = config["params"]["host_removal"]["enabled"]
+FUNCTIONAL_ENABLED = config["params"].get("functional_profiling", {}).get("enabled", False)
 
 # =============================================================================
 # Target Rule
@@ -53,8 +54,8 @@ rule all:
         expand(f"{RESULTS_DIR}/taxonomy/bracken/{{sample}}_bracken.txt", sample=SAMPLES),
         expand(f"{RESULTS_DIR}/taxonomy/metaphlan/{{sample}}_profile.txt", sample=SAMPLES),
         
-        # Functional profiles
-        expand(f"{RESULTS_DIR}/function/humann/{{sample}}_pathabundance.tsv", sample=SAMPLES),
+        # Functional profiles (optional)
+        expand(f"{RESULTS_DIR}/function/humann/{{sample}}_pathabundance.tsv", sample=SAMPLES) if FUNCTIONAL_ENABLED else [],
         
         # Visualizations
         expand(f"{RESULTS_DIR}/taxonomy/krona/{{sample}}_krona.html", sample=SAMPLES),
