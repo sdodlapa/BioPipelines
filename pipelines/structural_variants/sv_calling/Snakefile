@@ -96,7 +96,8 @@ rule manta_call:
         rundir=f"{PROCESSED_DIR}/manta/{{sample}}",
         min_spanning=config["callers"]["manta"]["min_candidate_spanning_count"],
         min_size=config["callers"]["manta"]["min_scored_variant_size"],
-        wrapper=os.path.expanduser("~/BioPipelines/tools/manta_wrapper.sh")
+        wrapper=os.path.expanduser("~/BioPipelines/tools/manta_wrapper.sh"),
+        python2=os.path.expanduser("~/miniconda3/envs/manta_py27/bin/python2")
     # Note: Uses Manta 1.6.0 pre-built binary with Python 2.7 wrapper (no conda conflicts)
     threads: 8
     log:
@@ -110,7 +111,7 @@ rule manta_call:
             --referenceFasta {input.ref} \\
             --runDir {params.rundir} 2> {log}
         
-        {params.rundir}/runWorkflow.py -j {threads} 2>> {log}
+        {params.python2} {params.rundir}/runWorkflow.py -j {threads} 2>> {log}
         
         cp {params.rundir}/results/variants/diploidSV.vcf.gz {output.vcf}
         tabix -p vcf {output.vcf}

@@ -1,12 +1,15 @@
 #!/bin/bash
 # Wrapper to run Manta with Python 2.7
-# Manta's configManta.py requires '#!/usr/bin/env python2' to find python2 in PATH
+# Directly invokes Python 2.7 to bypass shebang #!/usr/bin/env python2 issues
 
-# Set PATH to include manta_py27 environment's bin directory FIRST
-export PATH="$HOME/miniconda3/envs/manta_py27/bin:$PATH"
+PYTHON2="$HOME/miniconda3/envs/manta_py27/bin/python2"
+MANTA_CONFIG="$HOME/BioPipelines/tools/manta-1.6.0.centos6_x86_64/bin/configManta.py"
 
-# Verify python2 is accessible (log to stderr for debugging)
-which python2 >&2 || { echo "Error: python2 not found in PATH" >&2; exit 1; }
+# Verify python2 exists
+if [[ ! -f "$PYTHON2" ]]; then
+    echo "Error: python2 not found at $PYTHON2" >&2
+    exit 1
+fi
 
-# Run Manta configManta.py
-~/BioPipelines/tools/manta-1.6.0.centos6_x86_64/bin/configManta.py "$@"
+# Run Manta with explicit Python interpreter (bypasses shebang)
+"$PYTHON2" "$MANTA_CONFIG" "$@"
