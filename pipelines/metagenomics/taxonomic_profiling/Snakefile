@@ -80,8 +80,7 @@ rule fastqc_raw:
         html2=f"{QC_DIR}/fastqc_raw/{{sample}}_R2_fastqc.html",
         zip1=f"{QC_DIR}/fastqc_raw/{{sample}}_R1_fastqc.zip",
         zip2=f"{QC_DIR}/fastqc_raw/{{sample}}_R2_fastqc.zip"
-    conda:
-        "envs/preprocessing.yaml"
+    # Note: No conda directive - uses fastqc from base environment
     threads: 4
     log:
         f"{QC_DIR}/logs/fastqc_raw/{{sample}}.log"
@@ -102,8 +101,7 @@ rule trim_reads:
         r2=f"{PROCESSED_DIR}/trimmed/{{sample}}_R2.trimmed.fastq.gz",
         html=f"{QC_DIR}/fastp/{{sample}}.html",
         json=f"{QC_DIR}/fastp/{{sample}}.json"
-    conda:
-        "envs/preprocessing.yaml"
+    # Note: No conda directive - uses fastp from base environment
     threads: config["resources"]["threads"]["trim"]
     log:
         f"{QC_DIR}/logs/trim/{{sample}}.log"
