@@ -1,0 +1,12 @@
+name: long_read_sv_calling
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python>=3.9
+  - sniffles>=2.0
+  - cutesv>=2.0
+  - survivor>=1.0
+  - bcftools>=1.17
+  - vcftools>=0.1.16

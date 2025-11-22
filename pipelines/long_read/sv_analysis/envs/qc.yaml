@@ -1,0 +1,12 @@
+name: long_read_qc
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - python>=3.9
+  - nanoplot>=1.40
+  - nanostat>=1.6
+  - matplotlib
+  - seaborn
+  - pandas

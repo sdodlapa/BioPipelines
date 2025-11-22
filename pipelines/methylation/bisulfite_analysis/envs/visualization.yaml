@@ -4,10 +4,11 @@ channels:
   - bioconda
   - defaults
 dependencies:
-  # Python visualization (relaxed versions)
-  - python>=3.9
-  - matplotlib
-  - seaborn
-  - pandas
-  - numpy
-  - scipy
+  # Python visualization (pinned for libdeflate compatibility)
+  - python=3.9
+  - matplotlib=3.6
+  - seaborn=0.11
+  - pandas=1.5
+  - numpy=1.23
+  - scipy=1.9
+  - libdeflate=1.18

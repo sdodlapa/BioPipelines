@@ -1,0 +1,77 @@
+# Long-Read Sequencing Pipeline Configuration
+# ===========================================
+# For Oxford Nanopore (ONT) and PacBio HiFi data
+
+# Sample information
+samples:
+  - sample1
+
+# Sequencing platform
+# Options: nanopore, pacbio, pacbio_hifi
+platform: "nanopore"
+
+# Data directories
+data_dir: "/scratch/sdodl001/BioPipelines/data"
+raw_dir: "/scratch/sdodl001/BioPipelines/data/raw/long_read"
+processed_dir: "/scratch/sdodl001/BioPipelines/data/processed/long_read"
+results_dir: "/scratch/sdodl001/BioPipelines/data/results/long_read"
+
+# Reference genome
+reference:
+  genome: "/scratch/sdodl001/BioPipelines/data/references/hg38.fa"
+  genome_index: "/scratch/sdodl001/BioPipelines/data/references/hg38.fa.fai"
+
+# Alignment parameters
+alignment:
+  # Minimap2 presets: map-ont (ONT), map-pb (PacBio CLR), map-hifi (PacBio HiFi)
+  minimap2_preset: "map-ont"
+  threads: 16
+  min_mapq: 20
+  
+# SV calling parameters  
+sv_calling:
+  # Sniffles2 parameters
+  min_support: 10          # Minimum read support for SV
+  min_svlen: 50           # Minimum SV length
+  max_svlen: 100000       # Maximum SV length
+  
+  # SV types to call
+  sv_types:
+    - "DEL"    # Deletions
+    - "INS"    # Insertions
+    - "DUP"    # Duplications
+    - "INV"    # Inversions
+    - "BND"    # Breakends/Translocations
+  
+  # CuteSV parameters (alternative caller)
+  cutesv_threads: 8
+  cutesv_max_cluster_bias: 100
+  cutesv_min_size: 50
+
+# Phasing parameters
+phasing:
+  use_whatshap: true
+  min_phase_qual: 20
+  chromosome_list:  # Leave empty to phase all chromosomes
+    - "chr1"
+    - "chr2"
+    # Add more as needed, or leave empty for all
+
+# Quality control
+qc:
+  nanoplot_threads: 4
+  min_read_length: 1000
+  max_read_length: 1000000
+  min_quality: 7
+
+# Filtering
+filtering:
+  remove_secondary: true
+  remove_supplementary: false  # Keep for SV detection
+  min_read_length: 1000
+
+# Resources
+resources:
+  alignment_mem: "32G"
+  sv_calling_mem: "16G"
+  phasing_mem: "8G"
