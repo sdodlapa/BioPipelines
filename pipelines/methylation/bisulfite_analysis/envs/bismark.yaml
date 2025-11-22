@@ -4,12 +4,11 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Core bisulfite sequencing tools
-  - python=3.10
-  - bismark=0.24.2
-  - trim-galore=0.6.10
-  - cutadapt>=4.0,<4.4  # Avoid xopen 2.0.2 Windows dependency
-  - bowtie2=2.5.0
-  - samtools>=1.18  # Use newer version for libdeflate compatibility
-  - numpy
-  - scipy
+  # Core bisulfite sequencing tools - minimal pinning
+  - python>=3.9
+  - bismark>=0.24
+  - trim-galore>=0.6
+  - cutadapt>=4.0
+  - bowtie2>=2.5
+  - samtools>=1.18
+  - pigz
