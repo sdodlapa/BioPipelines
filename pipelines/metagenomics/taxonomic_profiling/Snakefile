@@ -39,6 +39,7 @@ ASSEMBLY_ENABLED = config["params"]["assembly"]["enabled"]
 BINNING_ENABLED = config["params"]["binning"]["enabled"]
 HOST_REMOVAL = config["params"]["host_removal"]["enabled"]
 FUNCTIONAL_ENABLED = config["params"].get("functional_profiling", {}).get("enabled", False)
+KRAKEN2_ENABLED = config["params"].get("kraken2_enabled", False)
 
 # =============================================================================
 # Target Rule
@@ -50,15 +51,15 @@ rule all:
         f"{RESULTS_DIR}/multiqc_report.html",
         
         # Taxonomic profiles
-        expand(f"{RESULTS_DIR}/taxonomy/kraken2/{{sample}}_report.txt", sample=SAMPLES),
-        expand(f"{RESULTS_DIR}/taxonomy/bracken/{{sample}}_bracken.txt", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/taxonomy/kraken2/{{sample}}_report.txt", sample=SAMPLES) if KRAKEN2_ENABLED else [],
+        expand(f"{RESULTS_DIR}/taxonomy/bracken/{{sample}}_bracken.txt", sample=SAMPLES) if KRAKEN2_ENABLED else [],
         expand(f"{RESULTS_DIR}/taxonomy/metaphlan/{{sample}}_profile.txt", sample=SAMPLES),
         
         # Functional profiles (optional)
         expand(f"{RESULTS_DIR}/function/humann/{{sample}}_pathabundance.tsv", sample=SAMPLES) if FUNCTIONAL_ENABLED else [],
         
         # Visualizations
-        expand(f"{RESULTS_DIR}/taxonomy/krona/{{sample}}_krona.html", sample=SAMPLES),
+        expand(f"{RESULTS_DIR}/taxonomy/krona/{{sample}}_krona.html", sample=SAMPLES) if KRAKEN2_ENABLED else [],
         
         # Optional assembly
         expand(f"{RESULTS_DIR}/assembly/{{sample}}/final.contigs.fa", sample=SAMPLES) if ASSEMBLY_ENABLED else [],

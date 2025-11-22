@@ -24,6 +24,10 @@ conda activate ~/envs/biopipelines
 # Navigate to pipeline directory
 cd ~/BioPipelines/pipelines/metagenomics/taxonomic_profiling
 
+# Unlock directory in case of previous failures
+echo "Unlocking Snakemake directory..."
+snakemake --unlock 2>/dev/null || true
+
 # Trap handlers for automatic cleanup
 trap 'echo "Job interrupted or failed..."; snakemake --unlock 2>/dev/null; exit 130' INT TERM
 trap 'if [ $? -ne 0 ]; then snakemake --unlock 2>/dev/null; fi' EXIT

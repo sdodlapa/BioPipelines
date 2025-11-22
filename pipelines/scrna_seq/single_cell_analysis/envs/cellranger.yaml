@@ -5,8 +5,8 @@ channels:
   - defaults
 dependencies:
   - python>=3.9
-  # Note: CellRanger typically installed separately as binary
-  # This env provides support tools
-  - h5py>=3.7
+  # Note: CellRanger and h5py installed separately to avoid libcurl conflicts
+  # Install with: pip install h5py pandas numpy
+  # - h5py>=3.7
   - pandas>=1.5
   - numpy>=1.23

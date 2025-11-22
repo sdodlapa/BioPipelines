@@ -21,6 +21,10 @@ conda activate ~/envs/biopipelines
 # Set working directory
 cd ~/BioPipelines/pipelines/long_read/sv_analysis
 
+# Unlock directory in case of previous failures
+echo "Unlocking Snakemake directory..."
+snakemake --unlock 2>/dev/null || true
+
 # Print environment info
 echo "Job started at: $(date)"
 echo "Running on node: $(hostname)"
