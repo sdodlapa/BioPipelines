@@ -211,13 +211,13 @@ rule deduplicate:
 rule extract_methylation:
     input:
         bam=f"{PROCESSED_DIR}/{{sample}}.deduplicated.bam",
-        index=BISMARK_INDEX
+        index=f"{BISMARK_INDEX}/.bismark_index_built"
     output:
         cov=f"{RESULTS_DIR}/methylation/{{sample}}_bismark.cov.gz",
         bedgraph=f"{RESULTS_DIR}/methylation/{{sample}}.bedGraph.gz",
         mbias=f"{QC_DIR}/mbias/{{sample}}.M-bias.txt"
     params:
-        genome_dir=BISMARK_INDEX,
+        genome_dir=os.path.dirname(REFERENCE),  # Actual genome directory with index files
         ignore=config["params"]["extraction"]["ignore"],
         ignore_3p=config["params"]["extraction"]["ignore_3prime"],
         ignore_r2=config["params"]["extraction"]["ignore_r2"],
