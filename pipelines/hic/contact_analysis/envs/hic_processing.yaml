@@ -14,5 +14,4 @@ dependencies:
   # Utilities
   - python>=3.10
   - numpy
-  - pandas
-  # Note: bowtie2, samtools, bwa, bedtools, bgzip, tabix, scipy, pysam from base env
+  # Note: bowtie2, samtools, bwa, bedtools, bgzip, tabix, scipy, pysam, pandas from base env

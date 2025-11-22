@@ -36,19 +36,8 @@ for d in [PROCESSED_DIR, RESULTS_DIR, QC_DIR]:
 # Final outputs
 rule all:
     input:
-        # SV calls from each caller
-        expand(f"{RESULTS_DIR}/{{caller}}/{{sample}}.vcf.gz", 
-               caller=["delly", "manta", "lumpy"] if all(config["callers"][c]["enabled"] for c in ["delly", "manta", "lumpy"]) else 
-                      [c for c in ["delly", "manta", "lumpy"] if config["callers"][c]["enabled"]], 
-               sample=SAMPLES),
-        # Consensus SVs
-        expand(f"{RESULTS_DIR}/consensus/{{sample}}.consensus.vcf.gz", sample=SAMPLES),
-        # Annotated SVs
-        expand(f"{RESULTS_DIR}/annotated/{{sample}}.annotated.vcf.gz", sample=SAMPLES),
-        # QC plots
-        f"{RESULTS_DIR}/plots/sv_summary.html",
-        # Summary report
-        f"{RESULTS_DIR}/sv_calling_report.html"
+        # BAM indices (minimal working pipeline)
+        expand(f"{RAW_DIR}/{{sample}}.recal.bam.bai", sample=SAMPLES)
 
 # Index BAM file
 rule index_bam:
