@@ -5,10 +5,9 @@ channels:
   - defaults
 dependencies:
   - python>=3.9
-  # SV callers
-  - delly>=1.1
-  # Note: Manta removed - requires Python 2.7 (incompatible with modern Python)
-  # Note: DELLY + LUMPY provide comprehensive SV detection
-  # SV merging
+  # SV merging tool
   - survivor>=1.0
-  # Note: samtools, bcftools, tabix from base env (LUMPY uses samtools)
+  # Note: Manta removed (requires Python 2.7)
+  # Note: Delly removed (libdeflate/htslib version conflicts)
+  # Note: Using LUMPY from base env + samtools + Python for SV calling
+  # Note: samtools, bcftools, tabix from base env

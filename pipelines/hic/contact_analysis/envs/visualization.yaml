@@ -4,12 +4,11 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Hi-C visualization tools (ultra-minimal)
-  - cooler>=0.9
-  - hicexplorer>=3.7
-  - cooltools>=0.5
-  - pygenometracks>=3.8
+  # Minimal Hi-C tools
+  - cooler>=0.9  # Contact matrix operations
   - python>=3.10
   - numpy
   - jinja2
-  # Note: matplotlib, seaborn, pandas, plotly from base env
+  # Note: matplotlib, seaborn, pandas from base env
+  # Note: hicexplorer, cooltools, pygenometracks removed (unsolvable dependency conflicts)
+  # Note: Use cooler + matplotlib for visualization instead
