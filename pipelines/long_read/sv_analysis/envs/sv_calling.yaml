@@ -8,5 +8,4 @@ dependencies:
   - sniffles>=2.0
   - cutesv>=2.0
   - survivor>=1.0
-  - bcftools>=1.17
-  - vcftools>=0.1.16
+  # Note: bcftools, vcftools from base env
