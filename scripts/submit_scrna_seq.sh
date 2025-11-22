@@ -26,13 +26,20 @@ cd ~/BioPipelines
 # Create log directory
 mkdir -p logs/scrna_seq
 
+# Unlock Snakemake directory in case of previous failures
+echo "Unlocking Snakemake directory..."
+snakemake --snakefile pipelines/scrna_seq/single_cell_analysis/Snakefile --unlock 2>/dev/null || true
+echo ""
+
 # Run Snakemake pipeline
 echo "Running Snakemake pipeline..."
 echo ""
 
 snakemake \
-    --snakefile pipelines/scrna_seq/Snakefile \
-    --configfile pipelines/scrna_seq/config.yaml \
+    --snakefile pipelines/scrna_seq/single_cell_analysis/Snakefile \
+    --configfile pipelines/scrna_seq/single_cell_analysis/config.yaml \
+    --use-conda \
+    --conda-frontend conda \
     --cores $SLURM_CPUS_PER_TASK \
     --rerun-incomplete \
     --printshellcmds \
