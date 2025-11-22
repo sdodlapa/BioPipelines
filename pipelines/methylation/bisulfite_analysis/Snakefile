@@ -69,9 +69,10 @@ rule prepare_bismark_index:
     input:
         genome=REFERENCE
     output:
-        directory(BISMARK_INDEX)
+        touch(f"{BISMARK_INDEX}/.bismark_index_built")
     params:
-        genome_dir=os.path.dirname(REFERENCE)
+        genome_dir=os.path.dirname(REFERENCE),
+        index_dir=BISMARK_INDEX
     conda:
         "envs/bismark.yaml"
     threads: 8
@@ -79,11 +80,16 @@ rule prepare_bismark_index:
         f"{QC_DIR}/logs/bismark_index.log"
     shell:
         """
+        mkdir -p {params.index_dir}
         bismark_genome_preparation \\
             --bowtie2 \\
             --parallel {threads} \\
             --genomic_composition \\
             {params.genome_dir} 2> {log}
+        
+        # Create marker file
+        mkdir -p {params.index_dir}
+        touch {output}
         """
 
 # FastQC on raw reads
@@ -148,11 +154,11 @@ rule trim_reads:
 rule bismark_align:
     input:
         reads=f"{PROCESSED_DIR}/{{sample}}.trim.done",
-        index=BISMARK_INDEX
+        index=f"{BISMARK_INDEX}/.bismark_index_built"
     output:
         bam=temp(f"{PROCESSED_DIR}/{{sample}}_bismark_bt2.bam")
     params:
-        genome_dir=BISMARK_INDEX,
+        genome_dir=os.path.dirname(REFERENCE),  # Bismark index is in the genome directory
         multicore=config["params"]["alignment"]["multicore"],
         score_min=config["params"]["alignment"]["score_min"],
         non_dir="--non_directional" if config["params"]["alignment"]["non_directional"] else "",

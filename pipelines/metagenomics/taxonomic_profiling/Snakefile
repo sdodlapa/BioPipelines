@@ -171,17 +171,20 @@ rule kraken2_classify:
     params:
         db=KRAKEN2_DB,
         confidence=config["params"]["kraken2"]["confidence"]
-    shell:
-        """
-        kraken2 --db {params.db} \
-                --threads {threads} \
-                --paired {input.r1} {input.r2} \
-                --report {output.report} \
-                --output {output.output} \
-                --confidence {params.confidence} \
-                --use-names \
-                2> {log}
-        """
+    run:
+        if not KRAKEN2_ENABLED:
+            shell("touch {output.report} {output.output}")
+        else:
+            shell("""
+            kraken2 --db {params.db} \
+                    --threads {threads} \
+                    --paired {input.r1} {input.r2} \
+                    --report {output.report} \
+                    --output {output.output} \
+                    --confidence {params.confidence} \
+                    --use-names \
+                    2> {log}
+            """)
 
 rule bracken_abundance:
     input:
