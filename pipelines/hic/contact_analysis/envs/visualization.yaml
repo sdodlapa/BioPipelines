@@ -4,20 +4,12 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Visualization tools
-  - cooler=0.9.3
-  - hicexplorer=3.7.2
-  - cooltools=0.5.4
-  - pygenometracks=3.8  # Hi-C track plots
-  
-  # Plotting libraries (pinned versions for compatibility)
-  - python=3.10
-  - matplotlib=3.7
-  - seaborn=0.12
-  - plotly
-  - bokeh
-  
-  # Report generation (removed pillow - causing conflicts)
-  - pandas=2.0
+  # Hi-C visualization tools (ultra-minimal)
+  - cooler>=0.9
+  - hicexplorer>=3.7
+  - cooltools>=0.5
+  - pygenometracks>=3.8
+  - python>=3.10
   - numpy
   - jinja2
+  # Note: matplotlib, seaborn, pandas, plotly from base env

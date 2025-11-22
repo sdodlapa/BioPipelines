@@ -394,8 +394,7 @@ rule multiqc:
         kraken=expand(f"{RESULTS_DIR}/taxonomy/kraken2/{{sample}}_report.txt", sample=SAMPLES)
     output:
         f"{RESULTS_DIR}/multiqc_report.html"
-    conda:
-        "envs/preprocessing.yaml"
+    # Note: Uses multiqc from base environment (installed via pip)
     log:
         f"{QC_DIR}/logs/multiqc.log"
     shell:
