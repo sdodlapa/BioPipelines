@@ -6,6 +6,11 @@
 source ~/miniconda3/etc/profile.d/conda.sh
 conda activate manta_py27
 
+# Create python2 symlink in environment
+if [ ! -f ~/miniconda3/envs/manta_py27/bin/python2 ]; then
+    ln -s ~/miniconda3/envs/manta_py27/bin/python2.7 ~/miniconda3/envs/manta_py27/bin/python2
+fi
+
 # Run Manta with all provided arguments
 ~/BioPipelines/tools/manta-1.6.0.centos6_x86_64/bin/configManta.py "$@"
 
