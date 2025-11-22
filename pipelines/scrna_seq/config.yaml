@@ -7,17 +7,17 @@ description: "Single-cell RNA-seq analysis using STARsolo and Scanpy"
 
 # Directories
 dirs:
-  raw_data: "data/raw/scrna_seq"
-  results: "data/results/scrna_seq"
-  references: "data/references"
-  logs: "logs/scrna_seq"
-  temp: "/scratch/$USER/BioPipelines/scrna_seq_temp"
+  raw_data: "/scratch/sdodl001/BioPipelines/data/raw/scrna_seq"
+  results: "/scratch/sdodl001/BioPipelines/data/results/scrna_seq"
+  references: "/scratch/sdodl001/BioPipelines/data/references"
+  logs: "/scratch/sdodl001/BioPipelines/logs/scrna_seq"
+  temp: "/scratch/sdodl001/BioPipelines/scrna_seq_temp"
 
 # Reference genome
 reference:
-  fasta: "data/references/refdata-gex-GRCh38-2024-A/fasta/genome.fa"
-  gtf: "data/references/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz"
-  star_index: "data/references/refdata-gex-GRCh38-2024-A/star"
+  fasta: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/fasta/genome.fa"
+  gtf: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz"
+  star_index: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/star"
 
 # 10x Genomics chemistry (v2 or v3)
 chemistry:
