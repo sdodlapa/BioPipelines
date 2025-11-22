@@ -108,7 +108,7 @@ rule fastqc_raw:
         touch {output}
         """
 
-# Trim Galore (bisulfite mode)
+# Trim Galore (bisulfite mode) - uses base environment trim_galore
 rule trim_reads:
     input:
         lambda w: [f"{RAW_DIR}/{w.sample}_R1.fastq.gz", f"{RAW_DIR}/{w.sample}_R2.fastq.gz"]
@@ -124,8 +124,7 @@ rule trim_reads:
         clip_r2=config["params"]["trim"]["clip_r2"],
         rrbs="--rrbs" if config["params"]["trim"]["rrbs"] else "",
         paired="--paired" if SAMPLE_LAYOUT.get("sample1", "SE") == "PE" else ""
-    conda:
-        "envs/bismark.yaml"
+    # Note: No conda directive - uses trim_galore from base environment
     threads: 4
     log:
         f"{QC_DIR}/logs/trim/{{sample}}.log"
