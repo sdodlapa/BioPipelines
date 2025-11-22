@@ -50,8 +50,6 @@ rule nanoplot_qc:
         min_length = config["qc"]["min_read_length"],
         max_length = config["qc"]["max_read_length"],
         min_qual = config["qc"]["min_quality"]
-    conda:
-        "envs/qc.yaml"
     threads: config["qc"]["nanoplot_threads"]
     shell:
         """
@@ -75,8 +73,6 @@ rule minimap2_align:
         preset = config["alignment"]["minimap2_preset"],
         threads = config["alignment"]["threads"],
         extra = "-a -L --MD --eqx"  # -a: SAM output, -L: long cigars, --MD: MD tag, --eqx: =/X for match/mismatch
-    conda:
-        "envs/alignment.yaml"
     threads: config["alignment"]["threads"]
     resources:
         mem_mb = lambda wildcards, attempt: int(config["resources"]["alignment_mem"].replace("G", "")) * 1024 * attempt
@@ -99,8 +95,6 @@ rule sort_bam:
         remove_secondary = config["filtering"]["remove_secondary"],
         remove_supplementary = config["filtering"]["remove_supplementary"],
         min_mapq = config["alignment"]["min_mapq"]
-    conda:
-        "envs/alignment.yaml"
     threads: config["alignment"]["threads"]
     shell:
         """
@@ -126,8 +120,6 @@ rule sniffles2_call:
         min_support = config["sv_calling"]["min_support"],
         min_svlen = config["sv_calling"]["min_svlen"],
         threads = config["alignment"]["threads"]
-    conda:
-        "envs/sv_calling.yaml"
     threads: config["alignment"]["threads"]
     resources:
         mem_mb = lambda wildcards, attempt: int(config["resources"]["sv_calling_mem"].replace("G", "")) * 1024 * attempt
@@ -153,8 +145,6 @@ rule cutesv_call:
         min_size = config["sv_calling"]["cutesv_min_size"],
         threads = config["sv_calling"]["cutesv_threads"],
         max_cluster_bias = config["sv_calling"]["cutesv_max_cluster_bias"]
-    conda:
-        "envs/sv_calling.yaml"
     threads: config["sv_calling"]["cutesv_threads"]
     shell:
         """
@@ -186,8 +176,6 @@ rule survivor_merge:
         sv_type = 1,          # Take SV type into account
         strand = 1,           # Take strand into account
         min_svlen = 50        # Minimum SV length
-    conda:
-        "envs/sv_calling.yaml"
     shell:
         """
         # Create list of VCF files
@@ -210,8 +198,6 @@ rule whatshap_phase:
     params:
         min_qual = config["phasing"]["min_phase_qual"],
         chromosomes = " ".join([f"--chromosome {c}" for c in config["phasing"]["chromosome_list"]]) if config["phasing"]["chromosome_list"] else ""
-    conda:
-        "envs/phasing.yaml"
     shell:
         """
         whatshap phase {params.chromosomes} \
@@ -227,8 +213,6 @@ rule alignment_stats:
     output:
         stats = f"{RESULTS_DIR}/qc/{{sample}}.samtools_stats.txt",
         flagstat = f"{RESULTS_DIR}/qc/{{sample}}.samtools_flagstat.txt"
-    conda:
-        "envs/alignment.yaml"
     shell:
         """
         samtools stats {input.bam} > {output.stats}

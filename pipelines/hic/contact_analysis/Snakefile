@@ -75,8 +75,6 @@ rule fastqc_raw:
         f"{QC_DIR}/fastqc_raw/{{sample}}_fastqc.done"
     params:
         outdir=f"{QC_DIR}/fastqc_raw"
-    conda:
-        "envs/qc.yaml"
     threads: 2
     log:
         f"{QC_DIR}/logs/fastqc/{{sample}}.log"
@@ -100,8 +98,6 @@ rule trim_reads:
     params:
         quality=config["params"]["trim"]["quality"],
         min_len=config["params"]["trim"]["min_length"]
-    conda:
-        "envs/hic_processing.yaml"
     threads: 4
     log:
         f"{QC_DIR}/logs/trim/{{sample}}.log"
@@ -126,8 +122,6 @@ rule align_reads:
     params:
         index_base=BOWTIE2_INDEX,
         mapq=config["params"]["alignment"]["quality"]
-    conda:
-        "envs/hic_processing.yaml"
     threads: 16
     log:
         f"{QC_DIR}/logs/align/{{sample}}.log"
@@ -155,8 +149,6 @@ rule parse_pairs:
     params:
         min_mapq=config["params"]["filtering"]["min_mapq"],
         max_size=config["params"]["filtering"]["max_molecule_size"]
-    conda:
-        "envs/hic_processing.yaml"
     threads: 8
     log:
         f"{QC_DIR}/logs/parse/{{sample}}.log"
@@ -196,8 +188,6 @@ rule make_cooler:
     params:
         resolutions=",".join(map(str, RESOLUTIONS)),
         base_res=min(RESOLUTIONS)
-    conda:
-        "envs/hic_processing.yaml"
     threads: 8
     log:
         f"{QC_DIR}/logs/cooler/{{sample}}.log"
@@ -233,8 +223,6 @@ rule call_tads:
         min_depth=config["params"]["tad"]["min_depth"],
         max_depth=config["params"]["tad"]["max_depth"],
         step=config["params"]["tad"]["step"]
-    conda:
-        "envs/hic_analysis.yaml"
     threads: 4
     log:
         f"{QC_DIR}/logs/tad/{{sample}}.log"
@@ -268,8 +256,6 @@ rule call_loops:
         resolution=10000,
         min_dist=config["params"]["loop"]["min_distance"],
         max_dist=config["params"]["loop"]["max_distance"]
-    conda:
-        "envs/hic_analysis.yaml"
     threads: 8
     log:
         f"{QC_DIR}/logs/loop/{{sample}}.log"
@@ -297,8 +283,6 @@ rule call_compartments:
         bigwig=f"{RESULTS_DIR}/compartments/{{sample}}_compartments.bw"
     params:
         resolution=config["params"]["compartment"]["resolution"]
-    conda:
-        "envs/hic_analysis.yaml"
     threads: 4
     log:
         f"{QC_DIR}/logs/compartment/{{sample}}.log"
@@ -333,8 +317,6 @@ rule plot_matrix:
     params:
         resolution=100000,
         region="chr1:0-50000000"
-    conda:
-        "envs/visualization.yaml"
     log:
         f"{QC_DIR}/logs/plot/{{sample}}.log"
     shell:
@@ -360,8 +342,6 @@ rule multiqc:
         f"{QC_DIR}/multiqc_report.html"
     params:
         qc_dir=QC_DIR
-    conda:
-        "envs/qc.yaml"
     log:
         f"{QC_DIR}/logs/multiqc.log"
     shell:
@@ -381,8 +361,6 @@ rule hic_summary:
         multiqc=f"{QC_DIR}/multiqc_report.html"
     output:
         html=f"{RESULTS_DIR}/hic_summary.html"
-    conda:
-        "envs/visualization.yaml"
     log:
         f"{QC_DIR}/logs/summary.log"
     script:
