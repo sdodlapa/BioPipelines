@@ -28,16 +28,16 @@ mkdir -p logs/scrna_seq
 
 # Unlock Snakemake directory in case of previous failures
 echo "Unlocking Snakemake directory..."
-snakemake --snakefile pipelines/scrna_seq/single_cell_analysis/Snakefile --unlock 2>/dev/null || true
+snakemake --snakefile pipelines/scrna_seq/Snakefile --unlock 2>/dev/null || true
 echo ""
 
-# Run Snakemake pipeline
+# Run Snakemake pipeline (using STARsolo, not CellRanger)
 echo "Running Snakemake pipeline..."
 echo ""
 
 snakemake \
-    --snakefile pipelines/scrna_seq/single_cell_analysis/Snakefile \
-    --configfile pipelines/scrna_seq/single_cell_analysis/config.yaml \
+    --snakefile pipelines/scrna_seq/Snakefile \
+    --configfile pipelines/scrna_seq/config.yaml \
     --use-conda \
     --conda-frontend conda \
     --cores $SLURM_CPUS_PER_TASK \
