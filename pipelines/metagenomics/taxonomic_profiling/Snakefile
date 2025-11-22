@@ -219,8 +219,7 @@ rule metaphlan_profile:
     output:
         profile=f"{RESULTS_DIR}/taxonomy/metaphlan/{{sample}}_profile.txt",
         bowtie2out=f"{RESULTS_DIR}/taxonomy/metaphlan/{{sample}}.bowtie2.bz2"
-    conda:
-        "envs/profiling.yaml"
+    # Note: Uses metaphlan from base environment (installed via pip)
     threads: config["resources"]["threads"]["metaphlan"]
     log:
         f"{QC_DIR}/logs/metaphlan/{{sample}}.log"
