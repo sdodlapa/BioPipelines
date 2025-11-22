@@ -6,7 +6,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=64G
-#SBATCH --partition=default
+#SBATCH --partition=cpuspot
 
 echo "=========================================="
 echo "Single-cell RNA-seq Analysis Pipeline"

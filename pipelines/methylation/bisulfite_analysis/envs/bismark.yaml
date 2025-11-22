@@ -4,11 +4,9 @@ channels:
   - conda-forge
   - defaults
 dependencies:
-  # Core bisulfite sequencing tools - ultra minimal
+  # Core bisulfite sequencing tools
   - python>=3.9
   - bismark>=0.24
   - bowtie2>=2.5
-  # Skip problematic tools, install separately if needed
-  # - trim-galore
-  # - cutadapt  
-  # - samtools
+  - trim-galore>=0.6
+  - samtools>=1.18
