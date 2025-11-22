@@ -53,9 +53,9 @@ rule all:
 # Index BAM file
 rule index_bam:
     input:
-        f"{RAW_DIR}/{{sample}}.sorted.bam"
+        bam=f"{RAW_DIR}/{{sample}}.recal.bam"
     output:
-        f"{RAW_DIR}/{{sample}}.sorted.bam.bai"
+        bai=f"{RAW_DIR}/{{sample}}.recal.bam.bai"
     conda:
         "envs/sv_calling.yaml"
     threads: 1
@@ -67,8 +67,8 @@ rule index_bam:
 # DELLY SV calling
 rule delly_call:
     input:
-        bam=f"{RAW_DIR}/{{sample}}.sorted.bam",
-        bai=f"{RAW_DIR}/{{sample}}.sorted.bam.bai",
+        bam=f"{RAW_DIR}/{{sample}}.recal.bam",
+        bai=f"{RAW_DIR}/{{sample}}.recal.bam.bai",
         ref=REFERENCE
     output:
         bcf=temp(f"{PROCESSED_DIR}/delly/{{sample}}.bcf"),
@@ -97,8 +97,8 @@ rule delly_call:
 # Manta SV calling
 rule manta_call:
     input:
-        bam=f"{RAW_DIR}/{{sample}}.sorted.bam",
-        bai=f"{RAW_DIR}/{{sample}}.sorted.bam.bai",
+        bam=f"{RAW_DIR}/{{sample}}.recal.bam",
+        bai=f"{RAW_DIR}/{{sample}}.recal.bam.bai",
         ref=REFERENCE
     output:
         vcf=f"{RESULTS_DIR}/manta/{{sample}}.vcf.gz"
@@ -129,8 +129,8 @@ rule manta_call:
 # LUMPY SV calling
 rule lumpy_call:
     input:
-        bam=f"{RAW_DIR}/{{sample}}.sorted.bam",
-        bai=f"{RAW_DIR}/{{sample}}.sorted.bam.bai"
+        bam=f"{RAW_DIR}/{{sample}}.recal.bam",
+        bai=f"{RAW_DIR}/{{sample}}.recal.bam.bai"
     output:
         vcf=f"{RESULTS_DIR}/lumpy/{{sample}}.vcf.gz"
     params:

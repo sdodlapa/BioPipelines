@@ -7,7 +7,7 @@ samples:
 
 # Data directories
 data_dir: "/scratch/sdodl001/BioPipelines/data"
-raw_dir: "/scratch/sdodl001/BioPipelines/data/processed/dna_seq"  # Use BAM from DNA-seq pipeline
+raw_dir: "/scratch/sdodl001/BioPipelines/data/processed"  # DNA-seq BAM files
 processed_dir: "/scratch/sdodl001/BioPipelines/data/processed/structural_variants"
 results_dir: "/scratch/sdodl001/BioPipelines/data/results/structural_variants"
 qc_dir: "/scratch/sdodl001/BioPipelines/data/results/structural_variants/qc"
