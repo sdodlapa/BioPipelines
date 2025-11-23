@@ -1,29 +1,35 @@
 # Nextflow Pipeline Architecture Plan
 
-**Date**: November 23, 2024  
+**Date**: November 23, 2025  
 **Purpose**: Design a new AI-driven, container-based bioinformatics platform using Nextflow  
-**Status**: Planning Phase
+**Status**: Planning Phase  
+**Environment**: Google Cloud HPC (8x H100 80GB GPUs per node)  
+**Target Users**: ~10 users/week at rollout  
+**Development Philosophy**: Quality over speed - build best version at our own pace
 
 ---
 
 ## 1. Executive Summary
 
 ### Vision
-Build a **modern, AI-agentic bioinformatics pipeline platform** that dynamically generates and executes workflows based on user specifications, using Nextflow as the orchestration engine with containerized tools.
+Build a **modern, AI-agentic bioinformatics pipeline platform** that dynamically generates and executes workflows based on user specifications, using Nextflow as the orchestration engine with containerized tools. Leverage GPU-accelerated AI models for intelligent pipeline design while maintaining parallel operation with existing Snakemake infrastructure.
 
 ### Key Differentiators from Current System
 - **Dynamic Pipeline Generation**: AI agents create workflows on-demand vs static Snakemake rules
+- **GPU-Accelerated AI**: Self-hosted LLMs on H100 GPUs (no API costs, data stays on-premise)
 - **Nextflow DSL2**: Modern workflow language with better parallelization and cloud integration
 - **Microservices Architecture**: Modular tool containers that can be composed flexibly
 - **User-Centric**: Pipelines tailored to specific research questions, not fixed templates
-- **Cloud-Native**: Designed for HPC, cloud (GCP), and hybrid environments
+- **Cloud-Native**: Native GCP integration with Google Batch and Cloud Storage
+- **Parallel Systems**: Coexists with Snakemake - users choose best tool for their needs
 
 ### Strategic Goals
 1. **Flexibility**: Generate custom pipelines for novel research questions
 2. **Scalability**: Handle 1-1000s of samples with automatic parallelization
 3. **Reproducibility**: Containerized tools + versioned workflows + data provenance
-4. **AI Integration**: Natural language → executable pipeline translation
+4. **AI Integration**: Natural language → executable pipeline translation using on-premise GPU inference
 5. **Efficiency**: Minimize storage, maximize compute utilization
+6. **User Experience**: Simple enough for new users, powerful enough for experts
 
 ---
 
@@ -79,14 +85,17 @@ Build a **modern, AI-agentic bioinformatics pipeline platform** that dynamically
 
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|
-| **Workflow Engine** | Nextflow 24.x (DSL2) | Industry standard, excellent cloud support, active community |
-| **Container Runtime** | Singularity/Apptainer | HPC-friendly, rootless, works with SLURM |
-| **Container Registry** | Local SIF + Docker Hub | Hybrid: fast local access + cloud distribution |
-| **AI Framework** | LangChain + Claude/GPT-4 | Structured prompt engineering, tool use, reasoning |
-| **Scheduling** | SLURM (primary) + nf-core/google | HPC cluster + cloud burst capability |
-| **Data Storage** | Scratch (NVMe) + GCS | Fast local compute + durable cloud archival |
+| **Workflow Engine** | Nextflow 24.x (DSL2) | Industry standard, excellent GCP support, active nf-core community |
+| **Container Runtime** | Singularity/Apptainer | HPC-friendly, rootless, works with SLURM on GCP |
+| **Container Registry** | GCP Artifact Registry + Local SIF | Fast local caching, cloud-backed distribution |
+| **AI Inference** | vLLM + Llama 3.3 70B / Qwen 2.5 72B | Self-hosted on H100 GPUs, <100ms latency, no API costs |
+| **AI Framework** | LangChain + Custom Agents | Structured prompts, tool use, multi-agent orchestration |
+| **GPU Hardware** | 8x H100 80GB per node | 3.2TB HBM3 bandwidth, tensor core acceleration |
+| **Scheduling** | SLURM + Google Batch | Primary HPC scheduler + cloud burst for large jobs |
+| **Data Storage** | NVMe (hot) + HDD (warm) + GCS (cold) | Tiered storage: compute → staging → archival |
 | **Programming** | Nextflow DSL2 + Python 3.11 | Workflow definition + AI agent logic |
 | **Configuration** | YAML + TOML | Human-readable, validation-friendly |
+| **Monitoring** | Nextflow Tower + Cloud Logging | Real-time pipeline monitoring, resource tracking |
 
 ---
 
@@ -682,89 +691,250 @@ nfp interactive
 
 ## 5. Implementation Roadmap
 
-### Phase 1: Foundation (Weeks 1-2)
-**Goal**: Basic infrastructure and proof-of-concept
+**Timeline**: 12-week phased development with quality checkpoints  
+**Philosophy**: Build best version at our own pace - quality over speed  
+**Strategy**: Parallel systems - Snakemake continues production while Nextflow develops
 
-- [ ] Set up new repository: `nextflow-pipelines`
-- [ ] Create directory structure
-- [ ] Install Nextflow (24.x) and configure for SLURM
-- [ ] Build base container with Nextflow + Python
-- [ ] Implement CLI skeleton (Typer)
+### Phase 1: Foundation & GPU Infrastructure (Weeks 1-3)
+**Goal**: Core infrastructure and self-hosted AI
+
+**GPU Infrastructure Setup**
+- [ ] Deploy vLLM inference server on H100 node
+- [ ] Test models: Llama 3.3 70B, Qwen 2.5 72B, DeepSeek-V3
+- [ ] Benchmark latency: target <500ms for pipeline generation
+- [ ] Set up model quantization (FP8/INT4) for optimal throughput
+- [ ] Configure GPU SLURM partition with proper isolation
+
+**Nextflow Foundation**
+- [ ] Create directory: `BioPipelines/nextflow-platform/`
+- [ ] Install Nextflow (24.x) and configure for SLURM + Google Batch
+- [ ] Set up GCP Artifact Registry for container distribution
+- [ ] Configure nf-core tooling and templates
+- [ ] Build base container with Nextflow + Python 3.11
+
+**CLI & Basic Modules**
+- [ ] Implement CLI skeleton (Typer + Rich for beautiful output)
 - [ ] Create 3 reference modules:
   - `qc/fastqc.nf`
   - `alignment/star.nf`
   - `expression/deseq2.nf`
-- [ ] Write first AI agent: `PipelinePlannerAgent`
+- [ ] Write first AI agent: `PipelinePlannerAgent` (connecting to local vLLM)
 - [ ] Test: "RNA-seq differential expression" → generated pipeline
 
-**Deliverable**: Functional proof-of-concept that generates a simple RNA-seq pipeline
+**Checkpoint**: Can we generate a valid Nextflow pipeline from natural language? (Pass/Fail)
 
-### Phase 2: Core Modules (Weeks 3-4)
-**Goal**: Build comprehensive module library
+**Deliverable**: Functional proof-of-concept with GPU-accelerated AI
 
-- [ ] Implement 20+ core modules:
-  - QC: FastQC, MultiQC, Trimmomatic, fastp
-  - Alignment: BWA, STAR, Bowtie2, Minimap2
-  - Variants: GATK, FreeBayes, VEP, filtering
-  - Expression: Salmon, featureCounts, DESeq2, edgeR
-  - Epigenomics: MACS2, HOMER, deepTools
-- [ ] Create module containers (1 container per module group)
-- [ ] Write module documentation
-- [ ] Implement module testing framework
-- [ ] Add resource profiles (standard, optimized)
+---
 
-**Deliverable**: Library of 20+ tested, documented modules
+### Phase 2: Core Pipeline Tier 1 (Weeks 4-6)
+**Goal**: Build 3 complete, production-ready pipelines
 
-### Phase 3: AI Agents (Weeks 5-6)
-**Goal**: Intelligent pipeline design and optimization
+**RNA-seq Pipeline** (Priority 1)
+- [ ] Modules: FastQC → STAR/Salmon → featureCounts → DESeq2 → GSEA → MultiQC
+- [ ] Support: Single/paired-end, stranded/unstranded, multiple references
+- [ ] AI agent: Auto-detect strandedness, choose quantification method
+- [ ] Testing: ENCODE test dataset, compare to Snakemake results
 
-- [ ] Implement `ToolSelectorAgent`: Choose optimal tools
-- [ ] Implement `ParameterOptimizerAgent`: Tune tool parameters
-- [ ] Implement `ResourceManagerAgent`: Estimate compute/storage
-- [ ] Implement `ValidatorAgent`: Check pipeline correctness
-- [ ] Add agent logging and decision tracking
-- [ ] Create agent testing suite with example queries
-- [ ] Integrate agents into CLI workflow
+**DNA-seq Variant Calling** (Priority 2)
+- [ ] Modules: BWA-MEM2 → GATK HaplotypeCaller → VEP annotation → Filtering
+- [ ] Support: WGS, WES, targeted panels
+- [ ] AI agent: Choose GATK vs FreeBayes based on organism/coverage
+- [ ] Testing: Genome in a Bottle reference samples
 
-**Deliverable**: End-to-end AI-driven pipeline generation
+**scRNA-seq** (Priority 3)
+- [ ] Modules: CellRanger/STARsolo → Scanpy/Seurat → Clustering → Annotation
+- [ ] Support: 10x, Drop-seq, Smart-seq2
+- [ ] AI agent: Recommend normalization and batch correction strategies
+- [ ] Testing: PBMC 3k dataset from 10x Genomics
 
-### Phase 4: Advanced Features (Weeks 7-8)
-**Goal**: Production-ready system
+**Infrastructure**
+- [ ] Create module containers (shared across pipelines)
+- [ ] Implement resource profiles (small/medium/large datasets)
+- [ ] Add GCS data staging automation
+- [ ] Write comprehensive module documentation
 
-- [ ] Implement sample sheet validation
-- [ ] Add pipeline resumption and checkpointing
-- [ ] Create MultiQC integration for unified reports
-- [ ] Implement data staging (scratch ↔ GCS)
-- [ ] Add Tower monitoring integration
-- [ ] Write comprehensive documentation
-- [ ] Create tutorial notebooks
-- [ ] Performance benchmarking
+**Checkpoint**: Are pipelines as good or better than Snakemake versions? (Quality gate)
 
-**Deliverable**: Production-ready platform with documentation
+**Deliverable**: 3 production-ready pipelines, full documentation
 
-### Phase 5: Testing & Validation (Week 9)
-**Goal**: Ensure reliability and correctness
+---
 
-- [ ] Run test datasets through all modules
-- [ ] Validate outputs against known results
-- [ ] Benchmark performance vs current Snakemake pipelines
-- [ ] Test error handling and edge cases
-- [ ] User acceptance testing
-- [ ] Security audit (container scanning, data access)
+### Phase 3: AI Agent Intelligence (Weeks 7-9)
+**Goal**: Multi-agent system with expert-level decision making
 
-**Deliverable**: Validated, tested, secure platform
+**Core Agents**
+- [ ] **PlannerAgent**: High-level workflow design (Llama 3.3 70B)
+- [ ] **ToolSelectorAgent**: Choose optimal tools per step (rule-based + LLM)
+- [ ] **ParameterOptimizerAgent**: Literature-based parameter tuning
+- [ ] **ResourceManagerAgent**: Predict compute/storage from data characteristics
+- [ ] **ValidatorAgent**: Check pipeline correctness (syntax + logic)
+- [ ] **CostEstimatorAgent**: Estimate GCP costs before execution
 
-### Phase 6: Deployment & Training (Week 10)
-**Goal**: Launch and enable users
+**Agent Orchestration**
+- [ ] Implement hierarchical coordination (planner → specialists)
+- [ ] Add agent memory: learn from past pipeline runs
+- [ ] Create decision logging (why agent chose tool X over Y)
+- [ ] Build feedback loop: user corrections → agent improvement
 
-- [ ] Deploy to cluster
-- [ ] Set up monitoring and logging
-- [ ] Create user onboarding guide
-- [ ] Hold training workshop
-- [ ] Gather user feedback
-- [ ] Plan future enhancements
+**Advanced Features**
+- [ ] Interactive mode: conversational pipeline refinement
+- [ ] Explain mode: "Why did you choose STAR over HISAT2?"
+- [ ] Alternative mode: "Show me 3 different approaches"
+- [ ] Benchmark mode: "Compare GATK vs FreeBayes on my data"
 
-**Deliverable**: Live platform with trained users
+**Testing**
+- [ ] Create test suite: 50 natural language queries
+- [ ] Target accuracy: 80% correct pipelines without human correction
+- [ ] Measure: generation time, resource accuracy, user satisfaction
+
+**Checkpoint**: Do AI agents reliably generate correct pipelines? (80% success target)
+
+**Deliverable**: Intelligent multi-agent system with learning capability
+
+---
+
+### Phase 4: Additional Pipelines Tier 2 (Weeks 10-11)
+**Goal**: Expand pipeline library to cover more use cases
+
+**Additional Pipelines** (Choose 3 based on user demand)
+- [ ] **ATAC-seq**: Chromatin accessibility analysis
+- [ ] **ChIP-seq**: TF binding and histone modifications (shares modules with ATAC-seq)
+- [ ] **Long-read sequencing**: PacBio/Nanopore analysis and assembly
+- [ ] **Metagenomics**: Microbiome profiling and functional analysis
+- [ ] **Methylation**: WGBS and RRBS analysis
+
+**Module Reuse**
+- [ ] Maximize module sharing across pipelines
+- [ ] Create meta-modules: combined tool groups
+- [ ] Document module compatibility matrix
+
+**nf-core Integration**
+- [ ] Import stable nf-core modules where appropriate
+- [ ] Contribute novel modules back to nf-core community
+- [ ] Follow nf-core best practices and standards
+
+**Deliverable**: 6 total pipelines covering major analysis types
+
+---
+
+### Phase 5: Production Features (Week 12)
+**Goal**: Enterprise-ready platform
+
+**Cloud Integration**
+- [ ] Google Batch executor for burst capacity
+- [ ] Automatic GCS archival (results older than 30 days)
+- [ ] Cloud Storage FUSE for transparent data access
+- [ ] Preemptible VM support for cost optimization
+
+**Monitoring & Observability**
+- [ ] Nextflow Tower integration
+- [ ] Cloud Logging for centralized logs
+- [ ] Prometheus metrics: job success rate, resource utilization
+- [ ] Alert system: email on pipeline failure
+
+**User Experience**
+- [ ] Sample sheet templates and validation
+- [ ] Pipeline resumption from any failure point
+- [ ] Progress indicators and ETA estimates
+- [ ] Result summaries with key findings highlighted
+
+**Documentation**
+- [ ] Comprehensive user guide
+- [ ] Video tutorials (pipeline generation, execution, troubleshooting)
+- [ ] API documentation for programmatic access
+- [ ] FAQ from beta testing
+
+**Deliverable**: Production-ready platform with full observability
+
+---
+
+### Phase 6: Testing & Validation (Week 13)
+**Goal**: Ensure correctness and reliability
+
+**Validation Testing**
+- [ ] Compare outputs vs Snakemake pipelines (identical results)
+- [ ] Run benchmark datasets: ENCODE, TCGA, GIAB references
+- [ ] Test edge cases: single sample, 1000 samples, missing data
+- [ ] Stress test: concurrent pipeline submissions
+- [ ] Failure recovery: kill jobs mid-run, verify resume works
+
+**Performance Benchmarking**
+- [ ] Measure: wall time, CPU hours, cost per pipeline
+- [ ] Compare: Nextflow vs Snakemake efficiency
+- [ ] Optimize: identify and fix bottlenecks
+- [ ] Document: performance characteristics and scaling limits
+
+**Security Audit**
+- [ ] Container vulnerability scanning
+- [ ] Data access permissions review
+- [ ] Secrets management (API keys, credentials)
+- [ ] Compliance: HIPAA considerations for human data
+
+**User Acceptance Testing**
+- [ ] Beta testers: 3-5 power users
+- [ ] Real projects: not just test data
+- [ ] Gather feedback: usability issues, feature requests
+- [ ] Iterate: fix critical issues before launch
+
+**Checkpoint**: Would we confidently use this for production research? (Go/No-Go decision)
+
+**Deliverable**: Validated, secure, performant platform
+
+---
+
+### Phase 7: Deployment & Rollout (Week 14)
+**Goal**: Launch to users and establish support model
+
+**Deployment**
+- [ ] Production deployment on cluster
+- [ ] Load balancing for AI inference (multiple H100 nodes)
+- [ ] Backup and disaster recovery plan
+- [ ] Documentation website (Sphinx or MkDocs)
+
+**Training & Onboarding**
+- [ ] User workshop: 2-hour hands-on training
+- [ ] Create tutorial notebooks (Jupyter)
+- [ ] Office hours: weekly drop-in support
+- [ ] Slack/Teams channel for questions
+
+**Launch Strategy**
+- [ ] Soft launch: announce to research group
+- [ ] Target: 10 users/week capacity
+- [ ] Monitor: usage patterns, common issues
+- [ ] Support: quick response to early adopter problems
+
+**Metrics & KPIs**
+- [ ] Track: pipelines generated, success rate, user satisfaction
+- [ ] Weekly reports: usage statistics and trends
+- [ ] Feedback loop: prioritize improvements based on data
+
+**Deliverable**: Live platform with active users and support infrastructure
+
+---
+
+### Phase 8: Continuous Improvement (Ongoing)
+**Goal**: Iterate based on real-world usage
+
+**Weeks 15-20: Enhancement Cycle**
+- [ ] Add most-requested pipeline types
+- [ ] Improve AI agents based on user feedback
+- [ ] Optimize resource allocation from actual usage data
+- [ ] Expand module library (community contributions)
+
+**Technical Debt**
+- [ ] Refactor based on lessons learned
+- [ ] Improve test coverage to 80%+
+- [ ] Performance optimization rounds
+- [ ] Documentation updates
+
+**Community Building**
+- [ ] Internal user group meetings (monthly)
+- [ ] Share success stories and use cases
+- [ ] Contribute to nf-core community
+- [ ] Consider open-source release (if appropriate)
+
+**Deliverable**: Mature platform with growing user base and feature set
 
 ---
 
@@ -819,24 +989,60 @@ Target: ~20 containers vs current 12, better reuse
 - Pros: Balance of expertise and efficiency
 - Cons: Moderate complexity
 
-**Decision**: **Multi-Agent with Hierarchical Coordination**
-- **Planner Agent**: High-level workflow design (Claude Sonnet)
-- **Specialist Agents**: Tool selection, parameter tuning (smaller models)
-- **Validator Agent**: Check correctness (rule-based + LLM)
+**Decision**: **Multi-Agent with Hierarchical Coordination + GPU Acceleration**
+- **Planner Agent**: High-level workflow design (Llama 3.3 70B on H100)
+- **Specialist Agents**: Tool selection, parameter tuning (Qwen 2.5 72B or smaller models)
+- **Validator Agent**: Check correctness (rule-based + LLM verification)
+- **Inference**: vLLM server on 8x H100 GPUs (~100-500ms latency per query)
+- **Scaling**: Multiple H100 nodes for concurrent users (10 users/week → 1 GPU per user)
+
+**GPU Resource Allocation**:
+```yaml
+AI Inference Server:
+  Hardware: 1-2 H100 nodes (8 GPUs each)
+  Model Loading:
+    - Llama 3.3 70B: 4 GPUs (tensor parallelism)
+    - Qwen 2.5 72B: 4 GPUs (tensor parallelism)
+  Throughput: 50-100 tokens/sec per model
+  Concurrent Users: 10-20 simultaneous queries
+  
+Pipeline Execution:
+  Remains on CPU nodes (SLURM)
+  GPU-accelerated tools (optional): DeepVariant, AlphaFold
+```
 
 ### 6.4 Data Management
 
 **Current**: `/scratch` for everything (volatile, not backed up)
 
-**Proposed**: Tiered storage
-1. **Hot**: `/scratch/nvme` - active computation (7-day retention)
-2. **Warm**: `/scratch/hdd` - recent results (30-day retention)
-3. **Cold**: Google Cloud Storage - archival (long-term, versioned)
+**Proposed**: GCP-Native Tiered Storage
+1. **Hot (Compute)**: Local NVMe on compute nodes - active jobs only (auto-cleanup)
+2. **Warm (Staging)**: Persistent Disk (SSD) - recent results (30-day retention)
+3. **Cold (Archive)**: Google Cloud Storage Standard - long-term storage (lifecycle management)
+4. **Deep Archive**: GCS Nearline/Coldline - rarely accessed data (cost-optimized)
 
 **Implementation**:
-- Nextflow auto-publishes results to appropriate tier
-- AI agent estimates data lifecycle
-- Automatic archival after completion
+- Nextflow publishes results to GCS automatically (via publishDir)
+- Cloud Storage FUSE mounts GCS as local filesystem (transparent access)
+- AI agent estimates data lifecycle and storage tier
+- Automatic lifecycle rules:
+  - 30 days: Standard → Nearline (50% cost reduction)
+  - 90 days: Nearline → Coldline (75% cost reduction)
+  - Never delete: Researchers decide retention
+  
+**Cost Optimization**:
+```yaml
+Storage_Costs_GCP:
+  Standard: $0.020/GB/month (first 30 days)
+  Nearline: $0.010/GB/month (30-90 days)
+  Coldline: $0.004/GB/month (90+ days)
+  
+Example_Project:
+  Raw_Data: 500GB (Archive immediately, rarely accessed)
+  Alignments: 2TB (Keep 30 days, then Nearline)
+  Results: 50GB (Keep indefinitely in Standard)
+  Total_Monthly: ~$25-30 vs $41 all-Standard
+```
 
 ---
 
@@ -948,61 +1154,288 @@ Target: ~20 containers vs current 12, better reuse
 
 ---
 
-## 11. Questions for Stakeholders
+## 11. Stakeholder Decisions & Requirements
 
-### Technical Team
-1. Do we want to support both local SLURM and cloud execution in Phase 1, or defer cloud to Phase 2?
-2. Should we use Docker Hub or build a private container registry?
-3. What's our budget for LLM API costs (Claude/GPT-4 for AI agents)?
-4. Should we integrate with existing LIMS/data management systems?
+### Infrastructure (Confirmed ✓)
+1. **GPU Access**: 8x H100 80GB GPUs per node - CONFIRMED
+   - Use for self-hosted LLM inference (vLLM)
+   - No API costs, data stays on-premise
+   - ~100-500ms latency for pipeline generation
 
-### Scientific Users
-1. What are the top 5 analysis types you need most urgently?
-2. Are you comfortable with CLI-based tools, or do we need a web UI?
-3. How important is integration with public databases (GEO, SRA)?
-4. What's your tolerance for AI-generated vs manually-reviewed pipelines?
+2. **Cloud Environment**: Google Cloud Platform - CONFIRMED
+   - Native GCP integration (Google Batch, Cloud Storage)
+   - No budget constraints for development
+   - Cost optimization through lifecycle management
 
-### Leadership
-1. Timeline: 10-week aggressive or 16-week thorough development?
-2. Resources: Dedicated developer time? GPU access for LLM inference?
-3. Success criteria: What defines a "successful" launch?
-4. Long-term: Is this intended for internal use only or public release?
+3. **Container Registry**: GCP Artifact Registry - DECIDED
+   - Private registry for proprietary tools
+   - Fast distribution across compute nodes
+   - Integration with Cloud Build for CI/CD
+
+4. **LIMS Integration**: Defer to Phase 8 (post-launch)
+   - Focus on core functionality first
+   - Add integrations based on user demand
+
+### User Requirements (Confirmed ✓)
+1. **Target Users**: ~10 users/week at rollout - CONFIRMED
+   - Gradual rollout strategy
+   - Close monitoring and support in early weeks
+   - Scale infrastructure as adoption grows
+
+2. **Analysis Priorities**: 
+   - Tier 1: RNA-seq, DNA-seq variant calling, scRNA-seq
+   - Tier 2: ATAC-seq, ChIP-seq, Long-read sequencing
+   - Tier 3: Add based on user requests
+
+3. **Interface**: CLI-first, Web UI optional
+   - Power users prefer command-line control
+   - Web UI for visualization/monitoring (future)
+   - Jupyter notebook integration for exploratory analysis
+
+4. **AI Trust Level**: High tolerance with validation
+   - Users comfortable with AI-generated pipelines
+   - Validation step before execution
+   - Explain mode to understand AI decisions
+
+### Development Strategy (Confirmed ✓)
+1. **Timeline**: 14-week phased development - DECIDED
+   - Quality over speed: "build best version at our own pace"
+   - Checkpoints at weeks 3, 9, 13 for quality gates
+   - Flexible schedule based on real progress
+
+2. **Resources**: 
+   - Dedicated development time (not rushing)
+   - H100 GPUs available for AI inference
+   - GCP credits unlimited for development
+
+3. **Success Criteria**:
+   - Week 3: Can generate valid Nextflow pipeline from NL
+   - Week 9: AI agents 80% accurate on test queries
+   - Week 13: Would use for real research (user validation)
+   - Post-launch: 80%+ user satisfaction, <5% failure rate
+
+4. **System Architecture**: Parallel systems - DECIDED
+   - Keep Snakemake running (production)
+   - Build Nextflow alongside (development)
+   - No forced migration, users choose
+   - Long-term: Natural adoption of superior system
+
+### Public Release (TBD)
+- Internal use for first 6 months
+- Evaluate open-source release after validation
+- Potential nf-core contributions
+- Decision deferred until system matures
 
 ---
 
 ## 12. Next Immediate Steps
 
-### This Week
-1. **Create new repository**: Initialize `nextflow-pipelines` repo
-2. **Install Nextflow**: Set up on cluster, test SLURM integration
-3. **Build first module**: Create `qc/fastqc.nf` as reference
-4. **Prototype AI agent**: Simple planner that generates 3-step pipeline
-5. **Document**: Write installation guide and architecture overview
+### Week 1: GPU & Nextflow Foundation
+**Days 1-2: GPU Infrastructure**
+1. **Deploy vLLM server** on H100 node
+   ```bash
+   # Test models and benchmark
+   vllm serve meta-llama/Llama-3.3-70B-Instruct --tensor-parallel-size 4
+   # Measure: latency, throughput, memory usage
+   ```
+2. **Test inference APIs**: REST endpoint, Python client
+3. **Benchmark models**: Llama 3.3 70B, Qwen 2.5 72B, DeepSeek-V3
+4. **Document**: GPU setup guide, model selection criteria
 
-### Week 2
-- Expand to 5 modules (FastQC, STAR, featureCounts, DESeq2, MultiQC)
-- Create RNA-seq reference workflow using modules
-- Test end-to-end: Natural language → pipeline → execution
-- Gather feedback from test users
+**Days 3-4: Nextflow Setup**
+1. **Create directory**: `BioPipelines/nextflow-platform/`
+   ```bash
+   cd ~/BioPipelines
+   mkdir -p nextflow-platform/{bin,src,modules,workflows,containers,config,tests,docs}
+   ```
+2. **Install Nextflow**: Latest stable (24.x) on login and compute nodes
+3. **Configure profiles**: 
+   - `slurm.config`: Local SLURM execution
+   - `google.config`: Google Batch for burst capacity
+4. **GCP setup**: Artifact Registry, IAM permissions, Cloud Storage buckets
 
-**DECISION POINT**: After Week 2, evaluate if Nextflow approach is superior to current system. If yes, proceed to Phase 2. If major issues, reassess.
+**Days 5-7: First Module + AI Agent**
+1. **Create reference module**: `modules/qc/fastqc.nf`
+2. **Build simple workflow**: Single FastQC run end-to-end
+3. **Implement basic AI agent**: 
+   - Input: "Run quality control on my fastq files"
+   - Output: Generated fastqc.nf workflow
+   - Backend: vLLM server on H100
+4. **Test**: Submit real FastQ → Nextflow executes → results generated
+
+**Deliverable**: Working proof-of-concept (NL query → GPU AI → Nextflow execution)
+
+---
+
+### Week 2-3: Expand to Complete RNA-seq
+1. **Add modules**: STAR alignment, featureCounts, DESeq2, MultiQC
+2. **Create containers**: Build Singularity images for each module
+3. **Test integration**: Complete RNA-seq pipeline end-to-end
+4. **Benchmark**: Compare to Snakemake RNA-seq (speed, accuracy)
+5. **Document**: User guide for first pipeline
+
+**CHECKPOINT (Week 3)**: 
+- ✓ Can we generate a complete, correct pipeline from NL?
+- ✓ Is Nextflow faster/better than Snakemake?
+- ✓ Does GPU AI inference work reliably?
+- **Decision**: Proceed to Phase 2 or pivot strategy
+
+---
+
+### Communication Plan
+**Stakeholder Updates**:
+- Week 3: Checkpoint review (POC results)
+- Week 6: Tier 1 pipelines demo
+- Week 9: AI agents demo (interactive session)
+- Week 13: Pre-launch user testing
+- Week 14: Launch announcement
+
+**Documentation**:
+- Living document: Update this plan as decisions are made
+- Decision log: Track what we tried, what worked, what failed
+- Weekly progress notes: Keep stakeholders informed
+
+---
+
+### Resource Requirements (Phase 1)
+
+**Compute**:
+- 1 H100 node (8 GPUs): AI inference server (dedicated)
+- 2-4 CPU nodes: Nextflow testing and development
+- 10-20 CPU cores: Parallel module testing
+
+**Storage**:
+- 500GB persistent disk: Code, containers, small test data
+- 2TB scratch: Large test datasets (ENCODE, TCGA subsets)
+- 1TB GCS: Archival of test results and benchmarks
+
+**Personnel**:
+- Primary developer: Full-time on Nextflow platform
+- Domain expert: Part-time for pipeline validation
+- System admin: Support for GCP and GPU setup (as needed)
 
 ---
 
 ## Conclusion
 
-This new Nextflow-based platform represents a **fundamental architectural shift** from fixed pipelines to **AI-driven, dynamic workflow generation**. Key advantages:
+This new Nextflow-based platform represents a **fundamental architectural shift** from fixed pipelines to **AI-driven, dynamic workflow generation**, leveraging Google Cloud's H100 GPU infrastructure for on-premise AI inference. Key advantages:
 
-1. **User-Centric**: Pipelines tailored to research questions, not forced into templates
-2. **Future-Proof**: Cloud-native design, ready for hybrid/cloud migration
-3. **Scalable**: Modular architecture supports infinite pipeline combinations
-4. **Intelligent**: AI agents automate design, optimization, validation
-5. **Maintainable**: Small, tested modules vs large monolithic workflows
+1. **GPU-Accelerated AI**: Self-hosted LLMs on H100s (no API costs, data privacy, <500ms latency)
+2. **User-Centric**: Pipelines tailored to research questions, not forced into templates
+3. **Cloud-Native GCP**: Native integration with Google Batch, Cloud Storage, lifecycle management
+4. **Parallel Systems**: Coexists with Snakemake - users choose best tool for their needs
+5. **Scalable**: Modular architecture supports infinite pipeline combinations (10 users/week → 100s)
+6. **Intelligent**: Multi-agent system with learning from usage patterns
+7. **Maintainable**: Small, tested modules following nf-core best practices
+8. **Quality-Focused**: 14-week thoughtful development over rushed 10-week sprint
 
-**Recommendation**: Proceed with 10-week aggressive timeline for initial launch, then iterate based on user feedback.
+### Strategic Positioning
+
+**Current State (Snakemake)**:
+- 10 fixed pipelines, fully containerized
+- Works well for standard analyses
+- Difficult to customize or extend
+- Manual parameter tuning required
+
+**Future State (Nextflow + AI)**:
+- Infinite custom pipelines from natural language
+- AI-optimized tool selection and parameters
+- Self-service for researchers (reduced bioinformatics bottleneck)
+- Cloud-ready for scale-out when needed
+
+**Transition Strategy**:
+- No disruption: Snakemake continues production use
+- Gradual adoption: Early adopters test Nextflow platform
+- Natural migration: Users choose superior system over time
+- No forced timeline: Quality and user satisfaction drive adoption
+
+### Success Metrics (6-Month Post-Launch)
+
+**Technical Excellence**:
+- 80%+ AI-generated pipelines run successfully without modification
+- 95%+ pipeline resumption success after failures
+- Results match or exceed Snakemake quality (validated on benchmarks)
+- <1 hour from query to running pipeline (including AI generation)
+
+**User Adoption**:
+- 10 active users/week generating custom pipelines
+- 80%+ user satisfaction score
+- 50%+ of new projects choose Nextflow over Snakemake
+- 20+ unique pipeline types generated (vs 10 fixed Snakemake)
+
+**Operational Efficiency**:
+- 30%+ reduction in bioinformatics support time (self-service)
+- 20%+ cost reduction through GCS lifecycle management
+- Zero data loss incidents
+- 99%+ system uptime
+
+### Risk Mitigation
+
+**Technical Risks**: Addressed via checkpoints at weeks 3, 9, 13 (go/no-go decisions)
+**User Adoption**: Parallel systems reduce risk, no forced migration
+**GPU Availability**: Dedicated H100 node for AI, no competition with compute jobs
+**Data Privacy**: Self-hosted AI keeps all data on-premise (no cloud APIs)
+**Maintenance Burden**: Modular design and comprehensive docs reduce long-term costs
+
+### Next Decision Points
+
+1. **Week 3**: Is GPU AI + Nextflow viable? (Technical validation)
+2. **Week 9**: Are AI agents good enough? (Quality gate: 80% accuracy)
+3. **Week 13**: Ready for production? (User acceptance testing)
+4. **Week 20**: Scale up or pivot? (Based on 6 weeks of real usage)
+
+**Recommendation**: Proceed with 14-week phased development, building the best possible system at our own pace. Quality and user trust are more valuable than speed.
 
 ---
 
-**Document Status**: Living Document - Update as decisions are made
-**Last Updated**: November 23, 2024
-**Next Review**: After Phase 1 completion (2 weeks)
+**Document Status**: Living Document - Update as implementation progresses  
+**Last Updated**: November 23, 2025  
+**Next Review**: After Week 3 Checkpoint (GPU + Nextflow POC)  
+**Approved By**: Development team (stakeholder sign-off pending)
+
+---
+
+## Appendix: Quick Reference
+
+### Repository Structure
+```
+BioPipelines/
+├── pipelines/              # Current Snakemake (keep as-is)
+├── containers/             # Shared containers (both systems)
+├── nextflow-platform/      # NEW - Nextflow + AI system
+│   ├── bin/nfp            # Main CLI
+│   ├── modules/           # Reusable Nextflow modules
+│   ├── workflows/         # Complete pipelines
+│   └── src/agents/        # AI agent implementations
+└── data/                  # Shared data (raw, references, results)
+```
+
+### Key Commands (Future)
+```bash
+# Plan a pipeline
+nfp plan "RNA-seq differential expression, tumor vs normal"
+
+# Generate Nextflow code
+nfp generate design.json --output rnaseq.nf
+
+# Execute pipeline
+nfp run rnaseq.nf samples.csv --profile slurm
+
+# Monitor progress
+nfp status <run-id>
+
+# Interactive mode
+nfp chat
+> I have 50 samples, what pipeline should I use?
+```
+
+### Technology Choices Summary
+| Component | Technology | Why |
+|-----------|-----------|-----|
+| Workflow Engine | Nextflow DSL2 | GCP-native, nf-core ecosystem |
+| AI Inference | vLLM on H100 | Self-hosted, <500ms latency |
+| Model | Llama 3.3 70B | Open source, strong reasoning |
+| Container | Singularity/Apptainer | HPC-friendly, SLURM compatible |
+| Storage | GCS Standard/Nearline/Coldline | Tiered costs, lifecycle automation |
+| Scheduling | SLURM + Google Batch | Local + cloud burst capacity |
+| Monitoring | Nextflow Tower | Real-time tracking, resource viz |
