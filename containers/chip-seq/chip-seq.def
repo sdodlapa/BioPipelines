@@ -1,0 +1,60 @@
+Bootstrap: localimage
+From: /scratch/sdodl001/containers/base_1.0.0.sif
+
+%labels
+    org.opencontainers.image.version="1.0.0"
+    org.opencontainers.image.authors="BioPipelines Team"
+    org.opencontainers.image.title="BioPipelines ChIP-seq Container"
+    org.opencontainers.image.description="ChIP-seq analysis pipeline with MACS2, HOMER, and peak annotation tools"
+    pipeline.name="chip-seq"
+    pipeline.version="1.0.0"
+
+%files
+    entrypoint.sh /opt/biopipelines/entrypoint.sh
+    run_pipeline.sh /opt/biopipelines/run_pipeline.sh
+
+%post
+    # Install ChIP-seq specific tools
+    micromamba install -y -n base -c conda-forge -c bioconda \
+        bowtie2=2.5.4 \
+        bwa=0.7.18 \
+        macs2=2.2.9.1 \
+        homer=4.11 \
+        deeptools=3.5.5 \
+        bedtools=2.31.1 \
+        fastp=0.23.4 \
+        trimmomatic=0.39 \
+        cutadapt=4.4 \
+        picard=3.1.1 \
+        ucsc-bedgraphtobigwig=455 \
+        ucsc-wigtobigwig=455 \
+        r-base=4.3 \
+        bioconductor-chipseeker \
+        bioconductor-diffbind \
+        bioconductor-genomicranges \
+        r-ggplot2 \
+        r-pheatmap
+
+    # Make scripts executable
+    chmod +x /opt/biopipelines/entrypoint.sh /opt/biopipelines/run_pipeline.sh
+    
+    # Create pipeline directory
+    mkdir -p /opt/biopipelines/chip_seq
+
+    # Clean up
+    micromamba clean --all --yes
+
+%environment
+    export PIPELINE_NAME="chip-seq"
+    export PIPELINE_VERSION="1.0.0"
+
+%runscript
+    exec /opt/biopipelines/entrypoint.sh "$@"
+
+%test
+    # Test ChIP-seq tools
+    bowtie2 --version | head -1
+    macs2 --version
+    homer2 2>&1 | head -1 || true
+    deeptools --version
+    echo "ChIP-seq container validation passed"

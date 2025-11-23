@@ -1,0 +1,48 @@
+Bootstrap: docker
+From: mambaorg/micromamba:1.5.8
+
+%labels
+    org.opencontainers.image.title="BioPipelines Base Container"
+    org.opencontainers.image.description="Foundation container with common bioinformatics tools"
+    org.opencontainers.image.version="1.0.0"
+    org.opencontainers.image.authors="BioPipelines Team <sdodlapa@github>"
+    org.opencontainers.image.source="https://github.com/sdodlapa/BioPipelines"
+    ai.agent.category="bioinformatics"
+    ai.agent.tier="base"
+
+%post
+    # Install common tools shared across all pipelines
+    micromamba install -y -n base -c conda-forge -c bioconda \
+        samtools=1.17 \
+        bcftools=1.17 \
+        htslib=1.17 \
+        bedtools=2.30.0 \
+        fastqc=0.12.1 \
+        multiqc=1.14 \
+        python=3.11 \
+        numpy \
+        pandas \
+        scipy \
+        matplotlib \
+        seaborn \
+        biopython \
+        pysam \
+        pybedtools \
+        parallel \
+        pigz \
+        && micromamba clean --all --yes
+    
+    # Create working directories
+    mkdir -p /analysis /data /results
+    chmod -R 777 /analysis /data /results
+
+%environment
+    export PATH="/opt/conda/bin:$PATH"
+    export PYTHONUNBUFFERED=1
+
+%runscript
+    exec /bin/bash "$@"
+
+%test
+    samtools --version
+    echo "Base container validation passed"

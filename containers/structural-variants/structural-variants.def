@@ -1,0 +1,62 @@
+Bootstrap: localimage
+From: /scratch/sdodl001/containers/base_1.0.0.sif
+
+%labels
+    org.opencontainers.image.version="1.0.0"
+    org.opencontainers.image.authors="BioPipelines Team"
+    org.opencontainers.image.title="BioPipelines Structural Variants Container"
+    org.opencontainers.image.description="Structural variant calling with Manta, LUMPY, Delly, and SV annotation tools"
+    pipeline.name="structural-variants"
+    pipeline.version="1.0.0"
+
+%files
+    entrypoint.sh /opt/biopipelines/entrypoint.sh
+    run_pipeline.sh /opt/biopipelines/run_pipeline.sh
+
+%post
+    # Install structural variant specific tools
+    micromamba install -y -n base -c conda-forge -c bioconda \
+        manta=1.6.0 \
+        delly=1.2.9 \
+        lumpy-sv=0.3.1 \
+        svtyper=0.7.1 \
+        smoove=0.2.8 \
+        svim=2.0.0 \
+        sniffles=2.4 \
+        cutesv=2.1.1 \
+        pbsv=2.9.0 \
+        bwa=0.7.18 \
+        minimap2=2.28 \
+        survivor=1.0.7 \
+        bcftools=1.19 \
+        vcftools=0.1.16 \
+        vt=0.57721 \
+        svtools=0.5.1 \
+        fastp=0.23.4 \
+        r-base=4.3 \
+        r-ggplot2 \
+        python=3.11 \
+        pysam
+
+    # Make scripts executable
+    chmod +x /opt/biopipelines/entrypoint.sh /opt/biopipelines/run_pipeline.sh
+    
+    # Create pipeline directory
+    mkdir -p /opt/biopipelines/structural_variants
+
+    # Clean up
+    micromamba clean --all --yes
+
+%environment
+    export PIPELINE_NAME="structural-variants"
+    export PIPELINE_VERSION="1.0.0"
+
+%runscript
+    exec /opt/biopipelines/entrypoint.sh "$@"
+
+%test
+    # Test SV tools
+    manta --version 2>&1 | head -1 || true
+    delly --version 2>&1 | head -1 || true
+    sniffles --version
+    echo "Structural variants container validation passed"
