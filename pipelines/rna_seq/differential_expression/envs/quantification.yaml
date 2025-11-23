@@ -1,6 +1,0 @@
-name: quantification
-channels:
-  - conda-forge
-  - bioconda
-dependencies:
-  - subread=2.0.3  # featureCounts

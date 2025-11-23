@@ -1,8 +1,0 @@
-name: alignment
-channels:
-  - conda-forge
-  - bioconda
-dependencies:
-  - bwa=0.7.17
-  - samtools=1.17
-  - gatk4=4.4.0.0
