@@ -11,7 +11,7 @@
 
 set -e
 
-CONTAINER_DIR="/scratch/sdodl001/containers"
+CONTAINER_DIR="/home/sdodl001_odu_edu/BioPipelines/containers/images"
 
 echo "Rebuilding failed containers..."
 

@@ -1,5 +1,5 @@
 Bootstrap: localimage
-From: /scratch/sdodl001/containers/base_1.0.0.sif
+From: /home/sdodl001_odu_edu/BioPipelines/containers/images/base_1.0.0.sif
 
 %labels
     org.opencontainers.image.version="1.0.0"
