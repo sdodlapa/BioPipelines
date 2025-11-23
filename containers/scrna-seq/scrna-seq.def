@@ -14,7 +14,7 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
     run_pipeline.sh /opt/biopipelines/run_pipeline.sh
 
 %post
-    # Install scRNA-seq specific tools
+    # Install scRNA-seq specific tools (common tools now in base)
     micromamba install -y -n base -c conda-forge -c bioconda \
         star=2.7.11a \
         salmon=1.10.3 \
@@ -26,20 +26,12 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
         umap-learn \
         leiden \
         louvain \
-        r-base=4.3 \
         r-seurat=5.1.0 \
         bioconductor-singlecellexperiment \
         bioconductor-scater \
         bioconductor-scran \
-        r-ggplot2 \
         r-cowplot \
-        r-patchwork \
-        python=3.11 \
-        numpy \
-        pandas \
-        scipy \
-        matplotlib \
-        seaborn
+        r-patchwork
 
     # Make scripts executable
     chmod +x /opt/biopipelines/entrypoint.sh /opt/biopipelines/run_pipeline.sh

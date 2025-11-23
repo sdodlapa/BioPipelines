@@ -14,7 +14,7 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
     run_pipeline.sh /opt/biopipelines/run_pipeline.sh
 
 %post
-    # Install metagenomics specific tools
+    # Install metagenomics specific tools (common tools now in base)
     micromamba install -y -n base -c conda-forge -c bioconda \
         kraken2=2.1.3 \
         bracken=2.9 \
@@ -25,17 +25,12 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
         prodigal=2.6.3 \
         prokka=1.14.6 \
         diamond=2.1.10 \
-        fastp=0.23.4 \
-        bowtie2=2.5.4 \
         bbmap=39.10 \
         seqtk=1.4 \
         centrifuge=1.0.4.1 \
         krona=2.8.1 \
-        r-base=4.3 \
         r-vegan \
-        r-phyloseq \
-        python=3.11 \
-        biopython
+        r-phyloseq
 
     # Make scripts executable
     chmod +x /opt/biopipelines/entrypoint.sh /opt/biopipelines/run_pipeline.sh

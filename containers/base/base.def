@@ -12,6 +12,7 @@ From: mambaorg/micromamba:1.5.8
 
 %post
     # Install common tools shared across all pipelines
+    # Core utilities (used across most pipelines)
     micromamba install -y -n base -c conda-forge -c bioconda \
         samtools=1.17 \
         bcftools=1.17 \
@@ -29,8 +30,29 @@ From: mambaorg/micromamba:1.5.8
         pysam \
         pybedtools \
         parallel \
-        pigz \
-        && micromamba clean --all --yes
+        pigz
+    
+    # High-frequency alignment & preprocessing tools (5+ pipelines)
+    micromamba install -y -n base -c conda-forge -c bioconda \
+        fastp=0.23.4 \
+        bowtie2=2.5.4 \
+        bwa=0.7.18 \
+        trimmomatic=0.39 \
+        cutadapt
+    
+    # R ecosystem & visualization (9 pipelines use r-base)
+    micromamba install -y -n base -c conda-forge -c bioconda \
+        r-base=4.3 \
+        r-ggplot2 \
+        r-pheatmap \
+        bioconductor-genomicranges
+    
+    # Common tools used by 3+ pipelines
+    micromamba install -y -n base -c conda-forge -c bioconda \
+        picard=3.1.1
+    
+    # Clean up
+    micromamba clean --all --yes
     
     # Create working directories
     mkdir -p /analysis /data /results
@@ -45,4 +67,9 @@ From: mambaorg/micromamba:1.5.8
 
 %test
     samtools --version
+    fastqc --version
+    bowtie2 --version | head -1
+    bwa 2>&1 | head -1
+    fastp --version 2>&1 | head -1
+    Rscript -e "library(ggplot2); cat('R packages loaded\n')"
     echo "Base container validation passed"

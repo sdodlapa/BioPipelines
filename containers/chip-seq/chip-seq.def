@@ -14,26 +14,15 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
     run_pipeline.sh /opt/biopipelines/run_pipeline.sh
 
 %post
-    # Install ChIP-seq specific tools
+    # Install ChIP-seq specific tools (common tools now in base)
     micromamba install -y -n base -c conda-forge -c bioconda \
-        bowtie2=2.5.4 \
-        bwa=0.7.18 \
         macs2=2.2.9.1 \
         homer=4.11 \
         deeptools=3.5.5 \
-        bedtools=2.31.1 \
-        fastp=0.23.4 \
-        trimmomatic=0.39 \
-        cutadapt=4.4 \
-        picard=3.1.1 \
-        ucsc-bedgraphtobigwig=455 \
-        ucsc-wigtobigwig=455 \
-        r-base=4.3 \
+        ucsc-bedgraphtobigwig \
+        ucsc-wigtobigwig \
         bioconductor-chipseeker \
-        bioconductor-diffbind \
-        bioconductor-genomicranges \
-        r-ggplot2 \
-        r-pheatmap
+        bioconductor-diffbind
 
     # Make scripts executable
     chmod +x /opt/biopipelines/entrypoint.sh /opt/biopipelines/run_pipeline.sh

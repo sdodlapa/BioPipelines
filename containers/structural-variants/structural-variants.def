@@ -14,7 +14,7 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
     run_pipeline.sh /opt/biopipelines/run_pipeline.sh
 
 %post
-    # Install structural variant specific tools
+    # Install structural variant specific tools (common tools now in base)
     micromamba install -y -n base -c conda-forge -c bioconda \
         manta=1.6.0 \
         delly=1.2.9 \
@@ -25,18 +25,11 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
         sniffles=2.4 \
         cutesv=2.1.1 \
         pbsv=2.9.0 \
-        bwa=0.7.18 \
         minimap2=2.28 \
         survivor=1.0.7 \
-        bcftools=1.19 \
         vcftools=0.1.16 \
         vt=0.57721 \
-        svtools=0.5.1 \
-        fastp=0.23.4 \
-        r-base=4.3 \
-        r-ggplot2 \
-        python=3.11 \
-        pysam
+        svtools=0.5.1
 
     # Make scripts executable
     chmod +x /opt/biopipelines/entrypoint.sh /opt/biopipelines/run_pipeline.sh

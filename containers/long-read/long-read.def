@@ -19,18 +19,17 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
         minimap2=2.28 \
         flye=2.9.5 \
         canu=2.2 \
-        medaka=2.0.1 \
-        nanoplot=1.44.0 \
+        medaka \
+        nanoplot \
         nanoqc=0.9.4 \
         filtlong=0.2.1 \
         porechop=0.2.4 \
         racon=1.5.0 \
-        nanopolish=0.14.0 \
-        pomoxis=0.3.16 \
+        nanopolish \
+        pomoxis \
         assembly-stats=1.0.1 \
         quast=5.2.0 \
         busco=5.8.0 \
-        python=3.11 \
         biopython
 
     # Make scripts executable

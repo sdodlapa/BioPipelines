@@ -14,22 +14,16 @@ From: /scratch/sdodl001/containers/base_1.0.0.sif
     run_pipeline.sh /opt/biopipelines/run_pipeline.sh
 
 %post
-    # Install RNA-seq specific tools (versions compatible with Python 3.11)
+    # Install RNA-seq specific tools (common tools now in base)
     micromamba install -y -n base -c conda-forge -c bioconda \
-        fastp=0.23.4 \
-        trimmomatic=0.39 \
-        cutadapt \
         star=2.7.11a \
         hisat2=2.2.1 \
         salmon=1.10.3 \
         subread=2.0.6 \
         htseq \
-        r-base=4.3 \
         bioconductor-deseq2 \
         bioconductor-edger \
         bioconductor-limma \
-        r-ggplot2 \
-        r-pheatmap \
         r-rcolorbrewer \
         r-tidyverse \
         && micromamba clean --all --yes
