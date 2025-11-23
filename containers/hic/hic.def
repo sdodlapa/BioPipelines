@@ -15,14 +15,15 @@ From: /home/sdodl001_odu_edu/BioPipelines/containers/images/base_1.0.0.sif
 
 %post
     # Install Hi-C specific tools (common tools now in base)
+    # Using compatible versions for Python 3.11
     micromamba install -y -n base -c conda-forge -c bioconda \
         hicexplorer=3.7.5 \
         cooler=0.10.2 \
         hicmatrix=17.2 \
-        pairix=0.3.7 \
+        pairix \
         pairtools=1.1.0 \
         chromosight=1.6.3 \
-        cooltools=0.7.4 \
+        cooltools=0.7.0 \
         bioconductor-hiccompare \
         r-strawr \
         freetype

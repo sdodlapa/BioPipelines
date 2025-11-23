@@ -11,19 +11,11 @@ PIPELINE_UNDERSCORE="${PIPELINE//-/_}"
 PIPELINE_DIR="$HOME/BioPipelines/pipelines/${PIPELINE_UNDERSCORE}"
 LOG_DIR="$HOME/BioPipelines/logs/pipeline_runs"
 PARTITION="cpuspot"
-WORKFLOW_ENGINE="${CONTAINER_DIR}/workflow-engine_1.0.0.sif"
 PIPELINE_CONTAINER="${CONTAINER_DIR}/${PIPELINE}_1.0.0.sif"
 
 # Validate pipeline exists
 if [[ ! -d "$PIPELINE_DIR" ]]; then
     echo "Error: Pipeline directory not found: $PIPELINE_DIR"
-    exit 1
-fi
-
-# Check workflow engine exists
-if [[ ! -f "$WORKFLOW_ENGINE" ]]; then
-    echo "Error: Workflow engine not found: $WORKFLOW_ENGINE"
-    echo "Build it with: sbatch scripts/containers/build_workflow_engine.slurm"
     exit 1
 fi
 
