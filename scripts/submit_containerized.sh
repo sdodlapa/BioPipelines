@@ -6,7 +6,7 @@ set -euo pipefail
 
 # Default values
 PIPELINE=""
-CONTAINER_DIR="/scratch/sdodl001/containers"
+CONTAINER_DIR="/home/sdodl001_odu_edu/BioPipelines/containers/images"
 VERSION="1.0.0"
 PARTITION="cpuspot"
 MEM="32G"
@@ -35,7 +35,7 @@ Options:
   --cores NUM       CPU cores (default: 8)
   --time DURATION   Time limit (default: 06:00:00)
   --version VER     Container version (default: 1.0.0)
-  --container-dir   Container directory (default: /scratch/sdodl001/containers)
+  --container-dir   Container directory (default: /home/sdodl001_odu_edu/BioPipelines/containers/images)
   --dry-run         Show what would be submitted without submitting
   --help            Show this help message
 
