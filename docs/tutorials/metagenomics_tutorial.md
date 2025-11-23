@@ -273,8 +273,8 @@ k__Bacteria|p__Bacteroidota              2|976        20.41
 # Navigate to metagenomics pipeline
 cd ~/BioPipelines
 
-# Submit to cluster
-sbatch scripts/submit_metagenomics.sh
+# Submit to cluster using unified script
+./scripts/submit_pipeline.sh --pipeline metagenomics --mem 64G --cores 8 --time 08:00:00
 ```
 
 ### Configuration

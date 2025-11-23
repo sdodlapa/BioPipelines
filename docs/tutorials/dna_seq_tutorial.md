@@ -562,7 +562,7 @@ Duplication rates, insert size distributions.
 
 1. **Prepare your data**:
 ```bash
-cd ~/BioPipelines/pipelines/dna_seq/variant_calling
+cd ~/BioPipelines
 ```
 
 2. **Edit config.yaml**:
@@ -578,7 +578,7 @@ reference:
 
 3. **Submit the job**:
 ```bash
-sbatch ~/BioPipelines/scripts/submit_dna_seq.sh
+./scripts/submit_pipeline.sh --pipeline dna_seq --mem 32G --cores 8 --time 06:00:00
 ```
 
 4. **Monitor progress**:

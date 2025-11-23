@@ -864,8 +864,8 @@ data/raw/atac_seq/
 
 3. **Submit pipeline**:
 ```bash
-cd ~/BioPipelines/pipelines/atac_seq/accessibility_analysis
-sbatch ~/BioPipelines/scripts/submit_atac_seq.sh
+cd ~/BioPipelines
+./scripts/submit_pipeline.sh --pipeline atac_seq --mem 32G --cores 8 --time 06:00:00
 ```
 
 4. **Monitor**:

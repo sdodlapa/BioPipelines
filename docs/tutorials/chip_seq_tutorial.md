@@ -543,8 +543,8 @@ data/raw/chip_seq/
 
 3. **Submit pipeline**:
 ```bash
-cd ~/BioPipelines/pipelines/chip_seq/peak_calling
-sbatch ~/BioPipelines/scripts/submit_chip_seq.sh
+cd ~/BioPipelines
+./scripts/submit_pipeline.sh --pipeline chip_seq --mem 32G --cores 8 --time 06:00:00
 ```
 
 4. **Monitor**:

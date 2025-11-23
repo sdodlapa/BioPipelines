@@ -1443,8 +1443,9 @@ compartments:
 ### 3. Submit Job
 
 ```bash
-# Submit to SLURM
-sbatch scripts/submit_hic.sh
+# Submit to SLURM using unified script
+cd ~/BioPipelines
+./scripts/submit_pipeline.sh --pipeline hic --mem 64G --cores 16 --time 12:00:00
 
 # Monitor
 squeue -u $USER
@@ -1488,6 +1489,63 @@ For deep Hi-C (1B pairs):
 ---
 
 ## Troubleshooting
+
+### Issue 0: Unpaired or Mismatched Read Files (CRITICAL)
+
+**Symptoms:**
+- Pipeline fails immediately with: `AssertionError: Hi-C requires paired-end reads`
+- Or fastp error: `input files don't contain identical amount of reads`
+- Or reads have different sequencing run IDs in headers
+
+**Cause:** R1 and R2 files are from different sequencing runs or not properly paired
+
+**Diagnosis:**
+```bash
+# Check if files exist
+ls -lh /path/to/hic/sample1_R1.fastq.gz
+ls -lh /path/to/hic/sample1_R2.fastq.gz
+
+# Check read headers match
+zcat sample1_R1.fastq.gz | head -1
+zcat sample1_R2.fastq.gz | head -1
+
+# Should see same prefix, only /1 vs /2 difference:
+# Good:
+#   @HISEQ:872:H7AWMADXX:1:1101:1074:2089 1:N:0:TCCAGCAA
+#   @HISEQ:872:H7AWMADXX:1:1101:1074:2089 2:N:0:TCCAGCAA
+#                                          ↑ Only difference
+
+# Bad (different flowcells):
+#   @HWI-ST560:146:C4GC2ACXX:8:1101:1233:2098 1:N:0:
+#   @HWI-ST560:148:C3A71ACXX:6:1101:1149:1960 2:N:0:
+#              ↑↑↑  ↑↑↑↑↑↑↑↑↑  ↑  ↑↑↑↑
+#           Different flowcells and read IDs = UNPAIRED
+```
+
+**Solution:** Download properly paired Hi-C data from ENCODE:
+```bash
+# Find a Hi-C experiment with proper paired-end data
+# Example: ENCSR382RFU (in situ Hi-C, GM12878)
+
+# Download paired R1 and R2 from same experiment:
+wget "https://www.encodeproject.org/files/ENCFF779SSO/@@download/ENCFF779SSO.fastq.gz" \
+     -O sample1_R1.fastq.gz
+wget "https://www.encodeproject.org/files/ENCFF717LOV/@@download/ENCFF717LOV.fastq.gz" \
+     -O sample1_R2.fastq.gz
+
+# Verify pairing:
+zcat sample1_R1.fastq.gz | head -1
+zcat sample1_R2.fastq.gz | head -1
+# Should have matching read IDs with /1 and /2
+```
+
+**Updating config.yaml:**
+```yaml
+# Make sure only properly paired samples are listed
+samples:
+  - sample1  # Only include if both R1 and R2 exist and are paired
+  # - sample2  # Comment out if files missing or unpaired
+```
 
 ### Issue 1: Low Valid Pairs (<40%)
 
@@ -1680,7 +1738,8 @@ snakemake --unlock
 
 # Or:
 rm -rf .snakemake/locks
-sbatch scripts/submit_hic.sh
+cd ~/BioPipelines
+./scripts/submit_pipeline.sh --pipeline hic --mem 64G --cores 16 --time 12:00:00
 ```
 
 ---

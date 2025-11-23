@@ -332,8 +332,8 @@ cd ~/BioPipelines
 # Ensure BAM file exists
 ls data/processed/sample1.recal.bam
 
-# Submit to cluster
-sbatch scripts/submit_sv_calling.sh
+# Submit to cluster using unified script
+./scripts/submit_pipeline.sh --pipeline structural_variants --mem 48G --cores 8 --time 08:00:00
 ```
 
 ### Configuration

@@ -972,8 +972,9 @@ dmr_calling:
 ### 3. Submit the Job
 
 ```bash
-# Submit to SLURM
-sbatch scripts/submit_methylation.sh
+# Submit to SLURM using unified script
+cd ~/BioPipelines
+./scripts/submit_pipeline.sh --pipeline methylation --mem 48G --cores 8 --time 10:00:00
 
 # Check job status
 squeue -u $USER
@@ -1022,6 +1023,113 @@ sacct -j <job_id> --format=JobID,MaxRSS,MaxVMSize,Elapsed,CPUTime
 ---
 
 ## Troubleshooting
+
+### Issue 0a: trim_galore Validation Fails on Large Datasets (CRITICAL)
+
+**Symptoms:**
+- Pipeline fails after several hours with: `"Read 2 output is truncated at sequence count: XXXXXXX, please check your paired-end input files! Terminating..."`
+- This occurs even with `--retain_unpaired` flag present
+- Input files are very large (>50GB each)
+
+**Cause:** trim_galore validates read counts BEFORE the `--retain_unpaired` can write unpaired reads. On large files with slight R1/R2 mismatches, this validation fails after hours of processing.
+
+**Solution:** Create a smaller test dataset to validate pipeline before processing full data:
+```bash
+# Create test dataset from first 5 million reads (20 million lines)
+cd /path/to/raw/methylation/
+zcat original_R1.fastq.gz | head -20000000 | gzip > test_R1.fastq.gz
+zcat original_R2.fastq.gz | head -20000000 | gzip > test_R2.fastq.gz
+
+# Replace symlinks or move originals:
+mv sample1_R1.fastq.gz sample1_R1_FULL.fastq.gz
+mv sample1_R2.fastq.gz sample1_R2_FULL.fastq.gz
+cp test_R1.fastq.gz sample1_R1.fastq.gz  # ~200-500MB
+cp test_R2.fastq.gz sample1_R2.fastq.gz  # ~200-500MB
+
+# Run pipeline on test data first (completes in ~10-15 minutes)
+cd ~/BioPipelines
+./scripts/submit_pipeline.sh --pipeline methylation --mem 48G --cores 8 --time 10:00:00
+
+# After successful test run, swap back to full data
+mv sample1_R1_FULL.fastq.gz sample1_R1.fastq.gz
+mv sample1_R2_FULL.fastq.gz sample1_R2.fastq.gz
+```
+
+**Why this works:**
+- Test data (5M reads) is small enough that any R1/R2 mismatch is insignificant
+- Validates entire pipeline quickly (trimming, alignment, calling)
+- Avoids wasting hours on validation failures
+- Full dataset can be processed after confirming pipeline works
+
+### Issue 0b: Bismark Output File Naming Mismatch
+
+**Symptoms:**
+- Pipeline fails with: `MissingOutputException: Job X completed successfully, but some output files are missing`
+- Expected: `sample1_bismark_bt2.bam`
+- Bismark log shows successful completion: `"Bismark completed in 0d 0h Xm Ys"`
+
+**Cause:** Bismark uses trimmed input filename as BAM output prefix:
+- Input: `sample1_R1_val_1.fq.gz` + `sample1_R2_val_2.fq.gz`
+- Output: `sample1_R1_val_1_bismark_bt2_pe.bam` (actual)
+- Expected: `sample1_bismark_bt2.bam` (Snakefile pattern)
+
+**Diagnosis:**
+```bash
+# Check if Bismark output exists with different name:
+ls -lh /path/to/processed/methylation/*.bam
+
+# Check Bismark log confirms success:
+tail -20 /path/to/results/methylation/qc/logs/align/sample1.log
+# Should see: "Bismark completed in 0d 0h Xm Ys"
+```
+
+**Solutions:**
+
+**Option A - Symlink (Quick fix, preserves original):**
+```bash
+cd /path/to/processed/methylation/
+ln -s sample1_R1_val_1_bismark_bt2_pe.bam sample1_bismark_bt2.bam
+cd ~/BioPipelines
+snakemake --rerun-incomplete --cores 8  # Continue pipeline
+```
+
+**Option B - Rename file:**
+```bash
+cd /path/to/processed/methylation/
+mv sample1_R1_val_1_bismark_bt2_pe.bam sample1_bismark_bt2.bam
+```
+
+**Option C - Fix Snakefile (Permanent fix):**
+```python
+# In pipelines/methylation/methylation_calling/Snakefile
+# Find the align_bismark rule output, change:
+output:
+    bam = "data/processed/methylation/{sample}_bismark_bt2.bam"
+# To:
+output:
+    bam = "data/processed/methylation/{sample}_R1_val_1_bismark_bt2_pe.bam"
+
+# Update downstream rules to match new pattern
+```
+
+### Issue 0c: trim_galore Validation Errors
+
+**Symptom**: `"Read 2 output is truncated at sequence count"`
+- **Cause**: R1 and R2 have mismatched read counts
+- **Solution**: Add `--retain_unpaired` flag to keep unpaired reads:
+  ```bash
+  trim_galore --retain_unpaired --paired R1.fq.gz R2.fq.gz
+  ```
+- **Note**: Common with real-world data where some reads fail QC
+- **See Issue 0a above** if this fails on large datasets
+
+**Symptom**: trim_galore v0.6.10 ignores R2 file with `--rrbs + --paired`
+- **Issue**: Known bug in v0.6.10
+- **Solution**: Remove `--rrbs`, use explicit clipping instead:
+  ```bash
+  trim_galore --clip_R1 10 --clip_R2 10 --paired R1.fq.gz R2.fq.gz
+  ```
+- **Alternative**: Upgrade to trim_galore >0.6.11
 
 ### Issue 1: Low Mapping Rate (<60%)
 
@@ -1211,7 +1319,8 @@ snakemake --unlock
 rm -rf .snakemake/locks
 
 # Then resubmit:
-sbatch scripts/submit_methylation.sh
+cd ~/BioPipelines
+./scripts/submit_pipeline.sh --pipeline methylation --mem 48G --cores 8 --time 10:00:00
 ```
 
 ---

@@ -482,7 +482,7 @@ sbatch ~/BioPipelines/scripts/build_star_index_yeast.sh
 ```bash
 # Submit from BioPipelines directory
 cd ~/BioPipelines
-sbatch scripts/submit_rna_seq.sh
+./scripts/submit_pipeline.sh --pipeline rna_seq --mem 32G --cores 8 --time 06:00:00
 ```
 
 4. **Monitor progress**:
@@ -530,7 +530,7 @@ grep "of .* steps" ~/BioPipelines/slurm_*.err
 ```bash
 # Unlock Snakemake working directory
 conda activate ~/envs/biopipelines
-cd ~/BioPipelines/pipelines/rna_seq/differential_expression
+cd ~/BioPipelines/pipelines/rna_seq
 snakemake --unlock
 ```
 

@@ -22,6 +22,19 @@ This tutorial guides you through single-cell RNA sequencing (scRNA-seq) analysis
 - Basic understanding of RNA-seq and gene expression
 - Familiarity with command line and R/Python
 - Access to BioPipelines environment
+- STAR v2.7.10b or compatible with your STAR index
+
+### Critical Setup Notes
+- **STAR index compatibility**: STAR index version must match STAR binary version
+- **Index location**: Use absolute paths in config.yaml
+  ```yaml
+  star_index: "/scratch/sdodl001/BioPipelines/data/references/star_index_hg38"
+  ```
+- **Building STAR index**: Requires ~40-50GB RAM, use SLURM job:
+  ```bash
+  sbatch scripts/build_star_index_scrna.sh  # ~20-30 minutes
+  ```
+- **10x Chemistry**: Auto-detection with `whitelist: "None"` and `EmptyDrops_CR`
 
 ## Biological Background
 
@@ -473,8 +486,8 @@ cd ~/BioPipelines
 ls data/raw/scrna_seq/sample1_S1_L001_R1_001.fastq.gz
 ls data/raw/scrna_seq/sample1_S1_L001_R2_001.fastq.gz
 
-# Submit to cluster (when pipeline available)
-sbatch scripts/submit_scrna_seq.sh
+# Submit to cluster using unified script
+./scripts/submit_pipeline.sh --pipeline scrna_seq --mem 48G --cores 8 --time 10:00:00
 ```
 
 ### Configuration
@@ -487,36 +500,91 @@ samples:
   - sample1
 
 # 10X chemistry
-chemistry: "v3"           # or "v2"
+chemistry:
+  version: "v3"           # or "v2"
+  whitelist: "None"       # Use "None" for auto-detection with EmptyDrops_CR
 
-# Reference
-reference: "GRCh38-2024-A"  # Human
-                             # or "mm10" for mouse
+# Reference - CRITICAL: Use absolute paths and matching STAR version!
+reference:
+  fasta: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/fasta/genome.fa"
+  gtf: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz"
+  star_index: "/scratch/sdodl001/BioPipelines/data/references/star_index_hg38"  # Must match STAR version!
 
 # QC thresholds
-qc:
-  min_genes: 200
+filtering:
+  min_genes: 250
   max_genes: 6000
+  min_counts: 500
   max_mito_pct: 20
 
 # Clustering
 clustering:
-  resolution: 0.8
-  n_pcs: 30
+  neighbors:
+    n_neighbors: 15
+    n_pcs: 40
+  leiden:
+    resolution: [0.4, 0.6, 0.8, 1.0]
 ```
+
+### CRITICAL: STAR Index Setup
+
+**STAR version compatibility issue:**
+- STAR index version MUST match STAR binary version
+- CellRanger indices use STAR 2.7.1a (incompatible with STAR 2.7.10b)
+
+**Error you'll see if mismatched:**
+```
+EXITING because of FATAL ERROR: Genome version: 2.7.1a is INCOMPATIBLE with running STAR version: 2.7.10b
+SOLUTION: please re-generate genome from scratch
+```
+
+**Solution: Build compatible STAR index**
+
+1. **Check your STAR version:**
+```bash
+STAR --version
+# STAR_2.7.10b
+```
+
+2. **Build matching index (requires 50GB RAM):**
+```bash
+# Submit as SLURM job (DO NOT run on login node!)
+sbatch scripts/build_star_index_scrna.sh
+
+# Monitor progress (~20-30 minutes)
+tail -f star_index_build_*.out
+```
+
+3. **Script creates index at:**
+```
+/scratch/sdodl001/BioPipelines/data/references/star_index_hg38/
+```
+
+4. **Update config.yaml with new path:**
+```yaml
+star_index: "/scratch/sdodl001/BioPipelines/data/references/star_index_hg38"
+```
+
+**Index build requirements:**
+- Memory: 40-50GB RAM
+- Time: 20-30 minutes
+- Disk: ~28GB for human genome
+- Must run on compute node (via SLURM)
 
 ### Expected Runtime
 
-- **STARsolo alignment:** 30-90 minutes
+- **STAR index build (one-time):** 20-30 minutes (50GB RAM)
+- **STARsolo alignment:** 30-90 minutes (per sample)
 - **QC + filtering:** 10-20 minutes
-- **Normalization + HVG:** 15-30 minutes
+- **Normalization + feature selection:** 15-30 minutes
 - **PCA + UMAP:** 10-20 minutes
 - **Clustering + markers:** 20-40 minutes
 
-**Total:** 2-4 hours for 10,000 cells
+**Total:** 2-4 hours for 10,000 cells (after index built)
 
 **Memory requirements:**
-- Alignment: 32-64 GB
+- STAR index build: 50 GB
+- STARsolo alignment: 32-64 GB
 - Downstream analysis: 16-32 GB
 
 ### Monitoring Progress
@@ -696,6 +764,116 @@ After initial analysis:
    - Isolate populations (FACS)
    - Perturbation experiments
    - Mechanistic studies
+
+## Troubleshooting
+
+### Common Issues and Solutions
+
+#### Issue 1: STAR Index Version Incompatibility
+**Error:** `BAMoutput.cpp:27:BAMoutput: exiting because of *OUTPUT FILE* error: could not create output file`
+
+**Cause:** STAR binary version doesn't match STAR index version
+
+**Solution:**
+```bash
+# Check versions
+STAR --version  # e.g., 2.7.10b
+head -1 /path/to/star_index/Log.out  # Shows index version
+
+# If mismatch, rebuild index:
+sbatch scripts/build_star_index_scrna.sh  # Requires 40-50GB RAM
+```
+
+#### Issue 2: Missing Python Packages
+**Errors:**
+- `ModuleNotFoundError: No module named 'scanpy'`
+- `ModuleNotFoundError: No module named 'scrublet'`
+- `ModuleNotFoundError: No module named 'igraph'`
+
+**Solution:**
+```bash
+# Install all required packages
+conda activate biopipelines
+pip install scanpy scrublet pandas matplotlib seaborn
+conda install -c conda-forge python-igraph leidenalg louvain
+```
+
+#### Issue 3: Scanpy Plotting API Changes
+**Error:** `TypeError: pca_variance_ratio() got an unexpected keyword argument 'ax'`
+
+**Cause:** Newer scanpy versions (>1.9) don't accept matplotlib axes directly
+
+**Solution:** Use scanpy's multi-panel plotting (already fixed in current version):
+```python
+# Old (broken):
+sc.pl.pca(adata, color='gene', ax=axes[0], show=False)
+
+# New (working):
+sc.pl.pca(adata, color=['gene1', 'gene2'], show=False, ncols=2)
+```
+
+#### Issue 4: File Format Issues
+**Error:** `FileNotFoundError: Did not find file matrix.mtx.gz`
+
+**Cause:** STARsolo outputs uncompressed files, scanpy expects gzipped
+
+**Solution:**
+```bash
+cd /path/to/starsolo/Gene/filtered/
+gzip -k matrix.mtx barcodes.tsv features.tsv
+```
+
+#### Issue 5: Scrublet API Changes
+**Error:** `TypeError: scrub_doublets() got unexpected keyword 'min_gene_variability_pct'`
+
+**Cause:** Parameter removed in newer scrublet versions
+
+**Solution:** Remove the parameter (already fixed in current version):
+```python
+# Old:
+scrub.scrub_doublets(min_gene_variability_pct=85)
+
+# New:
+scrub.scrub_doublets(min_counts=2, min_cells=3, n_prin_comps=30)
+```
+
+#### Issue 6: Matplotlib Axes Indexing
+**Error:** `AttributeError: 'numpy.ndarray' object has no attribute 'hist'`
+
+**Cause:** Subplot axes indexing changed between matplotlib versions
+
+**Solution:**
+```python
+# For 2x2 subplots:
+fig, axes = plt.subplots(2, 2)
+
+# Old (1D indexing):
+axes[0].hist(...)  # Wrong for 2x2
+
+# New (2D indexing):
+axes[0, 0].hist(...)  # Correct for 2x2
+axes[0, 1].hist(...)
+axes[1, 0].hist(...)
+axes[1, 1].hist(...)
+```
+
+### Performance Tips
+
+1. **Memory requirements:**
+   - STAR alignment: ~40GB RAM
+   - Processing 10K cells: ~16GB RAM
+   - Processing 50K+ cells: ~64GB RAM
+
+2. **Runtime estimates:**
+   - STARsolo alignment: 10-30 min (depends on read depth)
+   - QC and filtering: 1-2 min
+   - Clustering and annotation: 2-5 min
+   - Total: ~15-40 min for typical dataset
+
+3. **Disk space:**
+   - Raw FASTQ: variable (5-50GB)
+   - STAR output: ~2-10GB
+   - Processed h5ad files: 100MB-2GB
 
 ## Resources
 

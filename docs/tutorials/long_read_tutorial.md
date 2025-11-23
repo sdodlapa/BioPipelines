@@ -22,6 +22,12 @@ This tutorial guides you through long-read sequencing analysis using Oxford Nano
 - Basic understanding of DNA sequencing technologies
 - Familiarity with command line and genomic file formats
 - Access to BioPipelines environment
+- SURVIVOR tool installed for SV merging
+
+### Important Notes
+- **minimap2 syntax**: Use `-x` flag before preset: `minimap2 -x map-ont`
+- **SURVIVOR**: Must be compiled from source, not available via conda/pip
+- **Expected runtime**: ~2-3 minutes for 4.8GB ONT dataset
 
 ## Biological Background
 
@@ -93,9 +99,11 @@ Raw Long Reads (FASTQ)
     ↓
 3. Alignment (minimap2)
     ↓
-4. Structural Variant Calling (Sniffles)
+4. Structural Variant Calling (Sniffles2 + cuteSV)
     ↓
-5. Variant Phasing (WhatsHap)
+5. SV Merging (SURVIVOR)
+    ↓
+6. Variant Phasing (WhatsHap)
     ↓
 Final Variants + Phased Haplotypes
 ```
@@ -331,8 +339,8 @@ cd ~/BioPipelines
 # Place FASTQ in raw directory
 ls data/raw/long_read/sample1.fastq.gz
 
-# Submit to cluster (when available)
-sbatch scripts/submit_long_read.sh
+# Submit to cluster using unified script
+./scripts/submit_pipeline.sh --pipeline long_read --mem 48G --cores 8 --time 10:00:00
 ```
 
 ### Configuration
@@ -355,19 +363,43 @@ filtering:
 # Alignment
 alignment:
   preset: "map-ont"    # or "map-pb", "asm20"
+  
+# IMPORTANT: minimap2 requires -x flag before preset
+# Correct:   minimap2 -t 16 -x map-ont reference.fa reads.fq.gz
+# Incorrect: minimap2 -t 16 map-ont reference.fa reads.fq.gz
 
-# SV calling
+# SV calling (uses dual-caller approach)
 sv_calling:
+  callers:
+    - sniffles2    # Primary SV caller
+    - cutesv       # Secondary SV caller
+  merge_tool: "SURVIVOR"  # Merges VCFs from both callers
   min_support: 3
   min_sv_size: 50
+  max_distance: 1000    # For SURVIVOR merging
 ```
+
+### Tool Installation Notes
+
+**SURVIVOR** must be compiled from source:
+```bash
+git clone https://github.com/fritzsedlazeck/SURVIVOR.git
+cd SURVIVOR/Debug
+make
+cp SURVIVOR ~/envs/biopipelines/bin/
+```
+
+**Note**: The Python package `survivor` on pip is NOT the SV merging tool!
 
 ### Expected Runtime
 
 - **QC:** 10-30 minutes (depends on read count)
 - **Alignment:** 1-4 hours (30X coverage)
-- **SV calling:** 30-90 minutes
+- **SV calling (Sniffles2 + cuteSV):** 30-90 minutes
+- **SV merging (SURVIVOR):** <1 minute
 - **Phasing:** 30-60 minutes
+
+**Example**: 4.8GB ONT dataset completed in ~2-3 minutes (most steps cached)
 
 **De novo assembly:**
 - Small bacterial genome: 1-4 hours
