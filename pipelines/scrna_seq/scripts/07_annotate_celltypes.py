@@ -129,15 +129,10 @@ elif method == "celltypist":
 # Visualizations
 print("\nGenerating visualizations...")
 
-# 1. UMAP with cell type annotation
-fig, axes = plt.subplots(1, 2, figsize=(16, 6))
+# 1. UMAP with cell type annotation - use scanpy multi-panel
+sc.pl.umap(adata, color=['leiden', 'celltype'], show=False, ncols=2,
+          title=['Leiden clusters', 'Cell type annotation'], legend_loc='right margin')
 
-sc.pl.umap(adata, color='leiden', ax=axes[0], show=False, 
-          title='Leiden clusters', legend_loc='right margin')
-sc.pl.umap(adata, color='celltype', ax=axes[1], show=False, 
-          title='Cell type annotation', legend_loc='right margin')
-
-plt.tight_layout()
 plt.savefig(marker_plot, dpi=300, bbox_inches='tight')
 plt.close()
 print(f"Cell type UMAP saved to {marker_plot}")

@@ -39,7 +39,6 @@ if method == "scrublet":
     doublet_scores, predicted_doublets = scrub.scrub_doublets(
         min_counts=2,
         min_cells=3,
-        min_gene_variability_pct=85,
         n_prin_comps=30
     )
     
@@ -47,25 +46,30 @@ if method == "scrublet":
     adata.obs['doublet_score'] = doublet_scores
     adata.obs['predicted_doublet'] = predicted_doublets
     
-    # Scrublet plots
-    fig, axes = plt.subplots(1, 2, figsize=(12, 4))
-    
-    # Plot doublet score histogram
-    scrub.plot_histogram(ax=axes[0])
-    axes[0].set_title('Doublet Score Distribution')
-    
-    # Plot UMAP with doublet scores
+    # Save simple diagnostic plot
     try:
-        scrub.set_embedding('UMAP', scr.get_umap(scrub.manifold_obs_, 10, min_dist=0.3))
-        scrub.plot_embedding('UMAP', order_points=True, ax=axes[1])
-        axes[1].set_title('Doublet Scores (UMAP)')
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+        
+        # Plot doublet score histogram manually
+        axes[0].hist(doublet_scores, bins=50, color='steelblue', alpha=0.7)
+        axes[0].set_xlabel('Doublet Score')
+        axes[0].set_ylabel('Number of Cells')
+        axes[0].set_title('Doublet Score Distribution')
+        axes[0].axvline(x=threshold, color='red', linestyle='--', label=f'Threshold={threshold}')
+        axes[0].legend()
+        
+        # Plot doublet predictions
+        pred_counts = pd.Series(predicted_doublets).value_counts()
+        axes[1].bar(['Singlet', 'Doublet'], [pred_counts.get(False, 0), pred_counts.get(True, 0)], color=['steelblue', 'coral'])
+        axes[1].set_ylabel('Number of Cells')
+        axes[1].set_title('Predicted Doublets')
+        
+        plt.tight_layout()
+        plot_path = Path(output_h5ad).parent / f"{Path(output_h5ad).stem}_doublet_detection.png"
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
     except Exception as e:
-        print(f"Could not plot UMAP: {e}")
-    
-    plt.tight_layout()
-    plot_path = Path(output_h5ad).parent / f"{Path(output_h5ad).stem}_doublet_detection.png"
-    plt.savefig(plot_path, dpi=300, bbox_inches='tight')
-    plt.close()
+        print(f"Could not generate plots: {e}")
     
 elif method == "doubletfinder":
     # Note: DoubletFinder is R-based, would need rpy2 integration

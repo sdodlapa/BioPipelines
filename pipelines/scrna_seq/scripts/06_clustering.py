@@ -106,24 +106,18 @@ plt.tight_layout()
 plt.savefig(f"{leiden_plots_dir}/leiden_all_resolutions.png", dpi=300, bbox_inches='tight')
 plt.close()
 
-# 2. UMAP with default clustering
-fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+# 2. UMAP with default clustering - use scanpy multi-panel
+sc.pl.umap(adata, color=['leiden', 'louvain'], show=False, ncols=2,
+           title=['Leiden clusters', 'Louvain clusters'], legend_loc='right margin')
 
-sc.pl.umap(adata, color='leiden', ax=axes[0], show=False, title='Leiden clusters', legend_loc='right margin')
-sc.pl.umap(adata, color='louvain', ax=axes[1], show=False, title='Louvain clusters', legend_loc='right margin')
-
-plt.tight_layout()
 plt.savefig(umap_plot, dpi=300, bbox_inches='tight')
 plt.close()
 print(f"UMAP plot saved to {umap_plot}")
 
-# 3. UMAP colored by QC metrics
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
-
-sc.pl.umap(adata, color='total_counts', ax=axes[0, 0], show=False, title='Total counts')
-sc.pl.umap(adata, color='n_genes_by_counts', ax=axes[0, 1], show=False, title='N genes')
-sc.pl.umap(adata, color='pct_counts_mt', ax=axes[1, 0], show=False, title='Mitochondrial %')
-sc.pl.umap(adata, color='doublet_score', ax=axes[1, 1], show=False, title='Doublet score')
+# 3. UMAP colored by QC metrics - use scanpy multi-panel
+sc.pl.umap(adata, color=['total_counts', 'n_genes_by_counts', 'pct_counts_mt', 'doublet_score'],
+           show=False, ncols=2,
+           title=['Total counts', 'N genes', 'Mitochondrial %', 'Doublet score'])
 
 plt.tight_layout()
 plt.savefig(f"{leiden_plots_dir}/umap_qc_metrics.png", dpi=300, bbox_inches='tight')

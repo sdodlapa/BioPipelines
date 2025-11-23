@@ -65,20 +65,22 @@ sc.tl.pca(adata, n_comps=n_pcs, svd_solver='arpack', random_state=42)
 # Plot PCA variance ratio
 fig, axes = plt.subplots(1, 2, figsize=(12, 4))
 
-# Explained variance
-sc.pl.pca_variance_ratio(adata, log=True, n_pcs=n_pcs, ax=axes[0], show=False)
-axes[0].set_title('PCA Variance Ratio (log scale)')
+# Explained variance - use scanpy without ax parameter
+plt.subplot(1, 2, 1)
+sc.pl.pca_variance_ratio(adata, log=True, n_pcs=n_pcs, show=False)
+plt.title('PCA Variance Ratio (log scale)')
 
 # Cumulative variance
+plt.subplot(1, 2, 2)
 cumsum_var = np.cumsum(adata.uns['pca']['variance_ratio'])
-axes[1].plot(range(1, len(cumsum_var)+1), cumsum_var, 'o-', markersize=3)
-axes[1].axhline(y=0.9, color='red', linestyle='--', alpha=0.5, label='90% variance')
-axes[1].axhline(y=0.95, color='orange', linestyle='--', alpha=0.5, label='95% variance')
-axes[1].set_xlabel('Number of principal components')
-axes[1].set_ylabel('Cumulative explained variance')
-axes[1].set_title('Cumulative Variance Explained')
-axes[1].legend()
-axes[1].grid(alpha=0.3)
+plt.plot(range(1, len(cumsum_var)+1), cumsum_var, 'o-', markersize=3)
+plt.axhline(y=0.9, color='red', linestyle='--', alpha=0.5, label='90% variance')
+plt.axhline(y=0.95, color='orange', linestyle='--', alpha=0.5, label='95% variance')
+plt.xlabel('Number of principal components')
+plt.ylabel('Cumulative explained variance')
+plt.title('Cumulative Variance Explained')
+plt.legend()
+plt.grid(alpha=0.3)
 
 plt.tight_layout()
 plt.savefig(pca_plot, dpi=300, bbox_inches='tight')
@@ -86,29 +88,27 @@ plt.close()
 print(f"PCA plot saved to {pca_plot}")
 
 # Find optimal number of PCs (90% variance)
-n_pcs_90 = np.where(cumsum_var >= 0.9)[0][0] + 1
-n_pcs_95 = np.where(cumsum_var >= 0.95)[0][0] + 1
+pcs_90_idx = np.where(cumsum_var >= 0.9)[0]
+n_pcs_90 = pcs_90_idx[0] + 1 if len(pcs_90_idx) > 0 else n_pcs
+
+pcs_95_idx = np.where(cumsum_var >= 0.95)[0]
+n_pcs_95 = pcs_95_idx[0] + 1 if len(pcs_95_idx) > 0 else n_pcs
 
 print("\n" + "="*80)
 print("PCA SUMMARY")
 print("="*80)
 print(f"\nTotal PCs computed: {n_pcs}")
-print(f"PCs for 90% variance: {n_pcs_90}")
-print(f"PCs for 95% variance: {n_pcs_95}")
+print(f"PCs for 90% variance: {n_pcs_90} (max variance: {cumsum_var[n_pcs_90-1]:.4f})")
+print(f"PCs for 95% variance: {n_pcs_95} (max variance: {cumsum_var[n_pcs_95-1]:.4f})")
 print(f"\nVariance explained by first PC: {adata.uns['pca']['variance_ratio'][0]:.4f}")
-print(f"Variance explained by top 10 PCs: {cumsum_var[9]:.4f}")
-print(f"Variance explained by top 20 PCs: {cumsum_var[19]:.4f}")
-print(f"Variance explained by top 30 PCs: {cumsum_var[29]:.4f}")
+print(f"Variance explained by top 10 PCs: {cumsum_var[min(9, len(cumsum_var)-1)]:.4f}")
+print(f"Variance explained by top 20 PCs: {cumsum_var[min(19, len(cumsum_var)-1)]:.4f}")
+print(f"Variance explained by top 30 PCs: {cumsum_var[min(29, len(cumsum_var)-1)]:.4f}")
 
-# Plot top PCs
-fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+# Plot top PCs - use scanpy multi-panel plotting
+sc.pl.pca(adata, color=['total_counts', 'n_genes_by_counts', 'pct_counts_mt', 'pct_counts_ribo'], 
+          show=False, ncols=2)
 
-sc.pl.pca(adata, color='total_counts', ax=axes[0, 0], show=False, title='PC1 vs PC2 (Total counts)')
-sc.pl.pca(adata, color='n_genes_by_counts', ax=axes[0, 1], show=False, title='PC1 vs PC2 (N genes)')
-sc.pl.pca(adata, color='pct_counts_mt', ax=axes[1, 0], show=False, title='PC1 vs PC2 (Mito %)')
-sc.pl.pca(adata, color='pct_counts_ribo', ax=axes[1, 1], show=False, title='PC1 vs PC2 (Ribo %)')
-
-plt.tight_layout()
 pca_colored_plot = Path(pca_plot).parent / f"{Path(pca_plot).stem}_colored.png"
 plt.savefig(pca_colored_plot, dpi=300, bbox_inches='tight')
 plt.close()

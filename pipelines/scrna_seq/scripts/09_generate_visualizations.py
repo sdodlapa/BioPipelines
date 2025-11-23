@@ -80,14 +80,11 @@ for plot_type in plots_to_generate:
     
     elif plot_type == "umap_clusters":
         # UMAP with multiple colorings
-        fig, axes = plt.subplots(2, 3, figsize=(18, 12))
-        
-        sc.pl.umap(adata, color='leiden', ax=axes[0,0], show=False, title='Leiden clusters')
-        sc.pl.umap(adata, color='celltype', ax=axes[0,1], show=False, title='Cell types')
-        sc.pl.umap(adata, color='total_counts', ax=axes[0,2], show=False, title='Total counts')
-        sc.pl.umap(adata, color='n_genes_by_counts', ax=axes[1,0], show=False, title='N genes')
-        sc.pl.umap(adata, color='pct_counts_mt', ax=axes[1,1], show=False, title='Mitochondrial %')
-        sc.pl.umap(adata, color='doublet_score', ax=axes[1,2], show=False, title='Doublet score')
+        # Scanpy creates multi-panel plots automatically
+        sc.pl.umap(adata, 
+                   color=['leiden', 'celltype', 'total_counts', 'n_genes_by_counts', 'pct_counts_mt', 'doublet_score'],
+                   show=False, ncols=3,
+                   title=['Leiden clusters', 'Cell types', 'Total counts', 'N genes', 'Mitochondrial %', 'Doublet score'])
         
         plt.tight_layout()
         plt.savefig(f"{plot_dir}/umap_comprehensive.png", dpi=dpi, bbox_inches='tight')
