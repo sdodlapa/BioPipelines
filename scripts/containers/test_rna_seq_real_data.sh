@@ -19,7 +19,7 @@ echo "Start time: $(date)"
 echo "════════════════════════════════════════════════════════"
 
 # Setup
-CONTAINER="/scratch/sdodl001/containers/rna-seq_1.0.0.sif"
+CONTAINER="/home/sdodl001_odu_edu/BioPipelines/containers/images/rna-seq_1.0.0.sif"
 INPUT_DIR="/scratch/sdodl001/BioPipelines/data/raw/rna_seq"
 OUTPUT_DIR="/scratch/sdodl001/BioPipelines/test_container_output/rna_seq"
 REF_DIR="/scratch/sdodl001/BioPipelines/data/references"

@@ -20,7 +20,7 @@ echo "════════════════════════�
 
 # Configuration
 CONTAINER_DIR="/home/sdodl001_odu_edu/BioPipelines/containers/hic"
-OUTPUT="/scratch/sdodl001/containers/hic_1.0.0.sif"
+OUTPUT="/home/sdodl001_odu_edu/BioPipelines/containers/images/hic_1.0.0.sif"
 LOG_FILE="/tmp/hic_build_${SLURM_JOB_ID}.log"
 
 # Build container

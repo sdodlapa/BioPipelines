@@ -41,7 +41,7 @@ Options:
 Environment Variables:
   REGISTRY         Docker registry (default: biopipelines)
   VERSION          Container version (default: 1.0.0)
-  SINGULARITY_DIR  Singularity output directory (default: /scratch/sdodl001/containers)
+  SINGULARITY_DIR  Singularity output directory (default: /home/sdodl001_odu_edu/BioPipelines/containers/images)
 
 Examples:
   # Build all containers
@@ -97,7 +97,7 @@ fi
 
 # Convert to Singularity if requested
 if [[ "$BUILD_SINGULARITY" == "true" ]]; then
-    SINGULARITY_DIR="${SINGULARITY_DIR:-/scratch/sdodl001/containers}"
+    SINGULARITY_DIR="${SINGULARITY_DIR:-/home/sdodl001_odu_edu/BioPipelines/containers/images}"
     echo -e "\n${YELLOW}Converting to Singularity images...${NC}"
     mkdir -p "$SINGULARITY_DIR"
     

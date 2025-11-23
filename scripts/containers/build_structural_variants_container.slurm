@@ -20,7 +20,7 @@ echo "════════════════════════�
 
 # Configuration
 CONTAINER_DIR="/home/sdodl001_odu_edu/BioPipelines/containers/structural-variants"
-OUTPUT="/scratch/sdodl001/containers/structural-variants_1.0.0.sif"
+OUTPUT="/home/sdodl001_odu_edu/BioPipelines/containers/images/structural-variants_1.0.0.sif"
 LOG_FILE="/tmp/structural_variants_build_${SLURM_JOB_ID}.log"
 
 # Build container

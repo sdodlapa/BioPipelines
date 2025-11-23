@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-CONTAINER="/scratch/sdodl001/containers/rna-seq_1.0.0.sif"
+CONTAINER="/home/sdodl001_odu_edu/BioPipelines/containers/images/rna-seq_1.0.0.sif"
 
 echo "════════════════════════════════════════"
 echo "Testing RNA-seq Container"

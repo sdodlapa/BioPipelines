@@ -20,7 +20,7 @@ echo "════════════════════════�
 
 # Configuration
 CONTAINER_DIR="/home/sdodl001_odu_edu/BioPipelines/containers/rna-seq"
-OUTPUT="/scratch/sdodl001/containers/rna-seq_1.0.0.sif"
+OUTPUT="/home/sdodl001_odu_edu/BioPipelines/containers/images/rna-seq_1.0.0.sif"
 LOG_FILE="/tmp/rna_seq_build_${SLURM_JOB_ID}.log"
 
 # Build container
