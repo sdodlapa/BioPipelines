@@ -1,0 +1,13 @@
+name: hic_analysis
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Core tools only - ultra-minimal
+  - cooler>=0.9
+  - python>=3.10
+  - numpy
+  # Note: pandas, h5py, scipy, scikit-learn, matplotlib, seaborn from base env
+  # Note: hicexplorer removed (unsolvable tqdm conflicts)
+  # Note: cooltools, chromosight may have conflicts - install separately if needed

@@ -1,0 +1,15 @@
+name: hic_processing
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Hi-C specific tools only - MINIMAL
+  - cooler>=0.9
+  - pairtools>=1.0
+  
+  # Utilities
+  - python>=3.10
+  - numpy
+  # Note: hic-straw, pairix, hicexplorer removed (unsolvable conflicts)
+  # Note: bowtie2, samtools, bwa, bedtools, bgzip, tabix, scipy, pysam, pandas from base env

@@ -1,0 +1,21 @@
+name: metagenomics_profiling
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Taxonomic profiling
+  # Kraken2/Bracken - disabled due to libcurl conda conflicts
+  # - kraken2>=2.1
+  # - bracken>=2.8
+  
+  # Alternative profilers
+  # MetaPhlAn - installed via pip in base env (avoids phylophlan/biopython circular dependency)
+  # - metaphlan>=4.0
+  
+  # Utilities
+  - python>=3.9
+  - bowtie2>=2.5  # Required by MetaPhlAn
+  - pandas
+  - numpy
+  # - biopython  # Causes circular dependency with metaphlan

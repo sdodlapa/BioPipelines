@@ -1,0 +1,42 @@
+# RNA-seq Differential Expression Pipeline Configuration
+
+# Sample groups and replicates (using Yeast RNA-seq data - paired-end)
+samples:
+  treatment:
+    - mut_rep1    # Yeast snf2 mutant replicate 1
+    - mut_rep2    # Yeast snf2 mutant replicate 2
+  control:
+    - wt_rep1     # Yeast wild type replicate 1
+    - wt_rep2     # Yeast wild type replicate 2
+
+# Reference genome and annotations (Yeast S. cerevisiae)
+reference:
+  genome: "/scratch/sdodl001/BioPipelines/references/genomes/yeast/sacCer3.fa"
+  gtf: "/scratch/sdodl001/BioPipelines/references/annotations/yeast/sacCer3.gtf"
+  
+# STAR index directory
+star_index: "/scratch/sdodl001/BioPipelines/references/indexes/star_yeast"
+
+# Pipeline parameters
+trim:
+  min_length: 50
+  quality_cutoff: 20
+
+alignment:
+  threads: 8
+  
+quantification:
+  threads: 4
+  feature_type: "exon"
+  id_attribute: "gene_id"
+
+differential_expression:
+  adjusted_pvalue: 0.05
+  log2_fold_change: 1.0
+
+# Visualization
+plots:
+  volcano_plot: true
+  ma_plot: true
+  heatmap_top_genes: 50
+  pca_plot: true

@@ -1,0 +1,15 @@
+name: metagenomics_preprocessing
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # QC and preprocessing - minimal set
+  - python>=3.9
+  - bowtie2>=2.5
+  
+  # General utilities
+  - pigz
+  - seqtk
+  
+  # Note: fastqc, multiqc, fastp, trimmomatic, samtools from base env

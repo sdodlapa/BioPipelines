@@ -1,193 +1,116 @@
-# Single-cell RNA-seq Pipeline Configuration
-# Configuration for 10x Genomics single-cell RNA-seq analysis
+# Single-Cell RNA-seq Analysis Pipeline Configuration
+# ===================================================
+# For 10x Genomics Chromium data
 
-# Project info
-project_name: "scrna_seq_analysis"
-description: "Single-cell RNA-seq analysis using STARsolo and Scanpy"
+# Sample information
+samples:
+  pbmc_1k:
+    fastqs: "/scratch/sdodl001/BioPipelines/data/raw/scrna_seq/pbmc_1k_v3_fastqs"
+    sample_name: "pbmc_1k_v3"
+    description: "1k PBMCs from a Healthy Donor (v3 chemistry)"
 
-# Directories
-dirs:
-  raw_data: "/scratch/sdodl001/BioPipelines/data/raw/scrna_seq"
-  results: "/scratch/sdodl001/BioPipelines/data/results/scrna_seq"
-  references: "/scratch/sdodl001/BioPipelines/data/references"
-  logs: "/scratch/sdodl001/BioPipelines/logs/scrna_seq"
-  temp: "/scratch/sdodl001/BioPipelines/scrna_seq_temp"
+# Data directories
+data_dir: "/scratch/sdodl001/BioPipelines/data"
+raw_dir: "/scratch/sdodl001/BioPipelines/data/raw/scrna_seq"
+processed_dir: "/scratch/sdodl001/BioPipelines/data/processed/scrna_seq"
+results_dir: "/scratch/sdodl001/BioPipelines/data/results/scrna_seq"
 
-# Reference genome
+# Reference genome for CellRanger
 reference:
-  fasta: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/fasta/genome.fa"
-  gtf: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/genes/genes.gtf.gz"
-  star_index: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A/star"
-
-# 10x Genomics chemistry (v2 or v3)
-chemistry:
-  version: "v3"  # Options: v2, v3
-  whitelist: "None"  # Use None for STAR auto-detection (EmptyDrops_CR)
+  # Download from: https://support.10xgenomics.com/single-cell-gene-expression/software/downloads/latest
+  genome: "/scratch/sdodl001/BioPipelines/data/references/refdata-gex-GRCh38-2024-A"
+  species: "human"
   
-  # Barcode structure (10x v3)
-  barcode:
-    cell_length: 16      # Cell barcode length
-    umi_length: 12       # UMI length
-    polyA_length: 8      # Minimum polyA length
-
-# STARsolo parameters (alignment & counting)
-starsolo:
-  threads: 8
-  ram_gb: 32
+# CellRanger parameters
+cellranger:
+  chemistry: "auto"  # auto, SC3Pv3, SC3Pv2, SC5P-PE, SC5P-R2
+  expect_cells: 1000  # Expected number of cells
+  force_cells: null   # Force this many cells, null for auto
+  include_introns: false  # Include intronic reads
   
-  # Cell barcode parameters
-  cb_whitelist: "None"
-  cb_start: 1
-  cb_length: 16
-  umi_start: 17
-  umi_length: 12
+# Seurat analysis parameters
+seurat:
+  # QC filtering
+  qc:
+    min_genes: 200      # Min genes per cell
+    max_genes: 2500     # Max genes per cell (filter doublets)
+    max_mt_percent: 5   # Max mitochondrial content %
   
-  # Output features
-  solo_type: "CB_UMI_Simple"  # Cell barcode + UMI counting
-  solo_features: "Gene"        # Count genes
-  
-  # Filtering
-  solo_cb_match_wl: "1MM_multi"  # Allow 1 mismatch to whitelist
-  solo_umi_filtering: "MultiGeneUMI"  # UMI deduplication
-  
-  # Additional parameters
-  out_sam_attributes: "NH HI nM AS CR UR CB UB GX GN sS sQ sM"
-  out_sam_type: "BAM SortedByCoordinate"
-  limit_bam_sort_ram: 30000000000
-
-# Cell filtering thresholds
-filtering:
-  # Minimum counts per cell
-  min_counts: 500
-  
-  # Maximum counts per cell (filter potential doublets)
-  max_counts: 30000
-  
-  # Minimum genes per cell
-  min_genes: 250
-  
-  # Minimum cells per gene
-  min_cells: 3
-  
-  # Maximum mitochondrial content (%)
-  max_mito_percent: 20
-  
-  # Maximum ribosomal content (%)
-  max_ribo_percent: 50
-
-# Doublet detection
-doublets:
-  method: "scrublet"  # Options: scrublet, doubletfinder
-  expected_doublet_rate: 0.06  # ~6% for 10x
-  threshold: 0.25
-
-# Normalization
-normalization:
-  method: "log1p"  # Log1p normalization
-  target_sum: 10000  # Scale to 10,000 counts per cell
-  
-# Feature selection
-feature_selection:
-  n_top_genes: 2000
-  flavor: "seurat"  # Options: seurat, cell_ranger
-  min_mean: 0.0125
-  max_mean: 3
-  min_disp: 0.5
-
-# Dimensionality reduction
-pca:
-  n_components: 50
-  svd_solver: "arpack"
-  
-# Batch correction (if multiple samples)
-batch_correction:
-  enable: false
-  method: "harmony"  # Options: harmony, bbknn, scanorama, combat
-  
-# Clustering
-clustering:
-  neighbors:
-    n_neighbors: 15
-    n_pcs: 40
-    metric: "euclidean"
-  
+  # Normalization
+  normalization:
+    method: "LogNormalize"  # LogNormalize, SCT
+    scale_factor: 10000
+    
+  # Variable features
+  variable_features:
+    method: "vst"       # vst, mean.var.plot, dispersion
+    n_features: 2000
+    
+  # PCA
+  pca:
+    n_pcs: 50
+    features: null      # null = use variable features
+    
+  # Clustering
+  clustering:
+    resolution: 0.5     # 0.4-1.2 for ~1k cells
+    algorithm: 1        # 1=Louvain, 2=Louvain+multilevel, 3=SLM, 4=Leiden
+    dims: 30           # Number of PCs to use
+    
+  # UMAP
   umap:
+    dims: 30           # Number of PCs to use
+    n_neighbors: 30
     min_dist: 0.3
-    spread: 1.0
-    n_components: 2
     
-  leiden:
-    resolution: [0.4, 0.6, 0.8, 1.0]  # Multiple resolutions
+  # Differential expression
+  de:
+    test: "wilcox"     # wilcox, bimod, roc, t, negbinom, poisson, LR, MAST, DESeq2
+    logfc_threshold: 0.25
+    min_pct: 0.1       # Min fraction of cells expressing
+    only_pos: true     # Only positive markers
     
-  louvain:
-    resolution: [0.4, 0.6, 0.8]
-
 # Cell type annotation
 annotation:
-  method: "marker_genes"  # Options: marker_genes, celltypist, sctype
-  
-  # Marker genes for PBMC dataset
-  marker_genes:
-    "CD4 T cells": ["CD3D", "CD3E", "CD4", "IL7R"]
-    "CD8 T cells": ["CD3D", "CD3E", "CD8A", "CD8B"]
-    "B cells": ["MS4A1", "CD79A", "CD79B"]
-    "NK cells": ["GNLY", "NKG7", "NCAM1", "KLRD1"]
-    "Monocytes": ["CD14", "LYZ", "S100A8", "S100A9"]
-    "Dendritic cells": ["FCER1A", "CST3"]
-    "Megakaryocytes": ["PPBP", "PF4"]
+  # Marker genes for PBMC cell types
+  markers:
+    "Naive CD4 T": ["IL7R", "CCR7"]
+    "Memory CD4 T": ["IL7R", "S100A4"]
+    "CD14 Mono": ["CD14", "LYZ"]
+    "B cell": ["MS4A1", "CD79A"]
+    "CD8 T": ["CD8A"]
+    "FCGR3A Mono": ["FCGR3A", "MS4A7"]
+    "NK": ["GNLY", "NKG7"]
+    "DC": ["FCER1A", "CST3"]
+    "Platelet": ["PPBP"]
+    
+  # SingleR reference (optional)
+  use_singler: false
+  singler_ref: "HumanPrimaryCellAtlasData"
 
-# Differential expression
-differential_expression:
-  method: "wilcoxon"  # Options: wilcoxon, t-test, logreg
-  
-  # Thresholds
-  min_pct: 0.25          # Min fraction of cells expressing
-  logfc_threshold: 0.5   # Min log fold-change
-  pval_cutoff: 0.05      # P-value cutoff
-  
-  # Multiple testing correction
-  correction_method: "bonferroni"  # Options: bonferroni, fdr_bh
-
-# Trajectory inference (optional)
+# Trajectory analysis (optional)
 trajectory:
-  enable: false
-  method: "paga"  # Options: paga, velocyto, slingshot
+  enabled: false
+  method: "monocle3"  # monocle3, slingshot
+  start_cluster: null  # Starting cluster ID
+  
+# Batch correction (if multiple samples)
+integration:
+  enabled: false
+  method: "harmony"   # harmony, seurat, fastmnn
   
 # Visualization
 visualization:
-  dpi: 300
-  figsize: [10, 8]
+  plot_qc: true
+  plot_pca: true
+  plot_umap: true
+  plot_heatmap: true
+  plot_violin: true
+  plot_dotplot: true
   
-  # Color schemes
-  categorical_cmap: "tab20"
-  continuous_cmap: "viridis"
-  
-  # Plots to generate
-  plots:
-    - "qc_violin"
-    - "highest_expr_genes"
-    - "mito_scatter"
-    - "pca_variance"
-    - "umap_clusters"
-    - "umap_genes"
-    - "dotplot_markers"
-    - "heatmap_markers"
-    - "rank_genes"
-
-# QC reporting
-qc:
-  generate_html: true
-  include_plots:
-    - "reads_per_cell"
-    - "genes_per_cell"
-    - "umi_per_cell"
-    - "mito_percent"
-    - "doublet_scores"
-
-# Output formats
-output:
-  save_h5ad: true        # AnnData format
-  save_loom: false       # Loom format
-  save_seurat: false     # Seurat RDS format
-  save_csv: true         # CSV exports
-  save_plots: true       # Individual plot files
+# Resources
+resources:
+  cellranger_mem: "32G"
+  cellranger_threads: 8
+  seurat_mem: "16G"
+  seurat_threads: 4

@@ -1,0 +1,7 @@
+name: visualization
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - deeptools=3.5.2
+  - matplotlib=3.7.0

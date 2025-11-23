@@ -1,0 +1,14 @@
+name: metagenomics_visualization
+channels:
+  - bioconda
+  - conda-forge
+  - defaults
+dependencies:
+  # Minimal visualization - just python tools, no R
+  - krona>=2.8
+  - python>=3.9
+  - matplotlib
+  - seaborn
+  - plotly
+  - pandas
+  - scipy

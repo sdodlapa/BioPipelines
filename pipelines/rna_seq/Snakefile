@@ -1,0 +1,245 @@
+"""
+RNA-seq Differential Expression Analysis Pipeline
+==================================================
+
+A comprehensive pipeline for RNA-seq analysis following best practices.
+
+Workflow steps:
+1. Quality Control (FastQC)
+2. Read Trimming (fastp)
+3. Alignment (STAR)
+4. Quantification (featureCounts)
+5. Differential Expression Analysis (DESeq2)
+6. Visualization (MA plots, volcano plots, heatmaps)
+7. MultiQC Report
+
+Usage:
+    snakemake --cores 8 --use-conda
+"""
+
+from pathlib import Path
+from itertools import chain
+
+# Load configuration
+configfile: "config.yaml"
+
+# Get all samples
+ALL_SAMPLES = list(chain(*config["samples"].values()))
+TREATMENT = config["samples"]["treatment"]
+CONTROL = config["samples"]["control"]
+
+# Paths
+REFERENCE = config["reference"]["genome"]
+GTF = config["reference"]["gtf"]
+STAR_INDEX = config["star_index"]
+
+DATA_BASE = "/scratch/sdodl001/BioPipelines/data"
+QC_DIR = f"{DATA_BASE}/results/rna_seq/qc"
+PROCESSED_DIR = f"{DATA_BASE}/processed/rna_seq"
+RESULTS_DIR = f"{DATA_BASE}/results/rna_seq"
+RAW_DIR = f"{DATA_BASE}/raw/rna_seq"
+
+# Final outputs
+rule all:
+    input:
+        # Final DESeq2 results
+        f"{RESULTS_DIR}/de_analysis/deseq2_results.csv",
+        f"{RESULTS_DIR}/de_analysis/volcano_plot.png",
+        f"{RESULTS_DIR}/de_analysis/ma_plot.png",
+        f"{RESULTS_DIR}/de_analysis/heatmap.png",
+        f"{RESULTS_DIR}/de_analysis/pca_plot.png",
+        # MultiQC report
+        f"{RESULTS_DIR}/multiqc_report.html"
+
+
+# Quality Control - FastQC on raw reads
+rule fastqc_raw:
+    input:
+        r1=f"{RAW_DIR}/{{sample}}_R1.fastq.gz",
+        r2=f"{RAW_DIR}/{{sample}}_R2.fastq.gz"
+    output:
+        r1=f"{QC_DIR}/fastqc_raw/{{sample}}_R1_fastqc.html",
+        r2=f"{QC_DIR}/fastqc_raw/{{sample}}_R2_fastqc.html"
+    conda:
+        "envs/qc.yaml"
+    threads: 2
+    log:
+        f"{QC_DIR}/logs/fastqc_raw/{{sample}}.log"
+    shell:
+        """
+        mkdir -p {QC_DIR}/fastqc_raw
+        fastqc -t {threads} {input.r1} {input.r2} -o {QC_DIR}/fastqc_raw/ 2> {log}
+        """
+
+
+# Trimming - fastp
+rule trim_reads:
+    input:
+        r1=f"{RAW_DIR}/{{sample}}_R1.fastq.gz",
+        r2=f"{RAW_DIR}/{{sample}}_R2.fastq.gz"
+    output:
+        r1=f"{PROCESSED_DIR}/{{sample}}_R1.trimmed.fastq.gz",
+        r2=f"{PROCESSED_DIR}/{{sample}}_R2.trimmed.fastq.gz",
+        html=f"{QC_DIR}/fastp/{{sample}}.html",
+        json=f"{QC_DIR}/fastp/{{sample}}.json"
+    conda:
+        "envs/preprocessing.yaml"
+    threads: 4
+    log:
+        f"{QC_DIR}/logs/trim/{{sample}}.log"
+    shell:
+        """
+        fastp -i {input.r1} -I {input.r2} \\
+              -o {output.r1} -O {output.r2} \\
+              --thread {threads} \\
+              --html {output.html} \\
+              --json {output.json} \\
+              --detect_adapter_for_pe \\
+              --cut_right \\
+              --cut_right_window_size 4 \\
+              --cut_right_mean_quality 20 \\
+              --length_required 50 \\
+              2> {log}
+        """
+
+
+# Build STAR index
+rule star_index:
+    input:
+        fasta=REFERENCE,
+        gtf=GTF
+    output:
+        directory(STAR_INDEX)
+    conda:
+        "envs/alignment.yaml"
+    threads: 8
+    log:
+        f"{QC_DIR}/logs/star_index.log"
+    shell:
+        """
+        mkdir -p {output}
+        STAR --runMode genomeGenerate \\
+             --genomeDir {output} \\
+             --genomeFastaFiles {input.fasta} \\
+             --sjdbGTFfile {input.gtf} \\
+             --sjdbOverhang 100 \\
+             --runThreadN {threads} \\
+             2> {log}
+        """
+
+
+# Alignment - STAR
+rule align_reads:
+    input:
+        r1=f"{PROCESSED_DIR}/{{sample}}_R1.trimmed.fastq.gz",
+        r2=f"{PROCESSED_DIR}/{{sample}}_R2.trimmed.fastq.gz",
+        index=STAR_INDEX
+    output:
+        bam=f"{PROCESSED_DIR}/{{sample}}.Aligned.sortedByCoord.out.bam",
+        counts=f"{PROCESSED_DIR}/{{sample}}.ReadsPerGene.out.tab"
+    params:
+        prefix=f"{PROCESSED_DIR}/{{sample}}."
+    conda:
+        "envs/alignment.yaml"
+    threads: 8
+    log:
+        f"{QC_DIR}/logs/align/{{sample}}.log"
+    shell:
+        """
+        STAR --runThreadN {threads} \\
+             --genomeDir {input.index} \\
+             --readFilesIn {input.r1} {input.r2} \\
+             --readFilesCommand zcat \\
+             --outFileNamePrefix {params.prefix} \\
+             --outSAMtype BAM SortedByCoordinate \\
+             --quantMode GeneCounts \\
+             --outSAMunmapped Within \\
+             --outSAMattributes Standard \\
+             2> {log}
+        """
+
+
+# Index BAM files
+rule index_bam:
+    input:
+        f"{PROCESSED_DIR}/{{sample}}.Aligned.sortedByCoord.out.bam"
+    output:
+        f"{PROCESSED_DIR}/{{sample}}.Aligned.sortedByCoord.out.bam.bai"
+    conda:
+        "envs/alignment.yaml"
+    shell:
+        "samtools index {input}"
+
+
+# Quantification - featureCounts
+rule quantify:
+    input:
+        bams=expand(f"{PROCESSED_DIR}/{{sample}}.Aligned.sortedByCoord.out.bam", sample=ALL_SAMPLES),
+        gtf=GTF
+    output:
+        counts=f"{RESULTS_DIR}/counts/feature_counts.txt",
+        summary=f"{RESULTS_DIR}/counts/feature_counts.txt.summary"
+    params:
+        feature_type=config["quantification"]["feature_type"],
+        id_attr=config["quantification"]["id_attribute"]
+    conda:
+        "envs/quantification.yaml"
+    threads: 4
+    log:
+        f"{QC_DIR}/logs/quantify.log"
+    shell:
+        """
+        featureCounts -T {threads} \\
+                      -p \\
+                      -t {params.feature_type} \\
+                      -g {params.id_attr} \\
+                      -a {input.gtf} \\
+                      -o {output.counts} \\
+                      {input.bams} \\
+                      2> {log}
+        """
+
+
+# Differential Expression - DESeq2
+rule deseq2:
+    input:
+        counts=f"{RESULTS_DIR}/counts/feature_counts.txt"
+    output:
+        results=f"{RESULTS_DIR}/de_analysis/deseq2_results.csv",
+        normalized=f"{RESULTS_DIR}/de_analysis/normalized_counts.csv",
+        volcano=f"{RESULTS_DIR}/de_analysis/volcano_plot.png",
+        ma=f"{RESULTS_DIR}/de_analysis/ma_plot.png",
+        heatmap=f"{RESULTS_DIR}/de_analysis/heatmap.png",
+        pca=f"{RESULTS_DIR}/de_analysis/pca_plot.png"
+    params:
+        treatment_samples=TREATMENT,
+        control_samples=CONTROL,
+        padj_cutoff=config["differential_expression"]["adjusted_pvalue"],
+        lfc_cutoff=config["differential_expression"]["log2_fold_change"],
+        top_genes=config["plots"]["heatmap_top_genes"]
+    conda:
+        "envs/deseq2.yaml"
+    log:
+        f"{QC_DIR}/logs/deseq2.log"
+    script:
+        "scripts/deseq2_analysis.R"
+
+
+# MultiQC - Aggregate all QC reports
+rule multiqc:
+    input:
+        expand(f"{QC_DIR}/fastqc_raw/{{sample}}_R1_fastqc.html", sample=ALL_SAMPLES),
+        expand(f"{QC_DIR}/fastp/{{sample}}.json", sample=ALL_SAMPLES),
+        expand(f"{PROCESSED_DIR}/{{sample}}.ReadsPerGene.out.tab", sample=ALL_SAMPLES),
+        f"{RESULTS_DIR}/counts/feature_counts.txt.summary"
+    output:
+        f"{RESULTS_DIR}/multiqc_report.html"
+    conda:
+        "envs/qc.yaml"
+    log:
+        f"{QC_DIR}/logs/multiqc.log"
+    shell:
+        """
+        multiqc {QC_DIR} {PROCESSED_DIR} {RESULTS_DIR}/counts \\
+                -o {RESULTS_DIR} -f 2> {log}
+        """

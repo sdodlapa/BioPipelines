@@ -1,0 +1,29 @@
+# ATAC-seq Chromatin Accessibility Analysis Configuration
+
+samples:
+  - new_sample1  # 14G paired-end
+  - new_sample2  # downloading
+
+reference:
+  genome: "/scratch/sdodl001/BioPipelines/references/genomes/hg38/hg38.fa"
+  tss_bed: "/scratch/sdodl001/BioPipelines/references/annotations/hg38_tss.bed"
+  blacklist: "/scratch/sdodl001/BioPipelines/references/annotations/hg38-blacklist.v2.bed"
+
+# ATAC-seq specific parameters
+trimming:
+  nextera_adapter: "CTGTCTCTTATACACATCT"  # Nextera transposase adapter
+  min_length: 25
+
+alignment:
+  threads: 8
+  max_fragment_length: 2000
+
+peak_calling:
+  genome_size: "2.7e9"
+  shift: -100  # ATAC-seq specific shift
+  extsize: 200
+  qvalue: 0.05
+
+fragment_analysis:
+  nucleosome_free_max: 100
+  mononucleosome_max: 200
