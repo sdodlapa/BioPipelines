@@ -170,7 +170,7 @@ rule parse_pairs:
             {input.bam} 2> {log} | \
         pairtools sort \
             --nproc {threads} \
-            --tmpdir {PROCESSED_DIR}/tmp | \
+            --tmpdir $TMPDIR | \
         pairtools dedup \
             --nproc-in {threads} \
             --nproc-out {threads} \

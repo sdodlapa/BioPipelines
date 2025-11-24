@@ -99,3 +99,5 @@ containers/images/
 containers/scrna-seq/cellranger-10.0.0.tar.gz
 .nextflow*
 work/
+nextflow-pipelines/docs/nf-core-rnaseq-reference/
+pipelines/*/.java/
