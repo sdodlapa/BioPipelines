@@ -17,9 +17,8 @@ process BOWTIE2_ALIGN {
     path index
     
     output:
-    tuple val(meta), path('*.bam'), emit: bam
-    tuple val(meta), path('*.bai'), emit: bai
-    path "versions.yml"           , emit: versions
+    tuple val(meta), path('*.bam'), path('*.bam.bai'), emit: bam
+    path "versions.yml"                               , emit: versions
     
     when:
     task.ext.when == null || task.ext.when
@@ -40,12 +39,9 @@ process BOWTIE2_ALIGN {
         --threads ${task.cpus} \\
         $args \\
         2> ${prefix}.bowtie2.log \\
-        | samtools view -@ ${task.cpus} -bS - \\
-        | samtools sort -@ ${task.cpus} -o ${prefix}.sorted.bam -
+        | samtools sort -@ ${task.cpus} -O bam -o ${prefix}.bam -
     
-    samtools index ${prefix}.sorted.bam
-    mv ${prefix}.sorted.bam ${prefix}.bam
-    mv ${prefix}.sorted.bam.bai ${prefix}.bai
+    samtools index ${prefix}.bam
     
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
@@ -58,7 +54,7 @@ process BOWTIE2_ALIGN {
     def prefix = task.ext.prefix ?: "${meta.id}"
     """
     touch ${prefix}.bam
-    touch ${prefix}.bai
+    touch ${prefix}.bam.bai
     
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
