@@ -19,10 +19,10 @@ workflow {
     // R1 = barcode + UMI, R2 = cDNA read
     Channel.of(
         [
-            [id: 'pbmc_1k', single_end: false, chemistry: 'v3'],
+            [id: 'sample1', single_end: false, chemistry: 'v3'],
             [
-                file("/scratch/sdodl001/BioPipelines/data/raw/scrna_seq/pbmc_1k_v3_S1_L001_R1_001.fastq.gz"),
-                file("/scratch/sdodl001/BioPipelines/data/raw/scrna_seq/pbmc_1k_v3_S1_L001_R2_001.fastq.gz")
+                file("/scratch/sdodl001/BioPipelines/data/raw/scrna_seq/sample1_R1.fastq.gz"),
+                file("/scratch/sdodl001/BioPipelines/data/raw/scrna_seq/sample1_R2.fastq.gz")
             ]
         ]
     ).set { samples_ch }
