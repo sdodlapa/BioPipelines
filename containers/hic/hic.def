@@ -45,6 +45,7 @@ From: /home/sdodl001_odu_edu/BioPipelines/containers/images/base_1.0.0.sif
     export LD_LIBRARY_PATH="/opt/conda/lib:${LD_LIBRARY_PATH}"
 
 %runscript
+    export LD_LIBRARY_PATH="/opt/conda/lib:${LD_LIBRARY_PATH}"
     exec /opt/biopipelines/entrypoint.sh "$@"
 
 %test

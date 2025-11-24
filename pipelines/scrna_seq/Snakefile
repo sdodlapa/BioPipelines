@@ -72,6 +72,7 @@ rule cellranger_count:
             --sample={params.sample_name} \
             --chemistry={params.chemistry} \
             --expect-cells={params.expect_cells} \
+            --create-bam=true \
             {params.include_introns} \
             --localcores={threads} \
             --localmem={resources.mem_mb} \
