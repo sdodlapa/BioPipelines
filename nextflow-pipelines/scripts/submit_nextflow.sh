@@ -1,19 +1,17 @@
 #!/bin/bash
-#SBATCH --job-name=nf_test
 #SBATCH --partition=cpuspot
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=2
 #SBATCH --mem=8G
 #SBATCH --time=02:00:00
-#SBATCH --output=logs/nextflow_%j.out
-#SBATCH --error=logs/nextflow_%j.err
 
 # BioPipelines - Nextflow Workflow Submission Script
 # This script submits a Nextflow workflow to SLURM
 # The workflow itself will launch additional SLURM jobs via the executor
 
-# Usage: sbatch scripts/submit_nextflow.sh <workflow.nf> [nextflow args...]
+# Usage: Use scripts/submit_workflow.sh instead for automatic job naming
+# Direct usage: sbatch scripts/submit_nextflow.sh <workflow.nf> [nextflow args...]
 # Example: sbatch scripts/submit_nextflow.sh tests/test_fastqc_real.nf -resume
 
 set -euo pipefail
