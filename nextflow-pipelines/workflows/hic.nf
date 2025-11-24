@@ -30,7 +30,7 @@ workflow {
     ).set { samples_ch }
 
     // Reference files
-    bowtie2_index = file("/scratch/sdodl001/BioPipelines/data/references/bowtie2_index_hg38")
+    bowtie2_index = file("/scratch/sdodl001/BioPipelines/data/references/bowtie2_index")
     chrom_sizes = file("/scratch/sdodl001/BioPipelines/data/references/hg38.chrom.sizes")
     
     // Resolution for contact matrix (10kb by default)

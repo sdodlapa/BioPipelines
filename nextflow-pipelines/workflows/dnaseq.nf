@@ -30,7 +30,7 @@ workflow {
     ).set { samples_ch }
 
     // Reference files
-    bwa_index = file("/scratch/sdodl001/BioPipelines/data/references/bwa_index_hg38")
+    bwa_index = file("/scratch/sdodl001/BioPipelines/data/references/bwa_index")
     genome_fasta = file("/scratch/sdodl001/BioPipelines/data/references/hg38.fa")
     genome_fai = file("/scratch/sdodl001/BioPipelines/data/references/hg38.fa.fai")
     genome_dict = file("/scratch/sdodl001/BioPipelines/data/references/hg38.dict")

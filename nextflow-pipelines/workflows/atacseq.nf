@@ -34,7 +34,7 @@ workflow {
         .set { atac_samples }
     
     // Reference
-    bowtie2_index = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index_hg38')
+    bowtie2_index = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index')
     
     // QC
     FASTQC(atac_samples)

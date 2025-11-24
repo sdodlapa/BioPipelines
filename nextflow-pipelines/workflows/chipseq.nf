@@ -32,7 +32,7 @@ workflow {
     control_reads = file('/scratch/sdodl001/BioPipelines/data/processed/chip_seq/input_control.trimmed.fastq.gz')
     
     // Reference
-    bowtie2_index = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index_hg38')
+    bowtie2_index = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index')
     
     // Combine all samples (ChIP + control) for QC and alignment
     all_samples = chip_samples.mix(Channel.of([control_meta, control_reads]))
