@@ -29,7 +29,7 @@ process BWAMEM_ALIGN {
         -t ${task.cpus} \\
         -R '${read_group}' \\
         $args \\
-        ${index}/genome \\
+        ${index} \\
         ${reads[0]} \\
         ${reads[1]} \\
         | samtools sort -@ ${task.cpus} -o ${prefix}.bam -

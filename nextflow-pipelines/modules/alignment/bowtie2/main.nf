@@ -34,7 +34,7 @@ process BOWTIE2_ALIGN {
     export LD_LIBRARY_PATH=\$PWD:/opt/conda/lib:\${LD_LIBRARY_PATH:-}
     
     bowtie2 \\
-        -x $index/genome \\
+        -x $index/hg38 \\
         $reads_cmd \\
         --threads ${task.cpus} \\
         $args \\
