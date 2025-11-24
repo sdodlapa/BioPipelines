@@ -34,20 +34,28 @@ workflow {
     // Reference
     bowtie2_index = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index_hg38')
     
-    // QC
-    FASTQC(chip_samples)
-    FASTQC([[control_meta, control_reads]])
+    // Combine all samples (ChIP + control) for QC and alignment
+    all_samples = chip_samples.mix(Channel.of([[control_meta, control_reads]]))
     
-    // Align ChIP samples
-    BOWTIE2_ALIGN(chip_samples, bowtie2_index)
+    // QC on all samples
+    FASTQC(all_samples)
     
-    // Align control
-    control_align = BOWTIE2_ALIGN([[control_meta, control_reads]], bowtie2_index)
+    // Align all samples
+    BOWTIE2_ALIGN(all_samples, bowtie2_index)
+    
+    // Separate control from ChIP samples for peak calling
+    control_bam = BOWTIE2_ALIGN.out.bam
+        .filter { meta, bam, bai -> meta.id == 'input_control' }
+        .map { meta, bam, bai -> bam }
+        .first()
+    
+    chip_bams = BOWTIE2_ALIGN.out.bam
+        .filter { meta, bam, bai -> meta.id != 'input_control' }
     
     // Peak calling with control
     MACS2_CALLPEAK(
-        BOWTIE2_ALIGN.out.bam,
-        control_align.bam.map { meta, bam -> bam }.first()
+        chip_bams,
+        control_bam
     )
     
     // Display results

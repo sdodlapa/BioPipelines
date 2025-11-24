@@ -8,9 +8,9 @@ process TRIM_GALORE {
     tuple val(meta), path(reads)
 
     output:
-    tuple val(meta), path("*_trimmed.fq.gz"), emit: reads
-    path "*_trimming_report.txt"            , emit: report
-    path "versions.yml"                     , emit: versions
+    tuple val(meta), path("*_val_{1,2}.fq.gz"), emit: reads
+    path "*_trimming_report.txt"              , emit: report
+    path "versions.yml"                       , emit: versions
 
     when:
     task.ext.when == null || task.ext.when
