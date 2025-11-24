@@ -288,7 +288,9 @@ rule call_compartments:
         mcool=f"{RESULTS_DIR}/matrices/{{sample}}.mcool"
     output:
         compartments=f"{RESULTS_DIR}/compartments/{{sample}}_compartments.bed",
-        bigwig=f"{RESULTS_DIR}/compartments/{{sample}}_compartments.bw"
+        bigwig1=f"{RESULTS_DIR}/compartments/{{sample}}_PC1.bw",
+        bigwig2=f"{RESULTS_DIR}/compartments/{{sample}}_PC2.bw",
+        bigwig3=f"{RESULTS_DIR}/compartments/{{sample}}_PC3.bw"
     params:
         resolution=config["params"]["compartment"]["resolution"]
     threads: 4
@@ -300,7 +302,7 @@ rule call_compartments:
         
         hicPCA \
             --matrix {input.mcool}::resolutions/{params.resolution} \
-            --outputFileName {output.bigwig} \
+            --outputFileName {output.bigwig1} {output.bigwig2} {output.bigwig3} \
             --format bigwig \
             --whichEigenvectors 1 2 3 2> {log}
         
@@ -310,7 +312,7 @@ rule call_compartments:
             --outFileName {RESULTS_DIR}/compartments/{wildcards.sample}_oe.cool 2>> {log}
         
         cooltools call-compartments \
-            --bigwig {output.bigwig} \
+            --bigwig {output.bigwig1} \
             {RESULTS_DIR}/compartments/{wildcards.sample}_oe.cool \
             {output.compartments} 2>> {log} || touch {output.compartments}
         """
