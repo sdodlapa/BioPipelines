@@ -33,7 +33,7 @@ workflow {
     
     // Reference - Bowtie2 needs directory and all index files
     bowtie2_index_dir = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index')
-    bowtie2_index_files = Channel.fromPath('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index/hg38.*.bt2*').collect()
+    bowtie2_index_files = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index/hg38.*.bt2*')
     
     // Combine all samples (ChIP + control) for QC and alignment
     all_samples = chip_samples.mix(Channel.of([control_meta, control_reads]))
@@ -42,7 +42,7 @@ workflow {
     FASTQC(all_samples)
     
     // Align all samples
-    BOWTIE2_ALIGN(all_samples, [bowtie2_index_dir, bowtie2_index_files])
+    BOWTIE2_ALIGN(all_samples, tuple(bowtie2_index_dir, bowtie2_index_files))
     
     // Separate control from ChIP samples for peak calling
     control_bam = BOWTIE2_ALIGN.out.bam

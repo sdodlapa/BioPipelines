@@ -35,13 +35,13 @@ workflow {
     
     // Reference - Bowtie2 needs directory and all index files
     bowtie2_index_dir = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index')
-    bowtie2_index_files = Channel.fromPath('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index/hg38.*.bt2*').collect()
+    bowtie2_index_files = file('/scratch/sdodl001/BioPipelines/data/references/bowtie2_index/hg38.*.bt2*')
     
     // QC
     FASTQC(atac_samples)
     
     // Align
-    BOWTIE2_ALIGN(atac_samples, [bowtie2_index_dir, bowtie2_index_files])
+    BOWTIE2_ALIGN(atac_samples, tuple(bowtie2_index_dir, bowtie2_index_files))
     
     // Peak calling (no control for ATAC-seq)
     MACS2_CALLPEAK(
