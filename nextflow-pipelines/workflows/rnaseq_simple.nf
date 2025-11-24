@@ -30,7 +30,7 @@ workflow {
     
     // Reference files
     star_index = file('/scratch/sdodl001/BioPipelines/data/references/star_index_hg38')
-    gtf_file = file('/scratch/sdodl001/BioPipelines/data/references/gencode.v45.primary_assembly.annotation.gtf')
+    gtf_file = file('/scratch/sdodl001/BioPipelines/data/references/genes_GRCh38.gtf')
     
     // Create input channel
     input_ch = Channel.of([meta, reads])
