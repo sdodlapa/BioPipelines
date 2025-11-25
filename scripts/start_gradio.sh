@@ -54,26 +54,70 @@ echo "║        🧬 BioPipelines - Gradio Web UI                           ║
 echo "╚══════════════════════════════════════════════════════════════════╝"
 echo ""
 
-# Activate conda
-echo "Activating conda environment..."
-source ~/miniconda3/etc/profile.d/conda.sh
-conda activate base
+# Activate conda environment
+echo "Activating BioPipelines environment..."
+if [ -d ~/envs/biopipelines ]; then
+    source ~/miniconda3/etc/profile.d/conda.sh
+    conda activate ~/envs/biopipelines
+    echo "✓ Using ~/envs/biopipelines"
+elif conda env list | grep -q "^biopipelines "; then
+    source ~/miniconda3/etc/profile.d/conda.sh
+    conda activate biopipelines
+    echo "✓ Using biopipelines environment"
+else
+    echo "⚠ BioPipelines environment not found, using base"
+    source ~/miniconda3/etc/profile.d/conda.sh
+    conda activate base
+fi
 
 # Go to project directory
 cd "$PROJECT_DIR"
 
-# Load OpenAI API key
+# Load API keys from .secrets directory
+echo ""
+echo "Loading API keys..."
 if [ -f ".secrets/openai_key" ]; then
     export OPENAI_API_KEY=$(cat .secrets/openai_key)
     echo "✓ OpenAI API key loaded"
-else
-    echo "⚠ No OpenAI key found at .secrets/openai_key"
+fi
+
+if [ -f ".secrets/lightning_key" ]; then
+    export LIGHTNING_API_KEY=$(cat .secrets/lightning_key)
+    echo "✓ Lightning.ai API key loaded (30M FREE tokens/month!)"
+fi
+
+if [ -f ".secrets/anthropic_key" ]; then
+    export ANTHROPIC_API_KEY=$(cat .secrets/anthropic_key)
+    echo "✓ Anthropic API key loaded"
+fi
+
+if [ ! -f ".secrets/openai_key" ] && [ ! -f ".secrets/lightning_key" ]; then
+    echo "⚠ No API keys found in .secrets/"
+    echo "  For Lightning.ai (FREE): https://lightning.ai/models"
+    echo "  Save keys to: .secrets/lightning_key or .secrets/openai_key"
 fi
 
 # Check if package is installed
+echo ""
 if ! python -c "import workflow_composer" 2>/dev/null; then
-    echo "Installing workflow_composer..."
+    echo "Installing workflow_composer package..."
     pip install -e . -q
+    echo "✓ Package installed"
+fi
+
+# Verify required packages
+echo "Checking dependencies..."
+MISSING=""
+for pkg in gradio pandas numpy pyyaml openai; do
+    if ! python -c "import $pkg" 2>/dev/null; then
+        MISSING="$MISSING $pkg"
+    fi
+done
+
+if [ -n "$MISSING" ]; then
+    echo "Installing missing packages:$MISSING"
+    pip install $MISSING -q
+    echo "✓ Dependencies installed"
 fi
 
 echo ""

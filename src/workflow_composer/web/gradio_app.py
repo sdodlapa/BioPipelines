@@ -501,14 +501,22 @@ app_state = AppState()
 # ============================================================================
 
 def check_available_providers() -> Dict[str, bool]:
-    """Check which LLM providers are available."""
+    """Check which LLM providers are available based on API keys and configuration."""
     if not COMPOSER_AVAILABLE:
-        return {"openai": False, "vllm": False, "ollama": False, "anthropic": False}
+        return {"openai": False, "vllm": False, "ollama": False, "anthropic": False, "lightning": False}
     
     try:
-        return check_providers()
+        import os
+        # Quick check based on API keys instead of making actual API calls
+        return {
+            "lightning": bool(os.environ.get("LIGHTNING_API_KEY")),
+            "openai": bool(os.environ.get("OPENAI_API_KEY")),
+            "anthropic": bool(os.environ.get("ANTHROPIC_API_KEY")),
+            "ollama": False,  # Would need to check if ollama service is running
+            "vllm": False,  # Would need to check if vLLM is configured
+        }
     except:
-        return {"openai": False, "vllm": False, "ollama": False, "anthropic": False}
+        return {"openai": False, "vllm": False, "ollama": False, "anthropic": False, "lightning": False}
 
 
 def get_provider_choices() -> List[str]:
