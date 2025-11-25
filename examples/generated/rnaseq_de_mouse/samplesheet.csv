@@ -1,0 +1,5 @@
+sample,fastq_1,fastq_2,condition
+sample1,data/raw/sample1_R1.fastq.gz,data/raw/sample1_R2.fastq.gz,control
+sample2,data/raw/sample2_R1.fastq.gz,data/raw/sample2_R2.fastq.gz,control
+sample3,data/raw/sample3_R1.fastq.gz,data/raw/sample3_R2.fastq.gz,treatment
+sample4,data/raw/sample4_R1.fastq.gz,data/raw/sample4_R2.fastq.gz,treatment

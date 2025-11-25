@@ -175,18 +175,41 @@ class ModuleMapper:
             logger.warning(f"Module directory not found: {self.module_dir}")
             return
         
+        # Handle both structures:
+        # 1. category/tool/main.nf (nf-core style)
+        # 2. category/tool.nf (flat style)
+        
         for category_dir in self.module_dir.iterdir():
             if not category_dir.is_dir():
                 continue
             
+            # Check for nf-core style: category/tool/main.nf
+            for tool_dir in category_dir.iterdir():
+                if tool_dir.is_dir():
+                    main_nf = tool_dir / "main.nf"
+                    if main_nf.exists():
+                        module_name = tool_dir.name
+                        processes = self._extract_processes(main_nf)
+                        tool_name = module_name.lower()
+                        
+                        container = TOOL_CONTAINER_MAP.get(tool_name, "base")
+                        
+                        self.modules[tool_name] = Module(
+                            name=module_name,
+                            path=main_nf,
+                            tool_name=tool_name,
+                            container=container,
+                            processes=processes
+                        )
+            
+            # Also check for flat style: category/*.nf
             for module_file in category_dir.glob("*.nf"):
                 module_name = module_file.stem
-                
-                # Parse module to find processes
-                processes = self._extract_processes(module_file)
-                
-                # Determine tool name (usually same as module)
                 tool_name = module_name.lower()
+                
+                # Skip if already found in subdirectory
+                if tool_name in self.modules:
+                    continue
                 
                 # Get container from mapping
                 container = TOOL_CONTAINER_MAP.get(tool_name, "base")

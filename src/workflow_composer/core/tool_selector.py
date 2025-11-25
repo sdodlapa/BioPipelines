@@ -139,7 +139,7 @@ class ToolSelector:
         Initialize tool selector with tool catalog.
         
         Args:
-            catalog_path: Path to tool_catalog JSON file
+            catalog_path: Path to tool_catalog JSON file or directory containing it
         """
         self.catalog_path = Path(catalog_path)
         self.tools: Dict[str, Tool] = {}
@@ -149,11 +149,30 @@ class ToolSelector:
     
     def _load_catalog(self) -> None:
         """Load tool catalog from JSON."""
-        if not self.catalog_path.exists():
-            logger.warning(f"Tool catalog not found: {self.catalog_path}")
+        catalog_file = self.catalog_path
+        
+        # If path is a directory, look for the latest catalog
+        if self.catalog_path.is_dir():
+            # Try to find tool_catalog_latest.json symlink first
+            latest = self.catalog_path / "tool_catalog_latest.json"
+            if latest.exists():
+                catalog_file = latest
+            else:
+                # Find the most recent tool_catalog JSON
+                json_files = list(self.catalog_path.glob("tool_catalog_*.json"))
+                if json_files:
+                    catalog_file = max(json_files, key=lambda p: p.stat().st_mtime)
+                else:
+                    logger.warning(f"No tool catalog JSON found in: {self.catalog_path}")
+                    return
+        
+        if not catalog_file.exists():
+            logger.warning(f"Tool catalog not found: {catalog_file}")
             return
         
-        with open(self.catalog_path) as f:
+        logger.info(f"Loading tool catalog from: {catalog_file}")
+        
+        with open(catalog_file) as f:
             data = json.load(f)
         
         for container, info in data.get("containers", {}).items():

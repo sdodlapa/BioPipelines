@@ -52,8 +52,8 @@ class LLMConfig:
 @dataclass
 class KnowledgeBaseConfig:
     """Paths to knowledge base resources."""
-    tool_catalog: str = "data/tool_catalog/tool_catalog_20251125_003207.json"
-    module_library: str = "nextflow-modules/"
+    tool_catalog: str = "data/tool_catalog"  # Directory, will find latest JSON
+    module_library: str = "nextflow-pipelines/modules"  # nf-core style modules
     workflow_patterns: str = "docs/COMPOSITION_PATTERNS.md"
     container_images: str = "containers/images/"
 

@@ -484,8 +484,12 @@ class WorkflowGenerator:
         for module in modules:
             containers.add(module.container)
         
+        def format_container(c):
+            container_name = c.replace("_", "-")
+            return f'{c} = "${{projectDir}}/containers/images/{container_name}_1.0.0.sif"'
+        
         container_params = "\n        ".join([
-            f'{c} = "${{projectDir}}/containers/images/{c.replace(\"_\", \"-\")}_1.0.0.sif"'
+            format_container(c)
             for c in sorted(containers)
         ])
         
