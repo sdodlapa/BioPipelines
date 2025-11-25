@@ -711,7 +711,12 @@ def chat_with_composer(
 **Modules:**
 {', '.join(f'`{m}`' for m in (workflow.modules_used if hasattr(workflow, 'modules_used') else []))}
 
-📥 Use the **Download** tab to get your workflow files.
+📥 **Next Steps:**
+1. Go to the **🚀 Run Pipeline** tab
+2. Your workflow is now available in the dropdown
+3. Configure parameters and submit to SLURM
+
+Or download workflow files from the **Download** tab.
 """
                 response_parts.append(workflow_info)
                 
@@ -1829,17 +1834,23 @@ def create_interface() -> gr.Blocks:
         
         # ========== Event Handlers ==========
         
-        # Chat submission
+        # Chat submission - update workflow dropdown after each message
         msg_input.submit(
             fn=chat_with_composer,
             inputs=[msg_input, chatbot, provider_dropdown],
             outputs=[chatbot, msg_input],
+        ).then(
+            fn=lambda: gr.update(choices=get_available_workflows()),
+            outputs=workflow_dropdown,
         )
         
         send_btn.click(
             fn=chat_with_composer,
             inputs=[msg_input, chatbot, provider_dropdown],
             outputs=[chatbot, msg_input],
+        ).then(
+            fn=lambda: gr.update(choices=get_available_workflows()),
+            outputs=workflow_dropdown,
         )
         
         # Clear chat
