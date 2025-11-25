@@ -1,0 +1,53 @@
+Tool Catalog Summary
+Generated: Tue Nov 25 00:32:07 UTC 2025
+========================================
+
+rna-seq_1.0.0.sif
+  Size: 1.6G
+  Tools: 643
+
+dna-seq_1.0.0.sif
+  Size: 2.1G
+  Tools: 1044
+
+atac-seq_1.0.0.sif
+  Size: 1.7G
+  Tools: 901
+
+chip-seq_1.0.0.sif
+  Size: 1.8G
+  Tools: 793
+
+scrna-seq_1.0.0.sif
+  Size: 2.6G
+  Tools: 664
+
+metagenomics_1.0.0.sif
+  Size: 2.3G
+  Tools: 1428
+
+methylation_1.0.0.sif
+  Size: 2.4G
+  Tools: 745
+
+long-read_1.0.0.sif
+  Size: 2.1G
+  Tools: 1462
+
+hic_1.0.0.sif
+  Size: 1.8G
+  Tools: 1033
+
+structural-variants_1.0.0.sif
+  Size: 1.5G
+  Tools: 620
+
+base_1.0.0.sif
+  Size: 1.4G
+  Tools: 576
+
+========================================
+TOTALS:
+  Containers: 12
+  Total Tools: 9909
+

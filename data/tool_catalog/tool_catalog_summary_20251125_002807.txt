@@ -1,0 +1,13 @@
+Tool Catalog Summary
+Generated: Tue Nov 25 00:28:07 UTC 2025
+========================================
+
+workflow-engine.sif
+  Size: 628M
+  Tools: 459
+
+========================================
+TOTALS:
+  Containers: 12
+  Total Tools: 459
+
