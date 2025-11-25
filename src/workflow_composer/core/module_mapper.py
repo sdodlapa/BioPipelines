@@ -241,16 +241,45 @@ class ModuleMapper:
     
     # Tool name aliases - map common tool names to actual module names
     TOOL_ALIASES = {
+        # Alignment aliases
         "bwa": "bwamem",
         "bwa-mem": "bwamem",
         "bwa_mem": "bwamem",
+        
+        # Variant calling aliases
         "gatk": "gatk_haplotypecaller",
         "haplotypecaller": "gatk_haplotypecaller",
+        "gatk_hc": "gatk_haplotypecaller",
+        
+        # Trimming aliases
         "trimgalore": "trim_galore",
         "trim-galore": "trim_galore",
+        
+        # Utilities aliases
         "mark_duplicates": "markduplicates",
-        "picard": "markduplicates",
+        "picard_markduplicates": "markduplicates",
+        
+        # scRNA aliases
         "cellranger": "starsolo",  # fallback to starsolo for scRNA
+        "cell_ranger": "starsolo",
+        
+        # Peak calling
+        "macs": "macs2",
+        
+        # QC aliases
+        "multi_qc": "multiqc",
+        
+        # deeptools aliases
+        "deep_tools": "deeptools",
+        "deep-tools": "deeptools",
+        
+        # Methylation aliases
+        "bismark_methylation": "bismark_extractor",
+        "methylation_extractor": "bismark_extractor",
+        
+        # Hi-C aliases  
+        "cooler": "cooler_cload",
+        "pairtools": "pairtools_parse",
     }
     
     def find_module(self, tool_name: str) -> Optional[Module]:
