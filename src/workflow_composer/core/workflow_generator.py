@@ -5,7 +5,9 @@ Workflow Generator
 Generates complete Nextflow DSL2 workflows from parsed intents and modules.
 
 Supports:
-- Pattern-based workflow generation
+- Template-based workflow generation (preferred)
+- LLM-assisted customization
+- Pattern-based fallback generation
 - Module chaining with proper data flow
 - Parameter configuration
 - Config file generation
@@ -26,6 +28,13 @@ from datetime import datetime
 from .query_parser import ParsedIntent, AnalysisType
 from .module_mapper import Module, TOOL_CONTAINER_MAP
 from ..llm.base import LLMAdapter, Message
+
+# Import template registry
+try:
+    from ..templates import get_template, has_template
+except ImportError:
+    get_template = None
+    has_template = lambda x: False
 
 logger = logging.getLogger(__name__)
 
@@ -72,6 +81,19 @@ class Workflow:
         # Create modules symlink or copy structure
         modules_dir = out_path / "modules"
         modules_dir.mkdir(exist_ok=True)
+        
+        # Create symlink to main nextflow-modules directory
+        # This allows the workflow to find included modules
+        project_root = Path(__file__).parent.parent.parent.parent  # src/workflow_composer/core -> project root
+        nextflow_modules_src = project_root / "nextflow-modules"
+        nextflow_modules_link = out_path / "nextflow-modules"
+        
+        if nextflow_modules_src.exists() and not nextflow_modules_link.exists():
+            try:
+                nextflow_modules_link.symlink_to(nextflow_modules_src)
+                logger.info(f"Created symlink: {nextflow_modules_link} -> {nextflow_modules_src}")
+            except Exception as e:
+                logger.warning(f"Could not create symlink to nextflow-modules: {e}")
         
         self.output_dir = out_path
         logger.info(f"Workflow saved to: {out_path}")
@@ -390,6 +412,12 @@ class WorkflowGenerator:
         """
         Generate a complete workflow.
         
+        Priority order:
+        1. Use file-based template from nextflow-pipelines/templates/
+        2. Use embedded template from WORKFLOW_TEMPLATES
+        3. Use LLM for custom generation
+        4. Fall back to generic generation
+        
         Args:
             intent: Parsed user intent
             modules: List of modules to include
@@ -400,16 +428,65 @@ class WorkflowGenerator:
         """
         logger.info(f"Generating workflow for: {intent.analysis_type.value}")
         
-        # Check if we have a template
+        # Priority 1: File-based templates (tested, reliable)
+        if has_template and has_template(intent.analysis_type):
+            logger.info("Using file-based template (recommended)")
+            return self._generate_from_file_template(intent, modules, llm)
+        
+        # Priority 2: Embedded templates
         if intent.analysis_type in WORKFLOW_TEMPLATES:
+            logger.info("Using embedded template")
             return self._generate_from_template(intent, modules)
         
-        # Fall back to LLM generation
+        # Priority 3: LLM generation (for novel workflows)
         if llm:
+            logger.info("Using LLM generation (no template available)")
             return self._generate_with_llm(intent, modules, llm)
         
-        # Generic generation
+        # Priority 4: Generic generation
+        logger.info("Using generic generation")
         return self._generate_generic(intent, modules)
+    
+    def _generate_from_file_template(
+        self,
+        intent: ParsedIntent,
+        modules: List[Module],
+        llm: Optional[LLMAdapter] = None
+    ) -> Workflow:
+        """Generate workflow from file-based template."""
+        template = get_template(intent.analysis_type)
+        
+        # Prepare template parameters
+        params = {
+            "DATE": datetime.now().strftime("%Y-%m-%d"),
+            "ANALYSIS_TYPE": intent.analysis_type.value.replace("_", " ").title(),
+            "ORGANISM": intent.organism or "Unknown",
+            "GENOME_BUILD": intent.genome_build or "hg38",
+            "SINGLE_END": "false" if intent.paired_end else "true",
+        }
+        
+        # Customize template with parameters
+        main_nf = template.customize(params)
+        
+        if not main_nf:
+            logger.warning(f"Template file not found, falling back to LLM")
+            if llm:
+                return self._generate_with_llm(intent, modules, llm)
+            return self._generate_generic(intent, modules)
+        
+        # Generate config and other files
+        config = self._generate_config(intent, modules)
+        samplesheet = self._generate_samplesheet(intent)
+        readme = self._generate_readme(intent, modules)
+        
+        return Workflow(
+            name=f"{intent.analysis_type.value}_workflow",
+            main_nf=main_nf,
+            config=config,
+            samplesheet_template=samplesheet,
+            readme=readme,
+            modules_used=modules
+        )
     
     def _generate_from_template(
         self,

@@ -130,20 +130,36 @@ class LLMFactory:
             for name, cls in self.providers.items()
         }
     
-    def get_available_providers(self) -> Dict[str, bool]:
+    def get_available_providers(self, quiet: bool = True) -> Dict[str, bool]:
         """
         Check which providers are currently available.
+        
+        Args:
+            quiet: If True, suppress warning logs during checks
         
         Returns:
             Dict mapping provider names to availability status
         """
+        import logging
         status = {}
-        for name in self.providers:
-            try:
-                adapter = self.create(name)
-                status[name] = adapter.is_available()
-            except Exception:
-                status[name] = False
+        
+        # Temporarily suppress noisy warnings during availability checks
+        if quiet:
+            llm_logger = logging.getLogger("workflow_composer.llm")
+            old_level = llm_logger.level
+            llm_logger.setLevel(logging.ERROR)
+        
+        try:
+            for name in self.providers:
+                try:
+                    adapter = self.create(name)
+                    status[name] = adapter.is_available()
+                except Exception:
+                    status[name] = False
+        finally:
+            if quiet:
+                llm_logger.setLevel(old_level)
+        
         return status
 
 
