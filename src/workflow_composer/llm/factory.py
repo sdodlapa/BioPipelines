@@ -24,6 +24,7 @@ from .ollama_adapter import OllamaAdapter
 from .openai_adapter import OpenAIAdapter
 from .anthropic_adapter import AnthropicAdapter
 from .huggingface_adapter import HuggingFaceAdapter
+from .vllm_adapter import VLLMAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -42,6 +43,7 @@ class LLMFactory:
         "anthropic": AnthropicAdapter,
         "huggingface": HuggingFaceAdapter,
         "hf": HuggingFaceAdapter,  # Alias
+        "vllm": VLLMAdapter,
     }
     
     def __init__(self):
@@ -97,9 +99,10 @@ class LLMFactory:
         if model is None:
             defaults = {
                 "ollama": "llama3:8b",
-                "openai": "gpt-4-turbo-preview",
+                "openai": "gpt-4o",
                 "anthropic": "claude-3-5-sonnet-20241022",
-                "huggingface": "meta-llama/Llama-3-8b-chat-hf",
+                "huggingface": "meta-llama/Llama-3.1-8B-Instruct",
+                "vllm": "meta-llama/Llama-3.1-8B-Instruct",
             }
             model = defaults.get(provider_lower, "")
         
@@ -147,7 +150,7 @@ def get_llm(
     Convenience function to create an LLM adapter.
     
     Args:
-        provider: Provider name (ollama, openai, anthropic, huggingface)
+        provider: Provider name (ollama, openai, anthropic, huggingface, vllm)
         model: Model name (optional, uses provider default)
         **kwargs: Additional arguments for the adapter
         
@@ -158,14 +161,17 @@ def get_llm(
         # Local Ollama
         llm = get_llm("ollama", model="llama3:8b")
         
-        # OpenAI GPT-4
-        llm = get_llm("openai", model="gpt-4-turbo-preview")
+        # OpenAI GPT-4o
+        llm = get_llm("openai", model="gpt-4o")
         
         # Anthropic Claude
-        llm = get_llm("anthropic", model="claude-3-opus-20240229")
+        llm = get_llm("anthropic", model="claude-3-5-sonnet-20241022")
         
-        # HuggingFace (API)
-        llm = get_llm("huggingface", model="meta-llama/Llama-3-8b-chat-hf")
+        # vLLM (high-performance GPU inference)
+        llm = get_llm("vllm", model="meta-llama/Llama-3.1-8B-Instruct")
+        
+        # HuggingFace with vLLM backend
+        llm = get_llm("huggingface", model="mistralai/Mistral-7B-Instruct-v0.3", backend="vllm")
     """
     return _factory.create(provider, model, **kwargs)
 

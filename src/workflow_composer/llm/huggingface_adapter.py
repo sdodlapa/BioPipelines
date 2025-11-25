@@ -2,20 +2,28 @@
 HuggingFace LLM Adapter
 =======================
 
-Adapter for HuggingFace models via the Inference API or local transformers.
+Adapter for HuggingFace models via the Inference API, local transformers, or vLLM.
 
 Supports:
 - HuggingFace Inference API (cloud)
 - Local transformers (requires torch, transformers packages)
+- vLLM server (high-performance GPU inference)
 
 Usage:
     from workflow_composer.llm import HuggingFaceAdapter
     
-    # Using Inference API
-    llm = HuggingFaceAdapter(model="meta-llama/Llama-3-8b-chat-hf", use_api=True)
+    # Using HuggingFace Inference API
+    llm = HuggingFaceAdapter(model="meta-llama/Llama-3-8b-chat-hf", backend="api")
     
     # Using local transformers
-    llm = HuggingFaceAdapter(model="meta-llama/Llama-3-8b-chat-hf", use_api=False)
+    llm = HuggingFaceAdapter(model="meta-llama/Llama-3-8b-chat-hf", backend="transformers")
+    
+    # Using vLLM server (recommended for GPU inference)
+    llm = HuggingFaceAdapter(
+        model="meta-llama/Llama-3.1-8B-Instruct",
+        backend="vllm",
+        vllm_url="http://localhost:8000"
+    )
 """
 
 import json
@@ -37,24 +45,34 @@ class HuggingFaceAdapter(LLMAdapter):
     Can use either:
     1. HuggingFace Inference API (cloud, requires HF_TOKEN)
     2. Local transformers library (requires transformers, torch)
+    3. vLLM server (high-performance GPU inference)
     
     Recommended models:
-    - meta-llama/Llama-3-8b-chat-hf
-    - mistralai/Mistral-7B-Instruct-v0.2
-    - microsoft/Phi-3-mini-4k-instruct
-    - google/gemma-7b-it
+    - meta-llama/Llama-3.1-8B-Instruct (general purpose)
+    - meta-llama/Llama-3.1-70B-Instruct (high quality)
+    - mistralai/Mistral-7B-Instruct-v0.3 (fast, good quality)
+    - Qwen/Qwen2.5-7B-Instruct (multilingual)
+    - codellama/CodeLlama-34b-Instruct-hf (code generation)
+    - deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct (code focused)
     """
     
     API_BASE = "https://api-inference.huggingface.co/models"
     
+    # Backend options
+    BACKEND_API = "api"
+    BACKEND_TRANSFORMERS = "transformers"
+    BACKEND_VLLM = "vllm"
+    
     def __init__(
         self,
-        model: str = "meta-llama/Llama-3-8b-chat-hf",
+        model: str = "meta-llama/Llama-3.1-8B-Instruct",
         token: Optional[str] = None,
         temperature: float = 0.1,
         max_tokens: int = 4096,
-        use_api: bool = True,
+        backend: str = "api",
+        use_api: Optional[bool] = None,  # Deprecated, use backend instead
         device: str = "auto",
+        vllm_url: Optional[str] = None,
         **kwargs
     ):
         """
@@ -65,22 +83,49 @@ class HuggingFaceAdapter(LLMAdapter):
             token: HuggingFace API token (default: from HF_TOKEN env var)
             temperature: Sampling temperature
             max_tokens: Maximum tokens in response
-            use_api: Use Inference API (True) or local transformers (False)
-            device: Device for local inference ("auto", "cuda", "cpu")
+            backend: Backend to use - "api", "transformers", or "vllm"
+            use_api: Deprecated - use backend="api" or backend="transformers"
+            device: Device for local/transformers inference ("auto", "cuda", "cpu")
+            vllm_url: vLLM server URL (default: http://localhost:8000)
         """
         super().__init__(model=model, temperature=temperature, max_tokens=max_tokens, **kwargs)
         self.token = token or os.environ.get("HF_TOKEN") or os.environ.get("HUGGINGFACE_TOKEN")
-        self.use_api = use_api
         self.device = device
+        self.vllm_url = vllm_url or os.environ.get("VLLM_BASE_URL", "http://localhost:8000")
         
-        self._pipeline = None  # Lazy load for local inference
+        # Handle deprecated use_api parameter
+        if use_api is not None:
+            logger.warning("use_api is deprecated. Use backend='api' or backend='transformers' instead.")
+            backend = self.BACKEND_API if use_api else self.BACKEND_TRANSFORMERS
         
-        if not self.token and use_api:
+        self.backend = backend.lower()
+        
+        self._pipeline = None  # Lazy load for transformers
+        self._vllm_adapter = None  # Lazy load for vLLM
+        
+        if self.backend == self.BACKEND_API and not self.token:
             logger.warning("No HuggingFace token provided. Set HF_TOKEN environment variable.")
+    
+    @property
+    def use_api(self) -> bool:
+        """Deprecated: Check if using API backend."""
+        return self.backend == self.BACKEND_API
     
     @property
     def provider_name(self) -> str:
         return "huggingface"
+    
+    def _get_vllm_adapter(self):
+        """Lazy load vLLM adapter."""
+        if self._vllm_adapter is None:
+            from .vllm_adapter import VLLMAdapter
+            self._vllm_adapter = VLLMAdapter(
+                model=self.model,
+                base_url=self.vllm_url,
+                temperature=self.temperature,
+                max_tokens=self.max_tokens
+            )
+        return self._vllm_adapter
     
     def _get_pipeline(self):
         """Lazy load transformers pipeline for local inference."""
@@ -171,9 +216,11 @@ class HuggingFaceAdapter(LLMAdapter):
         Returns:
             LLMResponse with generated text
         """
-        if self.use_api:
+        if self.backend == self.BACKEND_VLLM:
+            return self._get_vllm_adapter().complete(prompt, **kwargs)
+        elif self.backend == self.BACKEND_API:
             content = self._api_request(prompt, **kwargs)
-        else:
+        else:  # transformers
             content = self._local_generate(prompt, **kwargs)
         
         return LLMResponse(
@@ -197,7 +244,10 @@ class HuggingFaceAdapter(LLMAdapter):
         Returns:
             LLMResponse with assistant's response
         """
-        # Format messages into a prompt
+        if self.backend == self.BACKEND_VLLM:
+            return self._get_vllm_adapter().chat(messages, **kwargs)
+        
+        # Format messages into a prompt for API/transformers backends
         # Use chat template if available, otherwise simple format
         prompt_parts = []
         for msg in messages:
@@ -214,8 +264,10 @@ class HuggingFaceAdapter(LLMAdapter):
         return self.complete(prompt, **kwargs)
     
     def is_available(self) -> bool:
-        """Check if HuggingFace is accessible."""
-        if self.use_api:
+        """Check if HuggingFace backend is accessible."""
+        if self.backend == self.BACKEND_VLLM:
+            return self._get_vllm_adapter().is_available()
+        elif self.backend == self.BACKEND_API:
             if not self.token:
                 return False
             try:
@@ -225,7 +277,7 @@ class HuggingFaceAdapter(LLMAdapter):
             except Exception as e:
                 logger.warning(f"HuggingFace API not available: {e}")
                 return False
-        else:
+        else:  # transformers
             try:
                 import transformers
                 import torch

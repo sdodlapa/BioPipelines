@@ -14,19 +14,27 @@ rapidfuzz>=3.0.0
 # LLM Adapters
 # ------------
 
-# OpenAI API
+# OpenAI API (GPT-4o, GPT-4, GPT-3.5)
 openai>=1.0.0
 
-# Anthropic API
+# Anthropic API (Claude 3.5, Claude 3)
 anthropic>=0.18.0
 
-# HuggingFace (optional - for local models)
-# Uncomment if using local HuggingFace models:
-# transformers>=4.30.0
+# vLLM - High-performance GPU inference for HuggingFace models
+# Requires CUDA-capable GPU
+# Install separately if on GPU cluster: pip install vllm
+# vllm>=0.6.0
+
+# HuggingFace (optional - for local transformers models)
+# Uncomment if using local HuggingFace models without vLLM:
+# transformers>=4.40.0
 # torch>=2.0.0
 # accelerate>=0.20.0
 
-# HTTP requests (for Ollama and other APIs)
+# HuggingFace Hub (for model downloading and tokens)
+huggingface_hub>=0.20.0
+
+# HTTP requests (for Ollama, vLLM, and other APIs)
 requests>=2.28.0
 httpx>=0.24.0
 

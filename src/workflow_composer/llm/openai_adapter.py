@@ -2,16 +2,15 @@
 OpenAI LLM Adapter
 ==================
 
-Adapter for OpenAI models (GPT-4, GPT-3.5-turbo, etc.)
+Adapter for OpenAI models (GPT-4o, GPT-4, GPT-3.5-turbo, etc.)
 
 Requirements:
     - OpenAI API key: Set OPENAI_API_KEY environment variable
-    - Optional: openai package for enhanced features
 
 Usage:
     from workflow_composer.llm import OpenAIAdapter
     
-    llm = OpenAIAdapter(model="gpt-4-turbo-preview")
+    llm = OpenAIAdapter(model="gpt-4o")
     response = llm.complete("Explain RNA-seq")
 """
 
@@ -32,10 +31,11 @@ class OpenAIAdapter(LLMAdapter):
     Adapter for OpenAI API.
     
     Supports:
-    - gpt-4-turbo-preview (recommended for complex tasks)
-    - gpt-4 (high quality, slower)
+    - gpt-4o (latest, recommended for most tasks)
+    - gpt-4o-mini (fast and cheap)
+    - gpt-4-turbo (high quality)
+    - gpt-4 (original, most expensive)
     - gpt-3.5-turbo (fast, cost-effective)
-    - gpt-3.5-turbo-16k (longer context)
     
     Requires OPENAI_API_KEY environment variable.
     """
@@ -44,7 +44,7 @@ class OpenAIAdapter(LLMAdapter):
     
     def __init__(
         self,
-        model: str = "gpt-4-turbo-preview",
+        model: str = "gpt-4o",
         api_key: Optional[str] = None,
         temperature: float = 0.1,
         max_tokens: int = 4096,
