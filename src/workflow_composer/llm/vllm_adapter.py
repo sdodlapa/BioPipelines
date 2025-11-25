@@ -299,7 +299,7 @@ class VLLMAdapter(LLMAdapter):
                 result = json.loads(response.read().decode("utf-8"))
                 return [m.get("id", "") for m in result.get("data", [])]
         except Exception as e:
-            logger.warning(f"Failed to get vLLM models: {e}")
+            logger.debug(f"Failed to get vLLM models: {e}")
             return []
     
     def is_available(self) -> bool:

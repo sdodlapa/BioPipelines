@@ -48,6 +48,22 @@ except ImportError:
     COMPOSER_AVAILABLE = False
     print("Warning: workflow_composer not fully installed. Running in demo mode.")
 
+# Import model orchestrator for ensemble management
+try:
+    from workflow_composer.core import (
+        get_model_manager,
+        AdaptiveQueryParser,
+        ORCHESTRATOR_AVAILABLE
+    )
+    # Fallback to old names for compatibility
+    get_orchestrator = get_model_manager
+except ImportError:
+    ORCHESTRATOR_AVAILABLE = False
+    get_model_manager = None
+    get_orchestrator = None
+    AdaptiveQueryParser = None
+    print("Note: Model orchestrator not available - using standard parsing.")
+
 
 # ============================================================================
 # Pipeline Execution Classes
@@ -579,6 +595,10 @@ def chat_with_composer(
             yield history, ""
             
             intent = app_state.composer.parse_intent(message)
+            
+            # Generate a descriptive workflow name
+            workflow_name = generate_workflow_name(intent, message)
+            
             intent_info = f"""
 📋 **Detected Analysis:**
 - Type: `{intent.analysis_type.value}`
@@ -588,27 +608,72 @@ def chat_with_composer(
 
 """
             response_parts.append(intent_info)
-            history[-1] = {"role": "assistant", "content": "".join(response_parts) + "🔧 Checking tool availability..."}
+            history[-1] = {"role": "assistant", "content": "".join(response_parts) + "🔧 Running pre-flight validation..."}
             yield history, ""
             
-            # Check readiness
+            # Check readiness with enhanced pre-flight validation
             readiness = app_state.composer.check_readiness(message)
             
+            # Display detailed validation results if available
+            validation = readiness.get("validation", {})
+            resources = readiness.get("resources", {})
+            
+            if validation:
+                # Enhanced pre-flight validation available
+                validation_info = """
+🔍 **Pre-flight Validation:**
+"""
+                # Tools status
+                tools_valid = validation.get("tools_found", [])
+                tools_missing = validation.get("tools_missing", [])
+                if tools_valid:
+                    validation_info += f"- ✅ Tools ready: {', '.join(f'`{t}`' for t in tools_valid[:5])}"
+                    if len(tools_valid) > 5:
+                        validation_info += f" +{len(tools_valid)-5} more"
+                    validation_info += "\n"
+                if tools_missing:
+                    validation_info += f"- ⚠️ Tools missing: {', '.join(f'`{t}`' for t in tools_missing[:5])}\n"
+                
+                # Containers status  
+                containers_valid = validation.get("containers_available", [])
+                containers_missing = validation.get("containers_missing", [])
+                if containers_valid:
+                    validation_info += f"- ✅ Containers ready: {', '.join(f'`{c}`' for c in containers_valid[:3])}\n"
+                if containers_missing:
+                    validation_info += f"- ⚠️ Containers missing: {', '.join(f'`{c}`' for c in containers_missing[:3])}\n"
+                
+                # Modules status
+                modules_valid = validation.get("modules_available", [])
+                modules_missing = validation.get("modules_missing", [])
+                if modules_valid:
+                    validation_info += f"- ✅ Modules ready: `{len(modules_valid)}` available\n"
+                if modules_missing:
+                    validation_info += f"- ⚠️ Modules to create: `{len(modules_missing)}`\n"
+                
+                # Resource estimates
+                if resources:
+                    validation_info += f"""
+📊 **Resource Estimates:**
+- Memory: `{resources.get('estimated_memory_gb', 'N/A')} GB`
+- Time: `{resources.get('estimated_hours', 'N/A'):.1f} hours`
+- Est. Cost: `${resources.get('estimated_cost_usd', 0):.2f}`
+
+"""
+                response_parts.append(validation_info)
+            
             if readiness.get("ready"):
-                tools_found = readiness.get("tools_found", 0)
-                modules_found = readiness.get("modules_found", 0)
+                tools_found = validation.get("valid", readiness.get("tools_found", 0))
                 
                 readiness_info = f"""✅ **Ready to generate!**
-- Tools available: `{tools_found}`
-- Modules available: `{modules_found}`
 
 """
                 response_parts.append(readiness_info)
                 history[-1] = {"role": "assistant", "content": "".join(response_parts) + "⚙️ Generating workflow..."}
                 yield history, ""
                 
-                # Generate the workflow
-                workflow_id = f"workflow_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+                # Generate the workflow with descriptive name
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                workflow_id = f"{workflow_name}_{timestamp}"
                 output_dir = GENERATED_DIR / workflow_id
                 
                 workflow = app_state.composer.generate(message, output_dir=str(output_dir))
@@ -634,11 +699,77 @@ def chat_with_composer(
                 
             else:
                 issues = readiness.get("issues", ["Unknown issue"])
-                response_parts.append(f"""⚠️ **Cannot generate workflow:**
-{chr(10).join(f'- {issue}' for issue in issues)}
+                warnings = readiness.get("warnings", [])
+                auto_fixable = readiness.get("auto_fixable", False)
+                
+                not_ready_msg = f"""⚠️ **Pre-flight Check Failed:**
 
-Please provide more details or check tool availability.
+**Critical Issues:**
+{chr(10).join(f'- ❌ {issue}' for issue in issues)}
+"""
+                if warnings:
+                    not_ready_msg += f"""
+**Warnings:**
+{chr(10).join(f'- ⚠️ {w}' for w in warnings[:5])}
+"""
+                
+                if auto_fixable:
+                    not_ready_msg += """
+✨ **Auto-Fix Available!** Missing modules can be auto-generated.
+Attempting auto-fix...
+"""
+                    response_parts.append(not_ready_msg)
+                    history[-1] = {"role": "assistant", "content": "".join(response_parts)}
+                    yield history, ""
+                    
+                    # Attempt auto-fix
+                    try:
+                        fix_result = app_state.composer.validate_and_prepare(message, auto_fix=True)
+                        
+                        if fix_result["status"] == "ready":
+                            fixes = fix_result.get("fixes_applied", [])
+                            success_fixes = [f for f in fixes if f.get("status") == "success"]
+                            
+                            response_parts.append(f"""
+✅ **Auto-Fix Successful!**
+- Applied `{len(success_fixes)}` fixes
+- {chr(10).join(f"  - Created module: `{f['name']}`" for f in success_fixes)}
+
 """)
+                            history[-1] = {"role": "assistant", "content": "".join(response_parts) + "⚙️ Generating workflow..."}
+                            yield history, ""
+                            
+                            # Now generate the workflow
+                            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                            workflow_id = f"{workflow_name}_{timestamp}"
+                            output_dir = GENERATED_DIR / workflow_id
+                            
+                            workflow = app_state.composer.generate(message, output_dir=str(output_dir))
+                            app_state.last_generated_workflow = str(output_dir)
+                            
+                            workflow_info = f"""🎉 **Workflow Generated!**
+
+**Name:** `{workflow.name if hasattr(workflow, 'name') else workflow_id}`
+**Output:** `{output_dir}`
+
+📥 Use the **Download** tab to get your workflow files.
+"""
+                            response_parts.append(workflow_info)
+                        else:
+                            response_parts.append(f"""
+⚠️ **Partial Fix Applied:**
+- Status: `{fix_result['status']}`
+- Message: {fix_result.get('message', 'Some issues remain')}
+
+Please address the remaining issues manually.
+""")
+                    except Exception as e:
+                        response_parts.append(f"\n❌ Auto-fix failed: {str(e)}")
+                else:
+                    not_ready_msg += """
+Please provide more details or ensure required containers are available.
+"""
+                    response_parts.append(not_ready_msg)
             
             history[-1] = {"role": "assistant", "content": "".join(response_parts)}
             yield history, ""
@@ -772,6 +903,152 @@ def get_example_prompts() -> List[List[str]]:
     ]
 
 
+def generate_workflow_name(intent, message: str) -> str:
+    """
+    Generate a descriptive workflow name based on the analysis intent.
+    
+    Examples:
+    - rnaseq_mouse_star_deseq2
+    - chipseq_human_h3k27ac_macs2
+    - atacseq_human_bowtie2
+    - methylation_bismark_human
+    - scrna_10x_seurat
+    """
+    parts = []
+    
+    # 1. Analysis type (shortened)
+    analysis_type = intent.analysis_type.value if hasattr(intent, 'analysis_type') else 'workflow'
+    type_map = {
+        'rna_seq': 'rnaseq',
+        'rna_seq_basic': 'rnaseq',
+        'rna_seq_de': 'rnaseq_de',
+        'chip_seq': 'chipseq',
+        'atac_seq': 'atacseq',
+        'dna_seq': 'dnaseq',
+        'variant_calling': 'variants',
+        'wgs': 'wgs',
+        'wes': 'wes',
+        'single_cell_rna': 'scrna',
+        'scrna_10x': 'scrna_10x',
+        'scrna_smartseq': 'scrna_ss2',
+        'metagenomics': 'metagen',
+        'methylation': 'methylation',
+        'bisulfite_seq': 'bisulfite',
+        'bisulfite_seq_methylation': 'methylation',
+        'long_read': 'longread',
+        'nanopore': 'nanopore',
+        'pacbio': 'pacbio',
+        'hic': 'hic',
+        'cut_and_run': 'cutrun',
+        'ribo_seq': 'riboseq',
+    }
+    parts.append(type_map.get(analysis_type, analysis_type.replace('_', '')))
+    
+    # 2. Organism (if specified)
+    organism = intent.organism if hasattr(intent, 'organism') and intent.organism else None
+    if organism:
+        org_map = {
+            'homo sapiens': 'human',
+            'human': 'human',
+            'mus musculus': 'mouse',
+            'mouse': 'mouse',
+            'drosophila melanogaster': 'fly',
+            'drosophila': 'fly',
+            'danio rerio': 'zebrafish',
+            'zebrafish': 'zebrafish',
+            'arabidopsis thaliana': 'arabidopsis',
+            'arabidopsis': 'arabidopsis',
+            'saccharomyces cerevisiae': 'yeast',
+            'yeast': 'yeast',
+            'caenorhabditis elegans': 'worm',
+            'c. elegans': 'worm',
+            'rattus norvegicus': 'rat',
+            'rat': 'rat',
+        }
+        org_lower = organism.lower()
+        parts.append(org_map.get(org_lower, org_lower.split()[0][:8]))
+    
+    # 3. Key tools mentioned in message (extract 1-2 main tools)
+    message_lower = message.lower()
+    tool_keywords = {
+        'star': 'star',
+        'hisat2': 'hisat2',
+        'salmon': 'salmon',
+        'kallisto': 'kallisto',
+        'bowtie2': 'bowtie2',
+        'bwa': 'bwa',
+        'minimap2': 'minimap2',
+        'deseq2': 'deseq2',
+        'edger': 'edger',
+        'macs2': 'macs2',
+        'macs3': 'macs3',
+        'gatk': 'gatk',
+        'deepvariant': 'deepvariant',
+        'bcftools': 'bcftools',
+        'bismark': 'bismark',
+        'starsolo': 'starsolo',
+        'cellranger': 'cellranger',
+        'seurat': 'seurat',
+        'scanpy': 'scanpy',
+        'kraken': 'kraken',
+        'metaphlan': 'metaphlan',
+    }
+    
+    found_tools = []
+    for keyword, tool_name in tool_keywords.items():
+        if keyword in message_lower and tool_name not in found_tools:
+            found_tools.append(tool_name)
+            if len(found_tools) >= 2:
+                break
+    
+    if found_tools:
+        parts.extend(found_tools[:2])
+    
+    # 4. Special markers from message
+    special_markers = {
+        'h3k27ac': 'h3k27ac',
+        'h3k4me3': 'h3k4me3',
+        'h3k27me3': 'h3k27me3',
+        'h3k9me3': 'h3k9me3',
+        'ctcf': 'ctcf',
+        'paired-end': 'pe',
+        'paired end': 'pe',
+        'single-end': 'se',
+        'single end': 'se',
+        '10x': '10x',
+        '10x genomics': '10x',
+        'smart-seq': 'smartseq',
+        'differential expression': 'de',
+        'peak calling': 'peaks',
+    }
+    
+    for marker, short in special_markers.items():
+        if marker in message_lower and short not in parts:
+            parts.append(short)
+            break  # Only add one special marker
+    
+    # Clean up and join
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_parts = []
+    for p in parts:
+        if p not in seen:
+            seen.add(p)
+            unique_parts.append(p)
+    
+    # Create final name (limit to 4 parts for readability)
+    workflow_name = '_'.join(unique_parts[:4])
+    
+    # Sanitize: only alphanumeric and underscores
+    workflow_name = re.sub(r'[^a-zA-Z0-9_]', '', workflow_name)
+    
+    # Ensure it's not empty
+    if not workflow_name:
+        workflow_name = 'workflow'
+    
+    return workflow_name
+
+
 def download_latest_workflow() -> Optional[str]:
     """Get path to latest generated workflow for download."""
     try:
@@ -795,6 +1072,111 @@ def refresh_stats() -> Tuple[str, str, str, str]:
         f"🐳 {stats['containers']}",
         f"🧬 {stats['analysis_types']}"
     )
+
+
+# ============================================================================
+# Ensemble Model Management Functions
+# ============================================================================
+
+def get_ensemble_status() -> str:
+    """Get current status of ensemble models."""
+    if not ORCHESTRATOR_AVAILABLE or not get_orchestrator:
+        return """
+### ⚠️ Ensemble Not Available
+
+The model orchestrator is not installed. Using standard rule-based + LLM parsing.
+
+To enable ensemble parsing with biomedical models:
+```bash
+pip install transformers torch
+```
+"""
+    
+    orchestrator = get_orchestrator()
+    status = orchestrator.get_status_summary()
+    
+    # Format status display
+    strategy_display = status.get('strategy_description', 'Unknown')
+    
+    output = f"""
+### 🧬 Ensemble Status: {strategy_display}
+
+| Model | Status | Details |
+|-------|--------|---------|
+"""
+    
+    status_icons = {
+        'ready': '✅',
+        'starting': '🟡',
+        'unavailable': '⚫',
+        'error': '❌'
+    }
+    
+    for model_name, model_info in status.get('models', {}).items():
+        icon = status_icons.get(model_info['status'], '❓')
+        details = []
+        
+        if model_info.get('endpoint'):
+            details.append(f"URL: `{model_info['endpoint']}`")
+        if model_info.get('load_time_ms'):
+            details.append(f"Loaded in {model_info['load_time_ms']:.0f}ms")
+        if model_info.get('job_id'):
+            details.append(f"SLURM: `{model_info['job_id']}`")
+        if model_info.get('error'):
+            details.append(f"⚠️ {model_info['error'][:30]}")
+        
+        detail_str = ", ".join(details) if details else "-"
+        output += f"| **{model_name.title()}** | {icon} {model_info['status']} | {detail_str} |\n"
+    
+    output += f"""
+
+### Parsing Strategy
+- **GPU Available:** {'✅ Yes' if status.get('gpu_available') else '❌ No'}
+- **CPU Models Loaded:** {'✅ Yes' if status.get('cpu_models_loaded') else '⚫ Not yet'}
+
+> Current strategy: `{status.get('strategy', 'unknown')}`
+"""
+    
+    return output
+
+
+def start_biomistral_service() -> str:
+    """Start BioMistral GPU service via SLURM."""
+    if not ORCHESTRATOR_AVAILABLE or not get_orchestrator:
+        return "❌ Orchestrator not available"
+    
+    orchestrator = get_orchestrator()
+    success, message = orchestrator.start_biomistral_gpu()
+    
+    if success:
+        return f"✅ {message}\n\n⏳ GPU startup typically takes 2-5 minutes. Refresh status to check."
+    else:
+        return f"❌ {message}"
+
+
+def stop_biomistral_service() -> str:
+    """Stop BioMistral GPU service."""
+    if not ORCHESTRATOR_AVAILABLE or not get_orchestrator:
+        return "❌ Orchestrator not available"
+    
+    orchestrator = get_orchestrator()
+    success, message = orchestrator.stop_biomistral_gpu()
+    
+    if success:
+        return f"✅ {message}"
+    else:
+        return f"❌ {message}"
+
+
+def preload_cpu_models() -> str:
+    """Preload BERT models on CPU."""
+    if not ORCHESTRATOR_AVAILABLE or not get_orchestrator:
+        return "❌ Orchestrator not available"
+    
+    orchestrator = get_orchestrator()
+    orchestrator.preload_cpu_models()
+    
+    return "🔄 Loading BiomedBERT and SciBERT in background...\n\nRefresh status in ~30 seconds to see results."
 
 
 # ============================================================================
@@ -1358,10 +1740,71 @@ def create_interface() -> gr.Blocks:
                         )
                 
                 gr.Markdown("---")
+                
+                # Ensemble Model Section
+                gr.Markdown("## 🧬 Biomedical Model Ensemble")
+                gr.Markdown("""
+                The ensemble combines multiple biomedical NLP models for accurate intent parsing:
+                - **BioMistral-7B** (GPU): Primary intent parsing with biomedical knowledge
+                - **BiomedBERT** (CPU): Entity extraction from biomedical text  
+                - **SciBERT** (CPU): Scientific term recognition
+                
+                **Strategy:** BERT models run on CPU (always available). BioMistral uses GPU when available, 
+                falls back to CPU-only ensemble otherwise.
+                """)
+                
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        ensemble_status_display = gr.Markdown(get_ensemble_status())
+                    
+                    with gr.Column(scale=1):
+                        gr.Markdown("### Controls")
+                        
+                        refresh_ensemble_btn = gr.Button("🔄 Refresh Status", size="sm")
+                        
+                        gr.Markdown("#### GPU Service (T4)")
+                        with gr.Row():
+                            start_gpu_btn = gr.Button("▶️ Start", variant="primary", size="sm")
+                            stop_gpu_btn = gr.Button("⏹️ Stop", variant="stop", size="sm")
+                        
+                        gr.Markdown("#### CPU Models")
+                        preload_cpu_btn = gr.Button("📥 Preload BERT Models", size="sm")
+                        
+                        ensemble_action_result = gr.Markdown("")
+                
+                # Ensemble event handlers
+                refresh_ensemble_btn.click(
+                    fn=get_ensemble_status,
+                    outputs=ensemble_status_display,
+                )
+                
+                start_gpu_btn.click(
+                    fn=start_biomistral_service,
+                    outputs=ensemble_action_result,
+                ).then(
+                    fn=get_ensemble_status,
+                    outputs=ensemble_status_display,
+                )
+                
+                stop_gpu_btn.click(
+                    fn=stop_biomistral_service,
+                    outputs=ensemble_action_result,
+                ).then(
+                    fn=get_ensemble_status,
+                    outputs=ensemble_status_display,
+                )
+                
+                preload_cpu_btn.click(
+                    fn=preload_cpu_models,
+                    outputs=ensemble_action_result,
+                )
+                
+                gr.Markdown("---")
                 gr.Markdown("### System Info")
                 
                 system_info = gr.Markdown(f"""
                 - **Workflow Composer:** {'✅ Available' if COMPOSER_AVAILABLE else '❌ Not installed'}
+                - **Model Orchestrator:** {'✅ Available' if ORCHESTRATOR_AVAILABLE else '❌ Not installed'}
                 - **Generated Workflows Dir:** `{GENERATED_DIR}`
                 - **Python Path:** `{Path(__file__).parent}`
                 """)

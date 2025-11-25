@@ -1,0 +1,132 @@
+# Ensemble Parser Configuration
+# ==============================
+#
+# Configure the multi-model ensemble for intent parsing.
+# 
+# Resource Strategy:
+# - BERT models (CPU): Always available, no queue wait
+# - BioMistral (GPU): L4 preferred (16GB), H100 for complex tasks
+#
+# Weighted Voting:
+# - BiomedBERT (0.25): Entity extraction, biological terms
+# - SciBERT (0.25): Scientific vocabulary classification  
+# - BioMistral (0.50): Intent generation, JSON output
+
+ensemble:
+  enabled: true
+  parallel: true  # Run models in parallel
+  
+  # Fallback strategy when GPU unavailable
+  fallback_to_rules: true
+  rules_confidence_threshold: 0.7
+  
+  models:
+    biomedbert:
+      name: "BiomedBERT"
+      model_id: "microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext"
+      weight: 0.25
+      device: "cpu"  # Always CPU - fast, always available
+      task: "ner"
+      timeout: 10.0
+      enabled: true
+      
+    scibert:
+      name: "SciBERT"
+      model_id: "allenai/scibert_scivocab_uncased"
+      weight: 0.25
+      device: "cpu"  # Always CPU - fast, always available
+      task: "classification"
+      timeout: 10.0
+      enabled: true
+      
+    biomistral:
+      name: "BioMistral"
+      model_id: "BioMistral/BioMistral-7B"
+      weight: 0.50
+      device: "auto"  # GPU when available (L4 preferred)
+      task: "generation"
+      timeout: 30.0
+      enabled: true
+      # vLLM server configuration
+      vllm_url: "http://localhost:8000/v1"
+
+# GPU Resource Allocation
+# -----------------------
+# Recommendations for different GPU types
+
+gpu_allocation:
+  # L4 (24GB) - Preferred for BioMistral
+  # - Lower cost, faster availability
+  # - 7B models fit comfortably
+  l4:
+    partition: "l4"
+    memory: "24G"
+    suitable_models:
+      - "BioMistral/BioMistral-7B"
+      - "epfl-llm/meditron-7b"
+      - "mistralai/Mistral-7B-Instruct-v0.3"
+    quantization: null  # No need for L4
+    
+  # H100 (80GB) - For larger models or high throughput
+  # - Higher cost, may have queue wait
+  # - Can run multiple models or 70B models
+  h100:
+    partition: "h100flex"
+    memory: "80G"
+    suitable_models:
+      - "BioMistral/BioMistral-7B"
+      - "meta-llama/Llama-3.1-70B-Instruct"
+      - "epfl-llm/meditron-70b"
+    quantization: null
+    
+  # CPU fallback
+  # - Always available, no queue wait
+  # - BERT models only
+  cpu:
+    partition: "cpuspot"
+    memory: "32G"
+    suitable_models:
+      - "microsoft/BiomedNLP-BiomedBERT-base-uncased-abstract-fulltext"
+      - "allenai/scibert_scivocab_uncased"
+
+# Entity Types
+# ------------
+# Biological entities recognized by the ensemble
+
+entity_types:
+  organism:
+    examples: ["human", "mouse", "zebrafish", "drosophila"]
+    sources: ["biomedbert"]
+    
+  sequencing_tech:
+    examples: ["illumina", "nanopore", "pacbio", "10x genomics"]
+    sources: ["biomedbert"]
+    
+  assay:
+    examples: ["rna-seq", "chip-seq", "atac-seq", "wgs"]
+    sources: ["biomedbert", "scibert"]
+    
+  tool:
+    examples: ["star", "salmon", "gatk", "seurat"]
+    sources: ["biomedbert"]
+    
+  genome_build:
+    examples: ["hg38", "mm10", "dm6"]
+    sources: ["biomedbert", "biomistral"]
+
+# Performance Tuning
+# ------------------
+
+performance:
+  # Cache embeddings for repeated queries
+  cache_embeddings: true
+  cache_ttl: 3600  # 1 hour
+  
+  # Batch size for BERT models
+  bert_batch_size: 8
+  
+  # Max concurrent requests to vLLM
+  vllm_max_concurrent: 4
+  
+  # Timeout for ensemble (total)
+  ensemble_timeout: 45.0

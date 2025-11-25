@@ -55,13 +55,15 @@ llm:
       timeout: 120
       
       # Recommended models for bioinformatics workflows
-      model: meta-llama/Llama-3.1-8B-Instruct
+      # BioMistral-7B: Best for biological/medical terminology parsing
+      model: BioMistral/BioMistral-7B
+      
       # Alternative models:
-      # - meta-llama/Llama-3.1-70B-Instruct (high quality, needs more GPU memory)
+      # - BioMistral/BioMistral-7B (RECOMMENDED - biomedical pre-trained)
+      # - epfl-llm/meditron-7b (medical domain, PubMed trained)
+      # - meta-llama/Llama-3.1-8B-Instruct (general purpose, good JSON)
       # - mistralai/Mistral-7B-Instruct-v0.3 (fast, good quality)
       # - Qwen/Qwen2.5-7B-Instruct (good multilingual support)
-      # - codellama/CodeLlama-34b-Instruct-hf (code generation focused)
-      # - deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct (code focused)
       
       # Generation parameters
       temperature: 0.3

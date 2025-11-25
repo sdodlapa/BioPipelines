@@ -274,7 +274,7 @@ class OllamaAdapter(LLMAdapter):
                 
                 return available
         except Exception as e:
-            logger.warning(f"Ollama not available: {e}")
+            logger.debug(f"Ollama not available: {e}")
             return False
     
     def list_models(self) -> List[str]:

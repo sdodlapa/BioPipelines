@@ -104,7 +104,7 @@ class HuggingFaceAdapter(LLMAdapter):
         self._vllm_adapter = None  # Lazy load for vLLM
         
         if self.backend == self.BACKEND_API and not self.token:
-            logger.warning("No HuggingFace token provided. Set HF_TOKEN environment variable.")
+            logger.debug("No HuggingFace token provided. Set HF_TOKEN environment variable.")
     
     @property
     def use_api(self) -> bool:

@@ -34,6 +34,14 @@ from .core import (
     WorkflowGenerator, Workflow
 )
 
+# Import pre-flight validator (optional - may not be available)
+try:
+    from .core import PreflightValidator, ValidationResult, PREFLIGHT_AVAILABLE
+except ImportError:
+    PREFLIGHT_AVAILABLE = False
+    PreflightValidator = None
+    ValidationResult = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -101,6 +109,17 @@ class Composer:
         self.workflow_generator = WorkflowGenerator(
             str(patterns_path) if patterns_path.exists() else None
         )
+        
+        # Pre-flight validator (optional)
+        if PREFLIGHT_AVAILABLE and PreflightValidator:
+            self.preflight_validator = PreflightValidator(
+                containers_dir=str(self.config.base_path / "containers"),
+                module_library_path=str(module_path)
+            )
+            logger.info("Pre-flight validator initialized")
+        else:
+            self.preflight_validator = None
+            logger.warning("Pre-flight validator not available")
     
     def generate(
         self,
@@ -234,19 +253,24 @@ class Composer:
         """
         Check if all components are ready to generate a workflow.
         
+        This now uses the PreflightValidator for comprehensive validation
+        including tool availability, container images, and resource estimation.
+        
         Args:
             description: Natural language description
             
         Returns:
-            Dict with readiness status and any issues
+            Dict with readiness status, issues, and resource estimates
         """
         result = {
             "ready": True,
             "issues": [],
-            "warnings": []
+            "warnings": [],
+            "auto_fixable": False,
+            "resources": {}
         }
         
-        # Parse intent
+        # Parse intent first
         try:
             intent = self.intent_parser.parse(description)
             result["intent"] = intent.to_dict()
@@ -260,6 +284,52 @@ class Composer:
                 f"Low confidence ({intent.confidence:.2f}) in intent parsing"
             )
         
+        # Use pre-flight validator if available
+        if self.preflight_validator:
+            validation_result = self.preflight_validator.validate_query(description)
+            
+            result["ready"] = validation_result.can_proceed
+            result["auto_fixable"] = validation_result.auto_fixable
+            result["resources"] = validation_result.resources
+            
+            # Categorize validation items
+            for item in validation_result.items:
+                if item.status == "missing":
+                    if item.severity == "critical":
+                        result["issues"].append(
+                            f"[{item.category}] {item.name}: {item.message}"
+                        )
+                    else:
+                        result["warnings"].append(
+                            f"[{item.category}] {item.name}: {item.message}"
+                        )
+                elif item.status == "warning":
+                    result["warnings"].append(
+                        f"[{item.category}] {item.name}: {item.message}"
+                    )
+            
+            result["validation"] = {
+                "total_items": validation_result.total_items,
+                "valid": validation_result.valid,
+                "missing": validation_result.missing,
+                "warnings": validation_result.warnings_count,
+                "tools_found": [i.name for i in validation_result.items 
+                               if i.category == "tool" and i.status == "valid"],
+                "tools_missing": [i.name for i in validation_result.items 
+                                 if i.category == "tool" and i.status == "missing"],
+                "containers_available": [i.name for i in validation_result.items 
+                                        if i.category == "container" and i.status == "valid"],
+                "containers_missing": [i.name for i in validation_result.items 
+                                      if i.category == "container" and i.status == "missing"],
+                "modules_available": [i.name for i in validation_result.items 
+                                     if i.category == "module" and i.status == "valid"],
+                "modules_missing": [i.name for i in validation_result.items 
+                                   if i.category == "module" and i.status == "missing"]
+            }
+            
+            return result
+        
+        # Fallback to basic validation if pre-flight not available
         # Find tools
         tool_map = self.tool_selector.find_tools_for_analysis(
             intent.analysis_type.value
@@ -292,6 +362,93 @@ class Composer:
         result["modules_missing"] = missing
         
         return result
+    
+    def validate_and_prepare(
+        self, 
+        description: str, 
+        auto_fix: bool = False
+    ) -> Dict[str, Any]:
+        """
+        Validate readiness and optionally auto-fix issues.
+        
+        This is a higher-level method that:
+        1. Checks readiness using pre-flight validation
+        2. If auto_fix=True, attempts to resolve fixable issues
+        3. Returns updated status and preparation report
+        
+        Args:
+            description: Natural language description
+            auto_fix: Automatically fix resolvable issues
+            
+        Returns:
+            Dict with validation status, fixes applied, and readiness
+        """
+        # Initial validation
+        readiness = self.check_readiness(description)
+        
+        if readiness["ready"]:
+            return {
+                "status": "ready",
+                "readiness": readiness,
+                "fixes_applied": [],
+                "message": "All components ready for workflow generation"
+            }
+        
+        if not auto_fix or not readiness.get("auto_fixable", False):
+            return {
+                "status": "not_ready",
+                "readiness": readiness,
+                "fixes_applied": [],
+                "message": "Issues found but auto-fix not enabled or not possible"
+            }
+        
+        # Attempt auto-fix
+        fixes_applied = []
+        
+        # Parse intent to get tools needed
+        intent = self.intent_parser.parse(description)
+        tool_map = self.tool_selector.find_tools_for_analysis(
+            intent.analysis_type.value
+        )
+        
+        all_tools = []
+        for tools in tool_map.values():
+            all_tools.extend(tools)
+        
+        # Try to create missing modules
+        validation = readiness.get("validation", {})
+        missing_modules = validation.get("modules_missing", [])
+        
+        for tool_name in missing_modules:
+            tool = self.tool_selector.find_tool(tool_name)
+            if tool:
+                try:
+                    module = self.module_mapper.create_module(
+                        tool_name, tool.container, self.llm
+                    )
+                    fixes_applied.append({
+                        "type": "module_created",
+                        "name": tool_name,
+                        "status": "success",
+                        "details": f"Created module: {module.name}"
+                    })
+                except Exception as e:
+                    fixes_applied.append({
+                        "type": "module_created",
+                        "name": tool_name,
+                        "status": "failed",
+                        "details": str(e)
+                    })
+        
+        # Re-check readiness after fixes
+        updated_readiness = self.check_readiness(description)
+        
+        return {
+            "status": "ready" if updated_readiness["ready"] else "partial",
+            "readiness": updated_readiness,
+            "fixes_applied": fixes_applied,
+            "message": f"Applied {len([f for f in fixes_applied if f['status'] == 'success'])} fixes"
+        }
     
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about available resources."""

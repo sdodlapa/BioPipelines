@@ -63,7 +63,7 @@ class AnthropicAdapter(LLMAdapter):
         self.api_key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         
         if not self.api_key:
-            logger.warning("No Anthropic API key provided. Set ANTHROPIC_API_KEY environment variable.")
+            logger.debug("No Anthropic API key provided. Set ANTHROPIC_API_KEY environment variable.")
     
     @property
     def provider_name(self) -> str:

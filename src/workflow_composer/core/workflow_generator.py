@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 
-from .intent_parser import ParsedIntent, AnalysisType
+from .query_parser import ParsedIntent, AnalysisType
 from .module_mapper import Module, TOOL_CONTAINER_MAP
 from ..llm.base import LLMAdapter, Message
 

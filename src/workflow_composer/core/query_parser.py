@@ -203,8 +203,10 @@ ANALYSIS_KEYWORDS = {
         "tad", "loop", "juicer"
     ],
     AnalysisType.LONG_READ_ASSEMBLY: [
-        "long read", "nanopore", "pacbio", "ont", "flye",
-        "canu", "assembly", "polish"
+        "long read", "long-read", "longread", "nanopore", "pacbio", "ont", "flye",
+        "canu", "assembly", "polish", "oxford nanopore", "minion", "promethion",
+        "long read pipeline", "longread pipeline", "nanopore pipeline",
+        "pacbio pipeline", "long read sequencing", "nanopore sequencing"
     ],
     AnalysisType.GENOME_ANNOTATION: [
         "annotation", "prokka", "augustus", "gene prediction",
@@ -228,16 +230,16 @@ ANALYSIS_KEYWORDS = {
     ],
     # Long-read RNA-seq
     AnalysisType.LONG_READ_RNA_SEQ: [
-        "long read rna", "full length transcript", "isoform",
-        "nanopore rna", "direct rna", "isoseq", "iso-seq"
+        "long read rna", "long-read rna", "full length transcript", "isoform",
+        "nanopore rna", "direct rna", "isoseq", "iso-seq", "longread rna"
     ],
     AnalysisType.LONG_READ_ISOSEQ: [
         "isoseq", "iso-seq", "pacbio rna", "isoform sequencing",
-        "fl transcript", "full-length cdna"
+        "fl transcript", "full-length cdna", "full length cdna"
     ],
     AnalysisType.LONG_READ_DIRECT_RNA: [
         "direct rna", "drna", "nanopore rna", "native rna",
-        "rna modification", "m6a"
+        "rna modification", "m6a", "direct-rna"
     ],
     # Multi-omics integration
     AnalysisType.MULTI_OMICS: [
@@ -283,11 +285,20 @@ class IntentParser:
     """
     Parses natural language to extract analysis intent.
     
-    Uses a hybrid approach:
-    1. LLM for complex understanding and reasoning
-    2. Rule-based fallback for reliability
-    3. Validation against known analysis types
+    Uses a hybrid approach (Rules-First):
+    1. Rule-based pre-check for fast, reliable matching
+    2. LLM for complex/ambiguous queries
+    3. Validation and confidence scoring
+    4. Rule-based fallback if LLM fails
+    
+    This approach ensures:
+    - Fast response for common queries
+    - Consistent handling of bioinformatics terminology
+    - LLM only used when truly needed
     """
+    
+    # Confidence threshold for rule-based matching
+    RULE_CONFIDENCE_THRESHOLD = 0.7
     
     SYSTEM_PROMPT = """You are a bioinformatics expert assistant. Your task is to analyze user requests for genomics/bioinformatics analysis and extract structured information.
 
@@ -302,6 +313,9 @@ Given a user's description of their analysis needs, extract:
 8. tools_requested: Any specific tools mentioned
 9. outputs_requested: What outputs the user wants
 10. parameters: Any specific parameters mentioned
+
+IMPORTANT: For long-read sequencing (Oxford Nanopore, PacBio, MinION, PromethION), use "long_read_assembly" or "long_read_rna_seq".
+For pipelines involving assembly with long reads, use "long_read_assembly".
 
 Respond ONLY with a valid JSON object. No explanations."""
 
@@ -339,6 +353,12 @@ Respond with a JSON object containing:
         """
         Parse a natural language query into structured intent.
         
+        Uses a hybrid rules-first approach:
+        1. Try rule-based parsing first (fast, reliable)
+        2. If confidence is low, use LLM for clarification
+        3. Validate LLM response against known types
+        4. Fall back to rules if LLM fails
+        
         Args:
             query: User's natural language description
             
@@ -347,16 +367,36 @@ Respond with a JSON object containing:
         """
         logger.info(f"Parsing intent from: {query[:100]}...")
         
-        # Try LLM parsing first
-        try:
-            intent = self._parse_with_llm(query)
-            logger.info(f"LLM parsed analysis type: {intent.analysis_type}")
-            return intent
-        except Exception as e:
-            logger.warning(f"LLM parsing failed: {e}, falling back to rules")
+        # Step 1: Rule-based parsing first (fast and reliable)
+        rule_intent = self._parse_with_rules(query)
         
-        # Fall back to rule-based parsing
-        return self._parse_with_rules(query)
+        # Step 2: If rules found a good match, use it
+        if rule_intent.analysis_type != AnalysisType.UNKNOWN and rule_intent.confidence >= self.RULE_CONFIDENCE_THRESHOLD:
+            logger.info(f"Rule-based match: {rule_intent.analysis_type.value} (confidence: {rule_intent.confidence})")
+            return rule_intent
+        
+        # Step 3: Use LLM for ambiguous/complex queries
+        logger.info(f"Rule confidence too low ({rule_intent.confidence}), trying LLM...")
+        try:
+            llm_intent = self._parse_with_llm(query)
+            
+            # Step 4: Validate LLM response - if it returns CUSTOM/UNKNOWN, prefer rules
+            if llm_intent.analysis_type in (AnalysisType.CUSTOM, AnalysisType.UNKNOWN):
+                if rule_intent.analysis_type != AnalysisType.UNKNOWN:
+                    logger.info(f"LLM returned {llm_intent.analysis_type.value}, using rule-based: {rule_intent.analysis_type.value}")
+                    return rule_intent
+            
+            # Step 5: Boost confidence if both agree
+            if llm_intent.analysis_type == rule_intent.analysis_type:
+                llm_intent.confidence = min(1.0, llm_intent.confidence + 0.2)
+                logger.info(f"LLM and rules agree: {llm_intent.analysis_type.value} (boosted confidence: {llm_intent.confidence})")
+            
+            logger.info(f"LLM parsed: {llm_intent.analysis_type.value} (confidence: {llm_intent.confidence})")
+            return llm_intent
+            
+        except Exception as e:
+            logger.warning(f"LLM parsing failed: {e}, using rule-based result")
+            return rule_intent
     
     def _parse_with_llm(self, query: str) -> ParsedIntent:
         """Parse using LLM."""
@@ -409,37 +449,84 @@ Respond with a JSON object containing:
         )
     
     def _parse_with_rules(self, query: str) -> ParsedIntent:
-        """Parse using rule-based approach."""
-        query_lower = query.lower()
+        """
+        Parse using rule-based approach with improved matching.
         
-        # Detect analysis type
+        Features:
+        - Normalizes hyphens, underscores, and case
+        - Calculates confidence based on keyword density
+        - Handles synonyms and variations
+        """
+        query_lower = query.lower()
+        # Normalize: convert hyphens and underscores to spaces for matching
+        query_normalized = query_lower.replace("-", " ").replace("_", " ")
+        
+        # Also create a version without spaces for compound terms
+        query_compact = query_lower.replace(" ", "").replace("-", "").replace("_", "")
+        
+        # Detect analysis type with confidence scoring
         analysis_type = AnalysisType.UNKNOWN
+        best_score = 0
         best_match_count = 0
         
         for atype, keywords in ANALYSIS_KEYWORDS.items():
-            match_count = sum(1 for kw in keywords if kw in query_lower)
-            if match_count > best_match_count:
-                best_match_count = match_count
-                analysis_type = atype
+            match_count = 0
+            keyword_weights = []
+            
+            for kw in keywords:
+                kw_normalized = kw.replace("-", " ").replace("_", " ")
+                kw_compact = kw.replace(" ", "").replace("-", "").replace("_", "")
+                
+                # Check multiple variations
+                if (kw in query_lower or 
+                    kw_normalized in query_normalized or 
+                    kw_compact in query_compact or
+                    kw in query_normalized):
+                    match_count += 1
+                    # Weight longer keywords higher (more specific)
+                    keyword_weights.append(len(kw.split()))
+            
+            if match_count > 0:
+                # Calculate score: matches * average keyword specificity
+                avg_weight = sum(keyword_weights) / len(keyword_weights) if keyword_weights else 1
+                score = match_count * avg_weight
+                
+                if score > best_score:
+                    best_score = score
+                    best_match_count = match_count
+                    analysis_type = atype
+        
+        # Calculate confidence based on match quality
+        if analysis_type != AnalysisType.UNKNOWN:
+            # More matches = higher confidence
+            total_keywords = len(ANALYSIS_KEYWORDS.get(analysis_type, []))
+            match_ratio = best_match_count / max(total_keywords, 1)
+            # Base confidence 0.6, boost by match ratio up to 0.95
+            confidence = min(0.95, 0.6 + (match_ratio * 0.35))
+        else:
+            confidence = 0.3
         
         # Detect organism
         organism = ""
         genome_build = ""
         for org_key, (org_name, genome) in ORGANISM_MAP.items():
-            if org_key in query_lower:
+            org_normalized = org_key.replace("-", " ").replace("_", " ")
+            if org_key in query_lower or org_normalized in query_normalized:
                 organism = org_name
                 genome_build = genome
                 break
         
         # Detect paired-end
-        paired_end = "paired" in query_lower or "pe" in query_lower
-        if "single-end" in query_lower or "single end" in query_lower:
+        paired_end = True  # Default
+        if "paired" in query_lower or "paired-end" in query_lower or "paired end" in query_lower:
+            paired_end = True
+        elif "single-end" in query_lower or "single end" in query_lower:
             paired_end = False
         
         # Detect comparison
         has_comparison = any(kw in query_lower for kw in [
             "differential", "compare", "versus", "vs", "between",
-            "treatment", "control", "condition"
+            "treatment", "control", "condition", "group"
         ])
         
         # Extract conditions (simple heuristic)
@@ -447,18 +534,32 @@ Respond with a JSON object containing:
         if "treatment" in query_lower and "control" in query_lower:
             conditions = ["treatment", "control"]
         
+        # Detect any tool mentions
+        tools_requested = []
+        tool_patterns = [
+            "star", "hisat2", "salmon", "kallisto", "bowtie2", "bwa", "minimap2",
+            "deseq2", "edger", "macs2", "gatk", "deepvariant", "bismark",
+            "cellranger", "seurat", "scanpy", "kraken", "metaphlan", "flye", "canu"
+        ]
+        for tool in tool_patterns:
+            if tool in query_lower:
+                tools_requested.append(tool)
+        
+        logger.debug(f"Rule-based: type={analysis_type.value}, confidence={confidence:.2f}, matches={best_match_count}")
+        
         return ParsedIntent(
             analysis_type=analysis_type,
             analysis_type_raw=analysis_type.value,
-            confidence=0.6 if analysis_type != AnalysisType.UNKNOWN else 0.3,
+            confidence=confidence,
             data_type="fastq",
             paired_end=paired_end,
             organism=organism,
             genome_build=genome_build,
             has_comparison=has_comparison,
             conditions=conditions,
+            tools_requested=tools_requested,
             original_query=query,
-            reasoning="Parsed using rule-based approach"
+            reasoning=f"Rule-based parsing (matched {best_match_count} keywords)"
         )
     
     def clarify(self, intent: ParsedIntent, question: str) -> str:
