@@ -517,11 +517,20 @@ def get_provider_choices() -> List[str]:
     choices = []
     
     provider_labels = {
+        "lightning": "⚡ Lightning.ai (30M FREE tokens!)",
         "openai": "🟢 OpenAI (GPT-4o)",
         "vllm": "🟣 vLLM (Local GPU)",
         "ollama": "🟠 Ollama (Local)",
         "anthropic": "🔵 Anthropic (Claude)",
     }
+    
+    # Always show Lightning.ai first as it's the best value
+    import os
+    lightning_available = bool(os.environ.get("LIGHTNING_API_KEY"))
+    if lightning_available:
+        choices.append(provider_labels["lightning"])
+    else:
+        choices.append("⚡ Lightning.ai (set LIGHTNING_API_KEY)")
     
     for provider, is_available in available.items():
         if is_available:
@@ -536,6 +545,7 @@ def get_provider_choices() -> List[str]:
 def extract_provider_key(choice: str) -> str:
     """Extract provider key from dropdown choice."""
     mapping = {
+        "lightning": "lightning",
         "openai": "openai",
         "vllm": "vllm",
         "ollama": "ollama",
@@ -546,7 +556,7 @@ def extract_provider_key(choice: str) -> str:
     for key in mapping:
         if key in choice_lower:
             return key
-    return "openai"
+    return "lightning"  # Default to Lightning.ai now
 
 
 def chat_with_composer(

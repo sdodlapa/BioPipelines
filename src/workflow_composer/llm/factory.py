@@ -10,6 +10,9 @@ Usage:
     # Simple factory function
     llm = get_llm("ollama", model="llama3:8b")
     
+    # Lightning.ai (30M FREE tokens/month!)
+    llm = get_llm("lightning", model="deepseek/deepseek-v3")
+    
     # Using factory class
     factory = LLMFactory()
     factory.register("custom", CustomAdapter)
@@ -25,6 +28,7 @@ from .openai_adapter import OpenAIAdapter
 from .anthropic_adapter import AnthropicAdapter
 from .huggingface_adapter import HuggingFaceAdapter
 from .vllm_adapter import VLLMAdapter
+from .lightning_adapter import LightningAdapter
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +48,9 @@ class LLMFactory:
         "huggingface": HuggingFaceAdapter,
         "hf": HuggingFaceAdapter,  # Alias
         "vllm": VLLMAdapter,
+        "lightning": LightningAdapter,
+        "lightning.ai": LightningAdapter,  # Alias
+        "litai": LightningAdapter,  # Alias
     }
     
     def __init__(self):
@@ -103,6 +110,9 @@ class LLMFactory:
                 "anthropic": "claude-3-5-sonnet-20241022",
                 "huggingface": "meta-llama/Llama-3.1-8B-Instruct",
                 "vllm": "meta-llama/Llama-3.1-8B-Instruct",
+                "lightning": "deepseek-ai/DeepSeek-V3",  # Best value!
+                "lightning.ai": "deepseek-ai/DeepSeek-V3",
+                "litai": "deepseek-ai/DeepSeek-V3",
             }
             model = defaults.get(provider_lower, "")
         
@@ -150,7 +160,7 @@ def get_llm(
     Convenience function to create an LLM adapter.
     
     Args:
-        provider: Provider name (ollama, openai, anthropic, huggingface, vllm)
+        provider: Provider name (ollama, openai, anthropic, huggingface, vllm, lightning)
         model: Model name (optional, uses provider default)
         **kwargs: Additional arguments for the adapter
         
@@ -158,6 +168,9 @@ def get_llm(
         Configured LLMAdapter instance
         
     Examples:
+        # Lightning.ai - RECOMMENDED (30M FREE tokens/month!)
+        llm = get_llm("lightning", model="deepseek/deepseek-v3")
+        
         # Local Ollama
         llm = get_llm("ollama", model="llama3:8b")
         

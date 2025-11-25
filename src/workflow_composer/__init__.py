@@ -39,6 +39,9 @@ Quick Start:
 __version__ = "0.1.0"
 __author__ = "BioPipelines Team"
 
+# Auto-load secrets from .secrets/ directory
+from . import secrets
+
 # Main composer
 from .composer import Composer
 from .config import Config
