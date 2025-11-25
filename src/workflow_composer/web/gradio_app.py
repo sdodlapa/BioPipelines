@@ -30,6 +30,7 @@ import subprocess
 import threading
 import time
 import re
+import logging
 from pathlib import Path
 from datetime import datetime
 from typing import Generator, Optional, List, Dict, Any, Tuple
@@ -37,6 +38,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 import gradio as gr
+
+logger = logging.getLogger(__name__)
 
 # Import workflow composer components
 try:
@@ -1520,6 +1523,14 @@ wait for it to complete or check the logs directly.
         agent = ErrorDiagnosisAgent()
         diagnosis = agent.diagnose_sync(job)
         
+        # Store in cache and record to history
+        _last_diagnosis[job.job_id] = diagnosis
+        try:
+            from workflow_composer.diagnosis import record_diagnosis
+            record_diagnosis(diagnosis, job.job_id, job.workflow_name)
+        except Exception as e:
+            logger.warning(f"Failed to record diagnosis to history: {e}")
+        
         # Format result
         risk_icons = {
             "safe": "🟢",
@@ -1572,7 +1583,7 @@ wait for it to complete or check the logs directly.
             output += """
 ### ✨ Auto-Fix Available
 Safe fixes marked with `[AUTO]` can be applied automatically.
-*Coming soon: Click "Apply Safe Fixes" to run them automatically.*
+Click **Apply Safe Fixes** to run them.
 """
         
         return output
@@ -1587,6 +1598,209 @@ An error occurred during diagnosis:
 ```
 
 Try viewing the logs directly for more information.
+"""
+
+
+# Store the last diagnosis for apply_safe_fixes
+_last_diagnosis = {}
+
+
+def apply_safe_fixes(job_id: str) -> str:
+    """
+    Apply safe auto-fixes for a diagnosed job.
+    
+    Args:
+        job_id: Job ID to fix (uses last diagnosis)
+        
+    Returns:
+        Formatted result report
+    """
+    global _last_diagnosis
+    
+    if not DIAGNOSIS_AVAILABLE:
+        return "⚠️ Error diagnosis agent not available."
+    
+    try:
+        from workflow_composer.diagnosis import AutoFixEngine, get_auto_fix_engine
+        import asyncio
+        
+        # Get or create diagnosis
+        if not job_id or not job_id.strip():
+            jobs = pipeline_executor.list_jobs()
+            failed_jobs = [j for j in jobs if j.status == JobStatus.FAILED]
+            if not failed_jobs:
+                return "*No failed jobs found.*"
+            job = max(failed_jobs, key=lambda j: j.finished_at or j.started_at or datetime.min)
+            job_id = job.job_id
+        else:
+            job = pipeline_executor.get_job_status(job_id.strip())
+        
+        if not job:
+            return f"*Job not found: `{job_id}`*"
+        
+        # Run diagnosis if not cached
+        if job_id not in _last_diagnosis:
+            agent = ErrorDiagnosisAgent()
+            diagnosis = agent.diagnose_sync(job)
+            _last_diagnosis[job_id] = diagnosis
+        else:
+            diagnosis = _last_diagnosis[job_id]
+        
+        # Get auto-fix engine
+        engine = get_auto_fix_engine(dry_run=False)
+        
+        # Build context for variable substitution
+        context = {
+            "workflow_dir": job.workflow_dir or "",
+            "job_id": job.job_id,
+            "slurm_job_id": job.slurm_job_id or "",
+        }
+        
+        # Get executable fixes
+        executable_fixes = engine.get_executable_fixes(diagnosis)
+        
+        if not executable_fixes:
+            return """## ⚠️ No Auto-Executable Fixes
+
+The suggested fixes require manual intervention. Please review the diagnosis 
+and apply the recommended fixes manually.
+"""
+        
+        # Execute safe fixes
+        async def run_fixes():
+            return await engine.execute_all_safe(diagnosis, context)
+        
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        results = loop.run_until_complete(run_fixes())
+        loop.close()
+        
+        # Format results
+        output = f"""## 🔧 Auto-Fix Results for `{job_id[-15:]}`
+
+"""
+        
+        success_count = sum(1 for r in results if r.success)
+        fail_count = sum(1 for r in results if r.status.value == 'failed')
+        
+        if success_count > 0:
+            output += f"✅ **{success_count} fix(es) applied successfully!**\n\n"
+        if fail_count > 0:
+            output += f"⚠️ **{fail_count} fix(es) failed.**\n\n"
+        
+        output += "### Execution Details\n\n"
+        
+        for i, result in enumerate(results, 1):
+            status_icon = "✅" if result.success else "❌" if result.status.value == 'failed' else "⏭️"
+            output += f"{i}. {status_icon} **{result.fix.description}**\n"
+            output += f"   - Status: {result.status.value}\n"
+            if result.message:
+                output += f"   - {result.message}\n"
+            if result.output and result.success:
+                output += f"   ```\n   {result.output[:200]}\n   ```\n"
+            if result.error:
+                output += f"   - Error: {result.error[:100]}\n"
+        
+        if success_count > 0:
+            output += """
+---
+💡 **Next Step:** Try re-running the pipeline with `-resume` to continue from where it failed.
+"""
+        
+        return output
+        
+    except Exception as e:
+        return f"""## ❌ Auto-Fix Failed
+
+Error: {str(e)}
+
+Please apply fixes manually or check the logs for more details.
+"""
+
+
+def create_github_issue(job_id: str) -> str:
+    """
+    Create a GitHub issue from a job diagnosis.
+    
+    Args:
+        job_id: Job ID (uses last diagnosis)
+        
+    Returns:
+        Formatted result
+    """
+    global _last_diagnosis
+    
+    if not DIAGNOSIS_AVAILABLE:
+        return "⚠️ Error diagnosis agent not available."
+    
+    try:
+        from workflow_composer.diagnosis import get_github_copilot_agent
+        
+        # Get or create diagnosis
+        if not job_id or not job_id.strip():
+            jobs = pipeline_executor.list_jobs()
+            failed_jobs = [j for j in jobs if j.status == JobStatus.FAILED]
+            if not failed_jobs:
+                return "*No failed jobs found.*"
+            job = max(failed_jobs, key=lambda j: j.finished_at or j.started_at or datetime.min)
+            job_id = job.job_id
+        else:
+            job = pipeline_executor.get_job_status(job_id.strip())
+        
+        if not job:
+            return f"*Job not found: `{job_id}`*"
+        
+        # Run diagnosis if not cached
+        if job_id not in _last_diagnosis:
+            agent = ErrorDiagnosisAgent()
+            diagnosis = agent.diagnose_sync(job)
+            _last_diagnosis[job_id] = diagnosis
+        else:
+            diagnosis = _last_diagnosis[job_id]
+        
+        # Get GitHub agent
+        github_agent = get_github_copilot_agent()
+        
+        if not github_agent:
+            return """## ⚠️ GitHub Not Configured
+
+GitHub token is not set. Please ensure `GITHUB_TOKEN` is configured in `.secrets/github_token`.
+"""
+        
+        # Create the issue
+        result = github_agent.create_issue(diagnosis)
+        
+        if result.success:
+            return f"""## ✅ GitHub Issue Created!
+
+**Issue:** #{result.issue_number}
+**URL:** [{result.issue_url}]({result.issue_url})
+
+The issue includes:
+- Error classification and root cause
+- Log excerpt
+- Suggested fixes
+- Context information
+
+### 🤖 Next Steps
+1. Open the issue in GitHub
+2. Assign GitHub Copilot to fix it (`@copilot`)
+3. Or manually implement the suggested fixes
+"""
+        else:
+            return f"""## ❌ Failed to Create Issue
+
+Error: {result.message}
+
+Please check your GitHub token has the required permissions (`repo` scope).
+"""
+        
+    except Exception as e:
+        return f"""## ❌ Error
+
+{str(e)}
+
+Please check your GitHub configuration.
 """
 
 
@@ -1825,6 +2039,7 @@ def create_interface() -> gr.Blocks:
                             with gr.Row():
                                 diagnose_btn = gr.Button("🔍 Diagnose", variant="secondary", size="sm", scale=1)
                                 apply_fixes_btn = gr.Button("✨ Apply Safe Fixes", size="sm", scale=1)
+                                create_issue_btn = gr.Button("🐙 Create GitHub Issue", size="sm", scale=1)
                             
                             diagnosis_display = gr.Markdown("*Click 'Diagnose' to analyze a failed job*")
                         
@@ -2059,9 +2274,17 @@ def create_interface() -> gr.Blocks:
             outputs=diagnosis_display,
         )
         
-        # Apply safe fixes (placeholder - shows info for now)
+        # Apply safe fixes
         apply_fixes_btn.click(
-            fn=lambda: "⚠️ **Coming Soon**\n\nAuto-fix functionality will be available in the next release. For now, please apply the suggested fixes manually.",
+            fn=apply_safe_fixes,
+            inputs=[job_selector],
+            outputs=diagnosis_display,
+        )
+        
+        # Create GitHub issue
+        create_issue_btn.click(
+            fn=create_github_issue,
+            inputs=[job_selector],
             outputs=diagnosis_display,
         )
         

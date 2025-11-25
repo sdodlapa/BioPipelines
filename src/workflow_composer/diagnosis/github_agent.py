@@ -7,6 +7,7 @@ creating pull requests that fix workflow issues.
 
 import os
 import logging
+import json
 from typing import Optional, Dict, Any
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,8 @@ class PullRequestResult:
     success: bool
     pr_number: Optional[int] = None
     pr_url: Optional[str] = None
+    issue_number: Optional[int] = None
+    issue_url: Optional[str] = None
     branch_name: Optional[str] = None
     message: str = ""
 
@@ -41,6 +44,8 @@ class GitHubCopilotAgent:
         agent = GitHubCopilotAgent(owner="user", repo="BioPipelines")
         result = await agent.create_fix_pr(diagnosis, workflow_content)
     """
+    
+    API_BASE = "https://api.github.com"
     
     def __init__(
         self,
@@ -66,6 +71,84 @@ class GitHubCopilotAgent:
     def is_available(self) -> bool:
         """Check if GitHub Copilot integration is available."""
         return bool(self.github_token)
+    
+    def _request(
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict] = None,
+    ) -> Dict:
+        """Make a GitHub API request."""
+        import requests
+        
+        url = f"{self.API_BASE}{endpoint}"
+        headers = {
+            "Authorization": f"token {self.github_token}",
+            "Accept": "application/vnd.github.v3+json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        }
+        
+        response = requests.request(
+            method=method,
+            url=url,
+            headers=headers,
+            json=data,
+            timeout=30,
+        )
+        
+        response.raise_for_status()
+        return response.json() if response.text else {}
+    
+    def create_issue(
+        self,
+        diagnosis: ErrorDiagnosis,
+        title: Optional[str] = None,
+    ) -> PullRequestResult:
+        """
+        Create a GitHub issue from a diagnosis.
+        
+        Args:
+            diagnosis: ErrorDiagnosis
+            title: Custom title (optional)
+            
+        Returns:
+            PullRequestResult with issue details
+        """
+        if not self.is_available():
+            return PullRequestResult(
+                success=False,
+                message="GitHub token not configured"
+            )
+        
+        if not title:
+            title = f"🔧 Fix: {diagnosis.category.value.replace('_', ' ').title()} - {diagnosis.root_cause[:50]}"
+        
+        body = self.format_issue_body(diagnosis)
+        
+        try:
+            result = self._request(
+                "POST",
+                f"/repos/{self.owner}/{self.repo}/issues",
+                data={
+                    "title": title,
+                    "body": body,
+                    "labels": ["bug", "auto-generated", diagnosis.category.value],
+                }
+            )
+            
+            return PullRequestResult(
+                success=True,
+                issue_number=result.get("number"),
+                issue_url=result.get("html_url"),
+                message=f"Issue #{result.get('number')} created successfully!",
+            )
+            
+        except Exception as e:
+            logger.error(f"Failed to create issue: {e}")
+            return PullRequestResult(
+                success=False,
+                message=f"Failed to create issue: {str(e)}"
+            )
     
     async def create_fix_pr(
         self,
@@ -110,34 +193,28 @@ class GitHubCopilotAgent:
             title += "..."
         
         try:
-            # This would integrate with MCP GitHub tools
-            # For now, return a placeholder that explains the integration
+            # For now, create an issue that Copilot can work on
+            # The MCP integration will be done through the chat interface
             
             logger.info(
-                f"Would create PR via GitHub Copilot:\n"
+                f"Creating issue for Copilot to fix:\n"
                 f"  Owner: {self.owner}\n"
                 f"  Repo: {self.repo}\n"
                 f"  Title: {title}\n"
                 f"  Base: {base_branch}"
             )
             
-            # In actual implementation, this would call:
-            # mcp_github_create_pull_request_with_copilot(
-            #     owner=self.owner,
-            #     repo=self.repo,
-            #     problem_statement=problem_statement,
-            #     title=title,
-            #     base_ref=base_branch,
-            # )
+            # Create an issue with the fix request
+            result = self.create_issue(diagnosis, title=f"🤖 [Copilot] {title}")
             
-            return PullRequestResult(
-                success=True,
-                message=(
-                    "Pull request creation initiated. GitHub Copilot will "
-                    "analyze the code and create a fix. Check the repository "
-                    "for the new PR."
-                ),
-            )
+            if result.success:
+                result.message = (
+                    f"Issue #{result.issue_number} created! "
+                    f"GitHub Copilot can now be assigned to fix it.\n"
+                    f"URL: {result.issue_url}"
+                )
+            
+            return result
             
         except Exception as e:
             logger.error(f"Failed to create fix PR: {e}")
@@ -168,21 +245,38 @@ class GitHubCopilotAgent:
             )
         
         try:
-            # This would call:
-            # mcp_github_assign_copilot_to_issue(
-            #     owner=self.owner,
-            #     repo=self.repo,
-            #     issueNumber=issue_number,
-            # )
+            # Add a comment with diagnosis context
+            if diagnosis:
+                comment = f"""## 🔍 AI Diagnosis Added
+
+**Error Type:** `{diagnosis.category.value}`
+**Root Cause:** {diagnosis.root_cause}
+**Confidence:** {diagnosis.confidence:.0%}
+
+### Suggested Fixes
+"""
+                for i, fix in enumerate(diagnosis.suggested_fixes[:3], 1):
+                    comment += f"{i}. {fix.description}\n"
+                    if fix.command:
+                        comment += f"   ```bash\n   {fix.command}\n   ```\n"
+                
+                comment += "\n*@copilot please fix this issue based on the diagnosis above.*"
+                
+                self._request(
+                    "POST",
+                    f"/repos/{self.owner}/{self.repo}/issues/{issue_number}/comments",
+                    data={"body": comment}
+                )
             
             logger.info(
-                f"Would assign Copilot to issue #{issue_number} "
+                f"Added Copilot comment to issue #{issue_number} "
                 f"in {self.owner}/{self.repo}"
             )
             
             return PullRequestResult(
                 success=True,
-                message=f"Copilot assigned to issue #{issue_number}",
+                issue_number=issue_number,
+                message=f"Copilot has been requested to fix issue #{issue_number}",
             )
             
         except Exception as e:

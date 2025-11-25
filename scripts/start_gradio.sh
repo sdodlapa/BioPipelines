@@ -91,6 +91,16 @@ if [ -f ".secrets/anthropic_key" ]; then
     echo "✓ Anthropic API key loaded"
 fi
 
+if [ -f ".secrets/google_api_key" ]; then
+    export GOOGLE_API_KEY=$(cat .secrets/google_api_key)
+    echo "✓ Google Gemini API key loaded (free tier)"
+fi
+
+if [ -f ".secrets/github_token" ]; then
+    export GITHUB_TOKEN=$(cat .secrets/github_token)
+    echo "✓ GitHub token loaded (for Copilot PR creation)"
+fi
+
 if [ ! -f ".secrets/openai_key" ] && [ ! -f ".secrets/lightning_key" ]; then
     echo "⚠ No API keys found in .secrets/"
     echo "  For Lightning.ai (FREE): https://lightning.ai/models"

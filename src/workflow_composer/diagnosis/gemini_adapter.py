@@ -25,7 +25,7 @@ class GeminiAdapter:
     """
     Adapter for Google Gemini API.
     
-    Supports free tier access with gemini-1.5-flash and other models.
+    Supports free tier access with gemini-2.0-flash and other models.
     Optimized for error diagnosis with minimal token usage.
     
     Example:
@@ -33,17 +33,20 @@ class GeminiAdapter:
         response = adapter.complete("Analyze this error...")
     """
     
-    # Recommended models
+    # Recommended models (updated Nov 2025)
     MODELS = {
-        "gemini-flash": "gemini-1.5-flash",
-        "gemini-pro": "gemini-1.5-pro",
-        "gemini-flash-8b": "gemini-1.5-flash-8b",
+        "gemini-flash": "gemini-2.0-flash",
+        "gemini-pro": "gemini-2.5-pro",
+        "gemini-flash-lite": "gemini-2.0-flash-lite-001",
+        # Legacy aliases
+        "gemini-1.5-flash": "gemini-2.0-flash",
+        "gemini-1.5-pro": "gemini-2.5-pro",
     }
     
     def __init__(
         self,
         api_key: Optional[str] = None,
-        model: str = "gemini-1.5-flash",
+        model: str = "gemini-2.0-flash",
     ):
         """
         Initialize Gemini adapter.

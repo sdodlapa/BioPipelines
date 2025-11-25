@@ -30,10 +30,11 @@ from .categories import (
 from .patterns import ERROR_PATTERNS, get_pattern, get_all_patterns
 from .log_collector import LogCollector, CollectedLogs
 from .agent import ErrorDiagnosisAgent
-from .auto_fix import AutoFixEngine, FixResult
+from .auto_fix import AutoFixEngine, FixResult, get_auto_fix_engine
 from .gemini_adapter import GeminiAdapter, get_gemini, check_gemini_available
 from .lightning_adapter import LightningDiagnosisAdapter, get_lightning_adapter
 from .github_agent import GitHubCopilotAgent, get_github_copilot_agent
+from .history import DiagnosisHistory, DiagnosisRecord, get_diagnosis_history, record_diagnosis
 
 __all__ = [
     # Categories
@@ -54,6 +55,7 @@ __all__ = [
     # Auto Fix
     "AutoFixEngine",
     "FixResult",
+    "get_auto_fix_engine",
     # LLM Adapters
     "GeminiAdapter",
     "get_gemini",
@@ -63,4 +65,9 @@ __all__ = [
     # GitHub Integration
     "GitHubCopilotAgent",
     "get_github_copilot_agent",
+    # History Tracking
+    "DiagnosisHistory",
+    "DiagnosisRecord",
+    "get_diagnosis_history",
+    "record_diagnosis",
 ]
