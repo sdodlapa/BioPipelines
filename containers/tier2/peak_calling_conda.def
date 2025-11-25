@@ -1,0 +1,71 @@
+Bootstrap: docker
+From: condaforge/mambaforge:latest
+
+%labels
+    Author sdodl001@odu.edu
+    Version 1.0.0
+    Module peak_calling
+    Description Peak calling tools via conda (fast, reliable builds)
+    Tools MACS2, bedtools, deepTools
+    BuildDate 2025-11-24
+    Strategy conda-based (5-10 min build vs 30+ min source)
+
+%help
+    Peak Calling Module (Conda-Based)
+    ==================================
+    
+    This container uses pre-compiled bioconda packages for:
+    - MACS2 (ChIP-seq peak calling)
+    - bedtools (genomic intervals)
+    - deepTools (coverage tracks)
+    
+    Benefits vs source compilation:
+    - 5-10 min build time (vs 30+ min)
+    - Guaranteed compatibility (bioconda testing)
+    - Automatic dependency resolution
+    - Version reproducibility
+    
+    Usage:
+      singularity exec peak_calling_conda.sif macs2 --version
+      singularity exec peak_calling_conda.sif bedtools --version
+      singularity exec peak_calling_conda.sif deeptools --version
+
+%environment
+    export PATH=/opt/conda/bin:$PATH
+    export LC_ALL=C.UTF-8
+    export LANG=C.UTF-8
+
+%post
+    # Conda is already installed in base image
+    
+    # Configure conda
+    /opt/conda/bin/conda config --add channels defaults
+    /opt/conda/bin/conda config --add channels bioconda
+    /opt/conda/bin/conda config --add channels conda-forge
+    /opt/conda/bin/conda config --set channel_priority strict
+    
+    # Install tools via mamba (faster than conda)
+    /opt/conda/bin/mamba install -y \
+        macs2=2.2.9.1 \
+        bedtools=2.31.1 \
+        deeptools=3.5.5 \
+        && /opt/conda/bin/conda clean -afy
+    
+    # Verify installations
+    /opt/conda/bin/macs2 --version
+    /opt/conda/bin/bedtools --version
+    /opt/conda/bin/deeptools --version
+
+%test
+    echo "=== Testing Peak Calling Tools ==="
+    
+    echo -n "MACS2: "
+    macs2 --version || exit 1
+    
+    echo -n "bedtools: "
+    bedtools --version || exit 1
+    
+    echo -n "deepTools: "
+    deeptools --version || exit 1
+    
+    echo "All tests passed!"

@@ -1,0 +1,54 @@
+Bootstrap: docker
+From: ubuntu:22.04
+
+%labels
+    Author sdodl001@odu.edu
+    Version 1.0.0
+    Tool FastQC
+    Description Minimal single-tool container for proof of concept
+    BuildDate 2025-11-24
+
+%help
+    Minimal Container: FastQC Only
+    ================================
+    
+    This is a proof-of-concept showing that simple, focused containers
+    build reliably in <5 minutes.
+    
+    Tool: FastQC v0.12.1
+    
+    Usage:
+      singularity exec fastqc_minimal.sif fastqc --version
+      singularity exec fastqc_minimal.sif fastqc sample.fastq.gz
+
+%environment
+    export PATH=/opt/FastQC:$PATH
+    export LC_ALL=C
+    export LANG=C
+
+%post
+    # Non-interactive mode
+    export DEBIAN_FRONTEND=noninteractive
+    export TZ=America/New_York
+    ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+    
+    # Minimal dependencies
+    apt-get update && apt-get install -y \
+        wget \
+        default-jre \
+        unzip \
+        perl \
+        && rm -rf /var/lib/apt/lists/*
+    
+    # Install FastQC (pre-compiled binary, no build needed)
+    cd /opt
+    wget https://www.bioinformatics.babraham.ac.uk/projects/fastqc/fastqc_v0.12.1.zip
+    unzip fastqc_v0.12.1.zip
+    chmod +x FastQC/fastqc
+    ln -s /opt/FastQC/fastqc /usr/local/bin/fastqc
+    rm fastqc_v0.12.1.zip
+
+%test
+    echo "Testing FastQC..."
+    fastqc --version
+    echo "FastQC test passed!"

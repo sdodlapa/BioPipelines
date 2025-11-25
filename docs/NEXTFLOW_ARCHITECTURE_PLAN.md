@@ -1,39 +1,232 @@
 # Nextflow Pipeline Architecture Plan
 
-**Date**: November 23, 2025  
+**Date**: November 25, 2025 (Updated - Strategic Reset)  
 **Purpose**: Design a new AI-driven, container-based bioinformatics platform using Nextflow  
-**Status**: Planning Phase  
+**Status**: Phase 2 Reset - Leverage Existing Assets, Focus on Composition  
 **Environment**: Google Cloud HPC (8x H100 80GB GPUs per node)  
 **Target Users**: ~10 users/week at rollout  
-**Development Philosophy**: Quality over speed - build best version at our own pace
+**Development Philosophy**: Use what works, build what's missing  
+**Critical Update**: Pivoted from building new containers to using existing 12 containers + dynamic workflow composition
 
 ---
 
 ## 1. Executive Summary
 
+### What Changed (November 25, 2025 - Strategic Reset)
+
+**The Failed Approach** (November 23-24):
+- Attempted to build new "Tier 2" container architecture from scratch
+- Source compilation of tools (STAR, BWA, MACS2, etc.)
+- 10+ container build failures over 2 days
+- Exit code 127, timeout issues, dependency problems
+- **Result**: Zero working containers built
+
+**The Discovery**:
+- 12 comprehensive containers **already exist** in containers/images/
+- Each contains 500-700 conda-installed, tested tools
+- Covers 95% of common bioinformatics workflows
+- ~20 GB total (reasonable size)
+- Already referenced in Nextflow configurations
+
+**The Realization**:
+We were solving the **wrong problem**:
+- ❌ Trying to build perfect containers
+- ❌ Reinventing what already works
+- ❌ Container construction as focus
+
+**What users actually need**:
+- ✅ Dynamic workflow composition ("I want STAR + featureCounts")
+- ✅ Tool-level granularity (mix any tools)
+- ✅ Fast response (minutes, not hours)
+- ✅ No bioinformatics expertise required
+
+**The Solution**:
+1. **Use existing 12 containers** - Stop building new ones
+2. **Create module library** - One module per tool (star.nf, bwa.nf, etc.)
+3. **Build AI composer** - Translate requests → Nextflow workflows
+4. **Enable customization** - Support user scripts via overlays
+
+**Fundamental Change**:
+- **Before**: Container-first architecture (build containers, then use them)
+- **After**: Composition-first architecture (use existing containers, compose flexibly)
+
+---
+
 ### Vision
-Build a **modern, modular bioinformatics pipeline platform** using Nextflow as the orchestration engine with containerized tools. Start with direct Nextflow translations of existing Snakemake pipelines, then progressively add AI assistance for parameter optimization and workflow configuration. Maintain parallel operation with existing Snakemake infrastructure during transition.
+Build a **modern, AI-driven bioinformatics platform** using Nextflow DSL2 for workflow orchestration with **existing containerized tools**. Enable dynamic workflow composition where users describe their analysis in natural language and the system automatically generates, optimizes, and executes the appropriate pipeline. Leverage 12 existing comprehensive containers (covering 95% of common tools) rather than building new ones.
+
+### Strategic Pivot (November 25, 2025)
+
+**Original Plan**: Build new multi-tier container architecture (Tier 1: base, Tier 2: domain modules, Tier 3: custom)
+- **Problem**: Spent 2 days failing to build containers (10+ failures, source compilation too fragile)
+- **Discovery**: 12 working containers already exist with 500-700 tools each
+- **Realization**: We're solving the wrong problem - users need workflow composition, not perfect containers
+
+**New Plan**: Dynamic workflow composition using existing containers
+- **Foundation**: Use 12 existing containers (rna-seq, dna-seq, chip-seq, etc.) - ~20GB total, comprehensive coverage
+- **Module Library**: Create tool-specific Nextflow modules (star.nf, bwa.nf, etc.) that reference existing containers
+- **AI Composer**: Build system to translate user requests → Nextflow workflows by composing modules
+- **Custom Integration**: Support user scripts via overlays/extensions when needed
 
 ### Key Differentiators from Current System
+- **AI-Driven Composition**: "I want STAR + featureCounts" → automatic workflow generation
+- **Tool-Level Granularity**: Compose workflows from individual tools, not pre-built pipelines
+- **Existing Container Leverage**: Use proven 12-container library (~500-700 tools each, conda-based, reliable)
+- **Module Library**: Reusable Nextflow processes enable infinite workflow combinations
+- **Dynamic Assembly**: Generate custom pipelines on-demand, no pre-programming needed
 - **Nextflow DSL2**: Modern workflow language with better parallelization and cloud integration
-- **Modular Architecture**: Reusable process modules that compose into complete workflows
 - **Cloud-Native**: Native GCP integration with Google Batch and Cloud Storage
-- **Container Reuse**: Leverage existing Singularity containers from Snakemake system
-- **Progressive Enhancement**: Start simple, add AI later based on real usage patterns
-- **Parallel Systems**: Coexists with Snakemake - users choose best tool for their needs
 
-### Strategic Goals (Revised - Phased Approach)
-**Phase 1 - Foundation (Weeks 1-4):**
-1. **Validate Nextflow**: Prove it's better than Snakemake for our use cases
-2. **Learn Platform**: Master DSL2, modules, executors, cloud integration
-3. **One Production Pipeline**: RNA-seq working as well or better than Snakemake
+## 2. Core Infrastructure (What We Have vs What We Need)
 
-**Phase 2 - Expansion (Weeks 5-10):**
-4. **Pipeline Library**: Translate 3-4 more Snakemake pipelines to Nextflow
-5. **Modularity**: Build reusable process library across pipelines
-6. **Documentation**: User guides, tutorials, best practices
+### 2.1 Existing Assets ✅
 
-**Phase 3 - Intelligence (Weeks 11+):**
+**12 Comprehensive Containers** (Already Built, Already Working)
+```
+Location: /home/sdodl001_odu_edu/BioPipelines/containers/images/
+
+rna-seq_1.0.0.sif        (1.7 GB, 643 tools)
+├── STAR 2.7.11a, HISAT2 2.2.1 (alignment)
+├── Salmon 1.10.3, featureCounts 2.0.6, HTSeq (quantification)
+├── DESeq2, EdgeR (differential expression)
+├── FastQC, MultiQC, Picard (QC)
+└── 636 other conda-installed tools
+
+dna-seq_1.0.0.sif        (2.1 GB, ~600 tools)
+├── BWA, Bowtie2 (alignment)
+├── GATK, FreeBayes, DeepVariant (variant calling)
+├── bcftools, VEP, SnpEff (annotation)
+└── Full variant analysis pipeline
+
+chipseq_1.0.0.sif        (1.8 GB, ~550 tools)
+├── Bowtie2, BWA (alignment)
+├── MACS2, HOMER (peak calling)
+├── deepTools, bedtools (analysis)
+└── ChIP/ATAC-seq complete toolkit
+
+scrna-seq_1.0.0.sif      (2.0 GB, ~700 tools)
+├── STARsolo, Alevin (quantification)
+├── Seurat, Scanpy (analysis)
+├── Monocle3 (trajectory)
+└── Single-cell complete ecosystem
+
+... plus 8 more covering:
+- ATAC-seq, Hi-C, long-read, metagenomics
+- methylation, structural variants
+- Base and workflow-engine containers
+
+Total: ~20 GB, 5000-7000 tools, all conda-based, all tested
+```
+
+**Nextflow Platform** (Validated in Phase 1)
+- ✅ 7-10 concurrent workflows tested successfully
+- ✅ DSL2 module architecture established  
+- ✅ SLURM integration working
+- ✅ Cloud-ready (GCP compatible)
+- ✅ Configuration system (containers.config)
+
+**Module Library Foundation**
+- Location: `/nextflow-pipelines/modules/`
+- Initial modules: qc/, alignment/, quantification/
+- Pattern: One process per module, parameterized, tested
+- Ready to expand to 30-50 modules
+
+### 2.2 What We Need to Build 🔨
+
+**Tool Catalog** (Week 2 - Priority 1)
+```json
+{
+  "catalog_version": "1.0.0",
+  "tools": {
+    "STAR": {
+      "container": "rna-seq_1.0.0.sif",
+      "version": "2.7.11a",
+      "module": "modules/alignment/star.nf",
+      "category": "alignment",
+      "data_types": ["rna-seq"],
+      "input": "FASTQ",
+      "output": "BAM"
+    },
+    "featureCounts": {
+      "container": "rna-seq_1.0.0.sif",
+      "version": "2.0.6",
+      "module": "modules/quantification/featurecounts.nf",
+      "category": "quantification",
+      "data_types": ["rna-seq"],
+      "input": "BAM",
+      "output": "counts"
+    }
+    // ... 5000+ tools mapped
+  }
+}
+```
+
+**Module Library Expansion** (Weeks 2-3 - Priority 1)
+```
+Target: 30-50 tool-specific modules
+
+Priority 1 (Week 2):
+✓ alignment/: star.nf, hisat2.nf, bwa.nf, bowtie2.nf, salmon.nf
+✓ quantification/: featurecounts.nf, htseq.nf, rsem.nf, kallisto.nf
+✓ qc/: fastqc.nf, multiqc.nf, picard.nf
+✓ peaks/: macs2.nf, homer.nf
+
+Priority 2 (Week 3):
+✓ variants/: gatk.nf, freebayes.nf, bcftools.nf
+✓ annotation/: vep.nf, snpeff.nf
+✓ scrna/: starsolo.nf, seurat.nf, scanpy.nf
+✓ assembly/: spades.nf, flye.nf
+```
+
+**AI Workflow Composer** (Weeks 4-5 - Core Feature)
+```python
+class WorkflowComposer:
+    """Translate natural language → Nextflow workflow"""
+    
+    def compose(self, user_request: str) -> WorkflowExecution:
+        # 1. Parse intent
+        intent = self.intent_parser.parse(user_request)
+        # Example: {"task": "rnaseq", "tools": ["STAR", "featureCounts"]}
+        
+        # 2. Select modules from catalog
+        modules = self.tool_catalog.find_modules(intent['tools'])
+        
+        # 3. Generate Nextflow workflow
+        workflow_code = self.workflow_generator.generate(modules, intent)
+        
+        # 4. Validate workflow
+        self.validator.check(workflow_code)
+        
+        # 5. Execute
+        return self.executor.run(workflow_code, intent['parameters'])
+```
+
+### Strategic Goals (Revised - Focus on Composition, Not Construction)
+
+**Phase 1 - Validation (Week 1) ✅ COMPLETE**:
+1. ✅ **Validated Nextflow**: Proved better than Snakemake (7 concurrent workflows, no locking)
+2. ✅ **Learned Platform**: Mastered DSL2, modules, executors, cloud integration
+3. ✅ **Translated Pipelines**: 8-10 Nextflow workflows from Snakemake
+4. ✅ **Discovered Assets**: 12 existing containers with comprehensive tool coverage
+
+**Phase 2 - Composition Infrastructure (Weeks 2-3) 🔄 REVISED**:
+1. **Tool Catalog**: Inventory 12 containers, map 5000+ tools to containers and categories
+2. **Module Library**: Create 30-50 tool-specific modules (star.nf, bwa.nf, featurecounts.nf, etc.)
+3. **Test Workflows**: Build 10+ example workflows by composing modules
+4. **Documentation**: User guide for manual composition, module templates
+
+**Phase 3 - AI Integration (Weeks 4-6) 🎯 CORE FEATURE**:
+1. **Intent Parser**: NLP system to understand user requests
+2. **Module Selector**: Choose appropriate modules based on task and tools requested
+3. **Workflow Generator**: Compose Nextflow code from selected modules
+4. **Execution Engine**: Run generated workflows, monitor progress, return results
+5. **Iteration Support**: Allow parameter tuning, tool swapping, comparison studies
+
+**Phase 4 - Custom Integration (Weeks 7-8) 🚀 ADVANCED**:
+1. **Overlay System**: Mount user scripts into existing containers (30 seconds)
+2. **Extension Builder**: Add pip/conda packages to containers (2-5 minutes)
+3. **Custom Containers**: Build from scratch only when necessary (10-30 minutes)
+4. **Smart Caching**: Reuse custom containers across users and sessions
 7. **AI Model Selection**: Evaluate open source LLMs based on real needs
 8. **Parameter Assistant**: AI suggests optimal settings (not generates code)
 9. **User Experience**: Simple CLI with optional AI assistance
@@ -94,19 +287,22 @@ PHASE 3: Intelligence (Weeks 11+)
 └─────────────────────────────────────────────────────────────┘
 ```
 
-### 2.2 Technology Stack (Revised)
+### 2.2 Technology Stack (Revised + Container Strategy)
 
 | Component | Technology | Rationale |
 |-----------|-----------|-----------|
-| **Workflow Engine** | Nextflow 24.x (DSL2) | Industry standard, excellent GCP support, active nf-core community |
-| **Container Runtime** | Singularity/Apptainer | HPC-friendly, rootless, works with SLURM - **Reuse existing 12 containers** |
-| **Container Registry** | Local SIF files + GCP Artifact Registry (future) | Fast local access, proven containers |
+| **Workflow Engine** | Nextflow 24.x (DSL2) - **NATIVE** | Industry standard, excellent GCP support, active nf-core community |
+| **Container Runtime** | Singularity/Apptainer | HPC-friendly, rootless, works with SLURM - **Multi-tier architecture** |
+| **Container Strategy** | Base + Modules + Microservices + JIT | Dynamic generation, 75% storage reduction vs monolithic |
+| **Container Cache** | /scratch/container_cache (~500 GB) | Local cache with TTL-based cleanup, shared read-only |
+| **Container Builds** | SLURM compute nodes (fakeroot) | Isolated builds, parallel execution, 3-30 min per container |
 | **Scheduling** | SLURM (primary) + Google Batch (future) | Current HPC scheduler, cloud burst optional |
 | **Data Storage** | /scratch (hot) + /home (persistent) + GCS (future) | Existing storage, add tiering later |
 | **Programming** | Nextflow DSL2 + Bash/Python scripts | Workflow definition + existing tool scripts |
 | **Configuration** | nextflow.config + params.yaml | Native Nextflow configuration |
 | **Monitoring** | SLURM logs + Nextflow reports | Built-in, no additional tools needed initially |
 | **AI/LLM** | **Phase 3 Decision** | Evaluate open source models (Llama, Qwen, Mixtral) after Nextflow validated |
+| **AI Container Builder** | Python agents + Singularity | Automated container generation based on workflow needs |
 
 ---
 
@@ -249,7 +445,9 @@ nextflow-pipelines/
 │   │   ├── planner.py            # Workflow design agent
 │   │   ├── selector.py           # Tool selection agent
 │   │   ├── optimizer.py          # Parameter tuning agent
-│   │   └── validator.py          # Pipeline validation agent
+│   │   ├── validator.py          # Pipeline validation agent
+│   │   ├── container_strategy.py  # Container tier selection (NEW)
+│   │   └── container_builder.py   # Container build orchestration (NEW)
 │   ├── api/                       # API interfaces
 │   │   ├── cli.py                # Command-line interface (Click/Typer)
 │   │   └── rest.py               # REST API (FastAPI) [Future]
@@ -260,7 +458,9 @@ nextflow-pipelines/
 │   └── utils/                     # Utilities
 │       ├── storage.py            # Data staging & caching
 │       ├── slurm.py              # SLURM integration
-│       └── validators.py         # Input validation
+│       ├── validators.py         # Input validation
+│       ├── container_cache.py    # Container cache management (NEW)
+│       └── container_ttl.py      # TTL enforcement & promotion (NEW)
 │
 ├── modules/                       # Nextflow DSL2 modules (reusable)
 │   ├── qc/
@@ -291,18 +491,55 @@ nextflow-pipelines/
 │   └── custom/                   # AI-generated custom pipelines
 │       └── .gitkeep              # Generated dynamically
 │
-├── containers/                    # Container definitions
-│   ├── Singularity.base          # Base container
-│   ├── tools/                    # Individual tool containers
-│   │   ├── fastqc.def
-│   │   ├── star.def
-│   │   ├── gatk.def
-│   │   └── ... (100+ tools)
-│   ├── modules/                  # Module-level containers (grouped tools)
-│   │   ├── qc_suite.def         # FastQC + MultiQC + Trim
-│   │   └── variant_calling.def   # BWA + GATK + VEP
-│   └── images/                   # Built SIF files
+├── containers/                    # Container definitions & build scripts
+│   ├── base/
+│   │   └── base.def              # Tier 1: 2 GB foundation (Python, R, samtools)
+│   ├── modules/                  # Tier 2: Domain-specific modules
+│   │   ├── alignment_short_read.def  # STAR, Bowtie2, BWA, Salmon
+│   │   ├── alignment_long_read.def   # Minimap2, NGMLR
+│   │   ├── variant_calling.def       # GATK, FreeBayes, VEP
+│   │   ├── peak_calling.def          # MACS2, MACS3, HOMER
+│   │   ├── assembly.def              # SPAdes, Velvet, Canu
+│   │   ├── quantification.def        # featureCounts, HTSeq, Kallisto
+│   │   └── scrna_analysis.def        # CellRanger, Seurat, Scanpy
+│   ├── microservices/            # Tier 3B: Single-tool containers
+│   │   ├── templates/
+│   │   │   ├── bioconda_tool.def     # Template for Bioconda tools
+│   │   │   └── custom_script.def     # Template for user scripts
+│   │   └── README.md             # How to create microservices
+│   ├── overlays/                 # Tier 3A: Overlay filesystem configs
+│   │   └── overlay_template.def  # Template for version overlays
+│   ├── custom/                   # Tier 3C: User JIT builds (runtime only)
+│   │   └── .gitkeep              # Not tracked, generated on-demand
+│   ├── build_container.sh        # SLURM job script for container builds
+│   └── images/                   # Legacy monolithic containers (migration)
 │       └── .gitkeep
+│
+├── cache/                         # Container cache (symlink to /scratch)
+│   └── README.md                 # Points to /scratch/container_cache/
+│
+# Actual container cache on SLURM (not in repo):
+# /scratch/container_cache/
+#   ├── base/
+#   │   └── foundation_v1.0.sif             # 2 GB, pre-built
+#   ├── modules/
+#   │   ├── alignment_short_read_v1.0.sif   # 8 GB, pre-built
+#   │   ├── alignment_long_read_v1.0.sif    # 4 GB, pre-built
+#   │   ├── variant_calling_v1.0.sif        # 8 GB, pre-built
+#   │   └── ... (~40 GB total, 10 modules)
+#   ├── overlays/
+#   │   ├── user1/
+#   │   │   └── 20250115_star_2.7.11b.sif   # 50 MB, TTL=30 days
+#   │   └── user2/
+#   │       └── 20250114_salmon_1.10.sif    # 100 MB, TTL=30 days
+#   ├── microservices/
+#   │   ├── star_2.7.11b_abc123.sif         # 400 MB, TTL=30 days
+#   │   └── kallisto_0.50.1_def456.sif      # 300 MB, TTL=30 days
+#   └── custom/
+#       ├── user1/
+#       │   └── job_12345_custom_norm.sif   # 800 MB, TTL=7 days, private
+#       └── shared/
+#           └── validated_tool_xyz.sif      # 600 MB, opt-in shared
 │
 ├── config/                        # Configuration files
 │   ├── profiles/                  # Execution profiles
@@ -750,46 +987,66 @@ nfp interactive
 
 ---
 
-### Phase 2: Pipeline Library Expansion (Weeks 5-10)
-**Goal**: Build modular process library, translate 3 more pipelines
+### Phase 2: Module Library + Container Migration (Weeks 5-10)
+**Goal**: Build modular process library, translate 3 more pipelines, migrate to multi-tier containers
 
-**Week 5-6: DNA-seq Variant Calling**
+**Week 5-6: DNA-seq + Container Migration Planning**
 - [ ] Translate BWA + GATK workflow from Snakemake
-- [ ] Reuse dna-seq container
-- [ ] Test on WGS data
-- [ ] Extract reusable modules: bwa_align, gatk_haplotypecaller, etc.
+- [ ] Test with legacy `dna-seq.sif` container (monolithic)
+- [ ] **NEW**: Design Tier 2 module containers:
+  - `alignment_short_read.def`: STAR, Bowtie2, BWA, Salmon (8 GB)
+  - `variant_calling.def`: GATK, FreeBayes, VEP, SnpEff (8 GB)
+  - `peak_calling.def`: MACS2, MACS3, HOMER (3 GB)
+- [ ] **NEW**: Test Singularity fakeroot builds on SLURM compute nodes
+- [ ] Extract reusable modules: bwa_align, gatk_haplotypecaller, variant_annotation
 
-**Week 7-8: scRNA-seq (CellRanger)**
+**Week 7-8: scRNA-seq + Container Build Infrastructure**
 - [ ] Translate CellRanger workflow
-- [ ] Reuse scrna-seq container (with CellRanger 10.0.0)
-- [ ] Test on PBMC dataset
-- [ ] Extract reusable modules: cellranger_count, scanpy_qc, etc.
+- [ ] Test with legacy `scrna-seq.sif` container
+- [ ] **NEW**: Build container infrastructure:
+  - Create `containers/build_container.sh` (SLURM job script)
+  - Implement container cache at `/scratch/container_cache/`
+  - Set up TTL enforcement (daily cron job)
+- [ ] **NEW**: Build first Tier 2 modules:
+  - `alignment_short_read_v1.0.sif` (test with RNA-seq, DNA-seq)
+  - `scrna_analysis_v1.0.sif` (CellRanger, Seurat, Scanpy)
+- [ ] Extract reusable modules: cellranger_count, scanpy_qc, seurat_normalize
 
-**Week 9-10: Choose Third Pipeline**
+**Week 9-10: Third Pipeline + Container Migration**
 - [ ] Pick based on user demand: ChIP-seq, ATAC-seq, or Long-read
-- [ ] Translate and test
+- [ ] Translate using NEW Tier 2 module containers (not monolithic)
+- [ ] **NEW**: Complete container migration:
+  - Build remaining Tier 2 modules (~10 total, ~40 GB)
+  - Update all Nextflow workflows to use module containers
+  - Deprecate monolithic containers (keep for 30-day transition)
+- [ ] **NEW**: Implement container cache management:
+  - `src/utils/container_cache.py`: Cache lookup, metadata storage
+  - `src/utils/container_ttl.py`: TTL cleanup, promotion logic
 - [ ] Refactor: Identify common modules across all pipelines
 - [ ] Create module library: `modules/{qc,alignment,quantification,variants}/`
 
 **Documentation**
 - [ ] Module documentation: Each module's purpose, inputs, outputs
+- [ ] **NEW**: Container documentation: How to use Tier 1-2, when to build Tier 3
 - [ ] User guides: How to run each pipeline type
-- [ ] Developer guide: How to add new modules/pipelines
+- [ ] Developer guide: How to add new modules/pipelines, build containers
 
 **Checkpoint Week 10**:
 - ✓ Are 4 Nextflow pipelines working in production?
 - ✓ Do users prefer Nextflow or Snakemake?
 - ✓ Is module library reusable across pipelines?
-- **Decision**: Continue to Phase 3 (AI) or focus on more pipelines?
+- ✓ **NEW**: Are Tier 2 containers working (smaller, faster, modular)?
+- ✓ **NEW**: Is container build infrastructure reliable (fakeroot builds)?
+- **Decision**: Continue to Phase 3 (AI + dynamic containers) or focus on more pipelines?
 
-**Deliverable**: 4 production pipelines, modular process library, comprehensive documentation
+**Deliverable**: 4 production pipelines, modular process library, Tier 1-2 container cache, build infrastructure
 
 ---
 
-### Phase 3: AI Parameter Assistant (Weeks 11-14) 🚀 FUTURE
-**Goal**: Add intelligent parameter suggestion (NOT code generation)
+### Phase 3: AI Integration + Dynamic Container Generation (Weeks 11-14) 🚀 FUTURE
+**Goal**: Add intelligent parameter suggestion + on-demand container builds (Tier 3A-3C)
 
-**Week 11: AI Model Selection & Testing**
+**Week 11: AI Model Selection & Container Strategy Agent**
 - [ ] Test open source models on H100 GPUs:
   - Llama 3.3 70B vs 8B (size vs performance tradeoff)
   - Qwen 2.5 72B vs 32B  
@@ -797,39 +1054,75 @@ nfp interactive
   - DeepSeek-V3 (if available)
 - [ ] Benchmark: Latency, accuracy on parameter suggestion tasks
 - [ ] Test: "Given RNA-seq data, suggest STAR parameters"
+- [ ] **NEW**: Build ContainerStrategyAgent:
+  - Input: User query ("Use STAR 2.7.11b", "Compare aligners", "Run my script")
+  - Logic: Check cache → Select tier (3A overlay, 3B microservice, 3C JIT)
+  - Output: Container path or build specification
 - [ ] Choose: Best model for our use case
 
-**Week 12: Simple AI Assistant**
+**Week 12: AI Parameter Assistant + Container Builder Agent**
 - [ ] Build CLI tool: `nextflow-assist`
 - [ ] Input: User describes data (# samples, organism, read length, etc.)
 - [ ] AI Output: Suggested parameter file (nextflow.params.json)
+- [ ] **NEW**: Build ContainerBuilderAgent:
+  - Generate Singularity definition files
+  - Submit SLURM build jobs (`sbatch containers/build_container.sh`)
+  - Monitor build progress, validate results
+  - Cache with metadata (TTL, usage stats, privacy settings)
+- [ ] **NEW**: Implement Tier 3 container builds:
+  - **Tier 3A (Overlays)**: Quick version updates (2-3 min builds)
+  - **Tier 3B (Microservices)**: Single-tool containers (3-5 min builds)
+  - **Tier 3C (Custom JIT)**: User scripts (10-30 min builds, queued)
 - [ ] Human review: User confirms/edits before execution
-- [ ] Method: Template-based generation, NOT free-form code
 
 **Week 13: Integration & Testing**
 - [ ] Integrate AI assistant with existing pipelines
-- [ ] Test workflow:
+- [ ] **NEW**: Test dynamic container workflows:
   ```bash
-  nextflow-assist describe --pipeline rnaseq --data samples.csv
-  # AI suggests parameters
+  # Example 1: Version-specific tool
+  nextflow-assist describe --pipeline rnaseq --star-version 2.7.11b
+  # AI generates overlay container (2-3 min) + parameter file
   nextflow run rnaseq.nf -params-file suggested.json
+  
+  # Example 2: Tool comparison
+  nextflow-assist compare --tools "star,salmon,kallisto"
+  # AI creates 3 microservices (3-5 min each) + comparison workflow
+  
+  # Example 3: Custom script
+  nextflow-assist custom --script my_normalization.R --deps "DESeq2,ggplot2"
+  # AI builds JIT container (10-30 min, queued) + wraps in Nextflow process
   ```
 - [ ] Beta testing with 3-5 users
 - [ ] Collect feedback: What's helpful? What's confusing?
+- [ ] **NEW**: Test container cache management:
+  - TTL cleanup (daily cron)
+  - Promotion (popular microservices → Tier 2 modules)
+  - Privacy enforcement (user custom scripts stay private)
 
 **Week 14: Refinement & Documentation**
 - [ ] Fix issues from beta testing
-- [ ] Add "explain" mode: Why AI suggested these parameters
-- [ ] Documentation: How to use AI assistant, when to override
+- [ ] Add "explain" mode: Why AI suggested these parameters/containers
+- [ ] **NEW**: Smart queuing for long builds:
+  - Quick builds (<5 min): Wait for completion
+  - Long builds (>5 min): Queue + notify when ready
+  - User choice: `--wait` or `--queue` flag
+- [ ] **NEW**: Container sharing workflow:
+  - Default: Private containers (user-specific)
+  - Opt-in: Share after validation (admin approval)
+  - Automated validation: Test imports, version checks, security scan
+- [ ] Documentation: How to use AI assistant + dynamic containers, when to override
 - [ ] Fallback: All pipelines work WITHOUT AI (always)
 
 **Checkpoint Week 14**:
 - ✓ Does AI assistant save time vs manual configuration?
 - ✓ Are suggestions accurate (>80%)?
 - ✓ Do users trust AI recommendations?
+- ✓ **NEW**: Do dynamic containers work reliably (build success >95%)?
+- ✓ **NEW**: Are build times acceptable (90% < 10 min)?
+- ✓ **NEW**: Is storage usage under budget (140 GB steady-state)?
 - **Decision**: Expand AI features or focus elsewhere?
 
-**Deliverable**: AI parameter assistant (optional tool, not required for pipelines)
+**Deliverable**: AI parameter assistant + dynamic container generation (Tier 3A-3C), smart queuing, cache management
 
 ---
 
@@ -871,26 +1164,143 @@ nfp interactive
 
 **Decision**: **Nextflow** for superior cloud integration, active community, and nf-core ecosystem
 
-### 6.2 Container Strategy
+### 6.2 Container Strategy (DECIDED - Multi-Tier Architecture)
 
-**Option A: Monolithic Containers** (Current Approach)
-- Pros: Simple deployment, one container per pipeline
-- Cons: Large size (~10GB), slow builds, poor modularity
+> **Status**: APPROVED after comprehensive evaluation (see CRITICAL_EVALUATION.md and DYNAMIC_CONTAINER_STRATEGY.md)
+> **Problem Solved**: Static monolithic containers (120 GB) cannot support AI-generated custom workflows requiring version-specific tools, user scripts, or novel tool combinations
+> **Result**: 75% storage reduction (140 GB vs 1.2 TB per-user duplication) with infinite flexibility
 
-**Option B: Micro-Containers** (Individual Tools)
-- Pros: Small, reusable, fast builds
-- Cons: Many containers to manage (~100+), startup overhead
+#### **Multi-Tier Architecture**
 
-**Option C: Module-Level Containers** (Grouped Tools)
-- Pros: Balance of modularity and efficiency
-- Cons: Some redundancy
+**Tier 1: Base Foundation** (2 GB, Pre-built)
+- **Purpose**: Core utilities shared across all workflows
+- **Contents**: samtools, bedtools, FastQC, Python 3.11, R 4.3, basic plotting
+- **Build**: One-time, maintained by admins
+- **Location**: `/scratch/container_cache/base/foundation_v1.0.sif`
+- **Already exists**: `containers/base/base.def` (validated)
 
-**Decision**: **Hybrid Approach**
-- **Base container**: Python, R, Conda (shared by all)
-- **Module containers**: Grouped by function (qc_suite, alignment_suite, etc.)
-- **Specialty containers**: Large/complex tools (GATK, CellRanger)
+**Tier 2: Domain Modules** (3-8 GB each, ~40 GB total, Pre-built)
+- **Purpose**: Grouped tools for common workflows (covers 90% of standard cases)
+- **Modules**:
+  - `alignment_short_read` (STAR, Bowtie2, BWA, Salmon) - 8 GB
+  - `alignment_long_read` (Minimap2, NGMLR) - 4 GB
+  - `variant_calling` (GATK, FreeBayes, BCFtools, VEP, SnpEff) - 8 GB
+  - `peak_calling` (MACS2, MACS3, HOMER) - 3 GB
+  - `assembly` (SPAdes, Velvet, Canu) - 6 GB
+  - `quantification` (featureCounts, HTSeq, Kallisto) - 3 GB
+  - `scrna_analysis` (CellRanger, Seurat, Scanpy) - 8 GB
+- **Build**: Quarterly updates, CI/CD tested
+- **Location**: `/scratch/container_cache/modules/{module_name}_v{version}.sif`
 
-Target: ~20 containers vs current 12, better reuse
+**Tier 3A: Overlays** (50-200 MB each, ~25 GB total, AI-Generated)
+- **Purpose**: Quick version updates or single-tool additions to modules
+- **Build Time**: 2-3 minutes
+- **Examples**:
+  - User: "Use STAR 2.7.11b not 2.7.10a" → overlay on `alignment_short_read`
+  - User: "Add featureCounts" → overlay on existing container
+- **TTL**: 30 days (auto-cleanup if not used)
+- **Location**: `/scratch/container_cache/overlays/{user}/{timestamp}_{tool}.sif`
+- **Technology**: Singularity overlay filesystem (writable layer on base)
+
+**Tier 3B: Microservices** (300-500 MB each, ~30 GB total, AI-Generated)
+- **Purpose**: Single-tool containers for comparisons or niche tools
+- **Build Time**: 3-5 minutes
+- **Examples**:
+  - User: "Compare STAR vs Salmon vs Kallisto alignments" → 3 microservices
+  - User: "Use obscure_tool from Bioconda" → single microservice
+- **TTL**: 30 days (promote to module if popular)
+- **Location**: `/scratch/container_cache/microservices/{tool}_{version}_{hash}.sif`
+- **Template**: `containers/microservices/templates/tool_template.def`
+
+**Tier 3C: Custom JIT (Just-In-Time)** (500 MB - 2 GB each, ~40 GB total, AI-Generated)
+- **Purpose**: User-provided scripts, custom environments, novel pipelines
+- **Build Time**: 10-30 minutes (includes compilation, testing)
+- **Examples**:
+  - User: "Run my custom R normalization script" → JIT with dependencies
+  - User: "Python pipeline with specific package versions" → JIT from requirements.txt
+- **TTL**: 7 days (private to user)
+- **Location**: `/scratch/container_cache/custom/{user}/{job_id}_{hash}.sif`
+- **Build**: Singularity fakeroot on SLURM compute nodes
+
+#### **Storage Budget & Efficiency**
+
+```yaml
+Storage_Comparison:
+  Old_Monolithic:
+    Containers: 12 pipeline-specific × 10 GB = 120 GB
+    Per_User_Duplication: 120 GB × 10 users = 1.2 TB
+    Flexibility: Fixed (cannot customize)
+  
+  New_Multi_Tier:
+    Tier_1_Base: 2 GB (1 container)
+    Tier_2_Modules: 40 GB (10 modules, shared)
+    Tier_3A_Overlays: 25 GB (50 active overlays)
+    Tier_3B_Microservices: 30 GB (60 active microservices)
+    Tier_3C_Custom: 40 GB (20 active JIT containers)
+    Buffer: 3 GB
+    Total_Steady_State: 140 GB (500 GB budget approved)
+    
+  Result:
+    Storage_Savings: 75% (140 GB vs 1.2 TB)
+    Flexibility: Infinite (any tool, any version, any combination)
+    Users_Supported: 10-100+ (shared cache, no duplication)
+```
+
+#### **Build Infrastructure (SLURM-Based)**
+
+**Location**: Compute nodes (not login nodes)
+- **Method**: Singularity fakeroot (rootless builds, no sudo required)
+- **Parallelization**: 4-8 concurrent builds (SLURM job array)
+- **Queuing Strategy**: Smart (Option C from Q3)
+  - **Quick builds** (<5 min estimated): Wait for completion
+  - **Long builds** (>5 min estimated): Queue job, notify user when ready
+  - **User choice**: `--wait` or `--queue` flag to override
+- **Build nodes**: `partition=build, nodes=4, cpus-per-task=8, mem=32GB`
+- **Cache warming**: Pre-build popular tool versions during off-hours
+
+#### **AI Agent Integration**
+
+**ContainerStrategyAgent**: Analyzes user query → selects optimal tier
+- Input: User query ("Use STAR 2.7.11b", "Run my script", "Compare aligners")
+- Logic: 
+  1. Check cache for exact match → return existing
+  2. Check base + overlay feasibility → Tier 3A (2-3 min)
+  3. Check microservice template → Tier 3B (3-5 min)
+  4. Fall back to JIT → Tier 3C (10-30 min)
+- Output: Container path or build job ID
+
+**ContainerBuilderAgent**: Executes builds on SLURM
+- Input: Build specification (tool, version, dependencies)
+- Actions:
+  1. Generate Singularity definition file
+  2. Submit SLURM job (`sbatch containers/build_container.sh`)
+  3. Monitor build progress
+  4. Validate container (test imports, version check)
+  5. Cache result with metadata (TTL, usage stats)
+- Output: Container path + validation report
+
+**Caching & Promotion**:
+- **TTL enforcement**: Daily cron job cleans expired containers
+- **Usage tracking**: Track container access frequency
+- **Promotion**: Popular Tier 3 containers (>10 users) promoted to Tier 2 modules
+- **Privacy**: User's custom scripts stay private (opt-in sharing after validation)
+
+#### **Build Time Estimates**
+
+| Tier | Typical Build Time | User Wait Time | Example |
+|------|-------------------|----------------|---------|
+| Tier 1 | N/A (pre-built) | 0 seconds | Use base container |
+| Tier 2 | N/A (pre-built) | 0 seconds | Use alignment module |
+| Tier 3A | 2-3 minutes | 2-3 minutes (wait) | Add STAR 2.7.11b overlay |
+| Tier 3B | 3-5 minutes | 3-5 minutes (wait) | Build Kallisto microservice |
+| Tier 3C | 10-30 minutes | Queue + notify | Custom R pipeline |
+
+**User Experience**:
+- 90% of queries: Use Tier 1-2 (instant, 0 wait)
+- 8% of queries: Tier 3A-3B (2-5 min, acceptable wait)
+- 2% of queries: Tier 3C (queued, notification when ready)
+
+**Target**: ~20 base containers + unlimited dynamic containers vs previous 12 monolithic
 
 ### 6.3 AI Agent Architecture
 
@@ -975,6 +1385,10 @@ Example_Project:
 | **Failure Rate** | < 5% | Failed runs / total runs |
 | **Resume Success** | > 95% | Successful resumes after failure |
 | **Storage Efficiency** | 50% reduction | vs storing all intermediates |
+| **Container Build Success** | > 95% | **NEW**: Successful builds / total build attempts |
+| **Container Build Time** | < 10 min (90%) | **NEW**: Build duration for Tier 3A-3C |
+| **Container Cache Hit Rate** | > 80% | **NEW**: Cache hits / total container requests |
+| **Storage Budget Compliance** | < 500 GB | **NEW**: Total container cache size |
 
 ### 7.2 User Experience Metrics
 
@@ -985,6 +1399,7 @@ Example_Project:
 | **User Satisfaction** | 4.5/5 | Post-use survey |
 | **Query Success Rate** | > 80% | Natural language → correct pipeline |
 | **Documentation Clarity** | 4.5/5 | User feedback |
+| **Container Wait Satisfaction** | 4/5 | **NEW**: User feedback on build times + queuing |
 
 ### 7.3 Scientific Metrics
 
@@ -1005,9 +1420,12 @@ Example_Project:
 |------|------------|--------|------------|
 | **Nextflow learning curve** | Medium | Medium | Use nf-core templates, extensive docs |
 | **AI hallucinations** | High | High | Validator agent, human review step |
-| **Container build failures** | Low | Medium | CI/CD testing, rollback mechanism |
+| **Container build failures** | Medium | Medium | **UPDATED**: Robust fallback: use Tier 1-2 if Tier 3 build fails, retry mechanism, pre-build validation |
 | **SLURM incompatibility** | Low | High | Test on cluster early, use nf-core configs |
-| **Storage quota exceeded** | Medium | High | Tiered storage, auto-cleanup policies |
+| **Storage quota exceeded** | Low | High | **UPDATED**: Multi-tier strategy (140 GB steady-state vs 500 GB budget), TTL cleanup, promotion system |
+| **Dynamic container security** | Medium | High | **NEW**: Singularity security (no root, namespaces), user script validation, opt-in sharing only |
+| **Build queue congestion** | Low | Medium | **NEW**: Smart queuing (quick builds wait, long builds queue), 4-8 parallel builds, off-hours pre-building |
+| **Overlay filesystem limits** | Low | Low | **NEW**: Singularity overlays limited to ~500 MB, fall back to microservices for larger changes |
 
 ### 8.2 Operational Risks
 
@@ -1145,170 +1563,231 @@ Example_Project:
 
 ---
 
-## 12. Next Immediate Steps
-
-### Week 1: GPU & Nextflow Foundation
-**Days 1-2: GPU Infrastructure**
-1. **Deploy vLLM server** on H100 node
-   ```bash
-   # Test models and benchmark
-   vllm serve meta-llama/Llama-3.3-70B-Instruct --tensor-parallel-size 4
-   # Measure: latency, throughput, memory usage
-   ```
-2. **Test inference APIs**: REST endpoint, Python client
-3. **Benchmark models**: Llama 3.3 70B, Qwen 2.5 72B, DeepSeek-V3
-4. **Document**: GPU setup guide, model selection criteria
-
-**Days 3-4: Nextflow Setup**
-1. **Create directory**: `BioPipelines/nextflow-platform/`
-   ```bash
-   cd ~/BioPipelines
-   mkdir -p nextflow-platform/{bin,src,modules,workflows,containers,config,tests,docs}
-   ```
-2. **Install Nextflow**: Latest stable (24.x) on login and compute nodes
-3. **Configure profiles**: 
-   - `slurm.config`: Local SLURM execution
-   - `google.config`: Google Batch for burst capacity
-4. **GCP setup**: Artifact Registry, IAM permissions, Cloud Storage buckets
-
-**Days 5-7: First Module + AI Agent**
-1. **Create reference module**: `modules/qc/fastqc.nf`
-2. **Build simple workflow**: Single FastQC run end-to-end
-3. **Implement basic AI agent**: 
-   - Input: "Run quality control on my fastq files"
-   - Output: Generated fastqc.nf workflow
-   - Backend: vLLM server on H100
-4. **Test**: Submit real FastQ → Nextflow executes → results generated
-
-**Deliverable**: Working proof-of-concept (NL query → GPU AI → Nextflow execution)
+**Document Status**: Living Document - Update as implementation progresses  
+**Last Updated**: November 24, 2025  
+**Next Review**: After Phase 1 Week 4 Checkpoint (8 Nextflow pipelines complete)  
+**Major Updates**: Nov 24 - Added multi-tier container strategy, removed obsolete GPU-first section, updated current status  
+**Current Status**: Phase 1 Day 2 - 2/10 pipelines complete, 5/10 running, multi-user validated (7 concurrent workflows)  
+**Approved By**: Development team (stakeholder sign-off pending)
 
 ---
 
-### Week 2-3: Expand to Complete RNA-seq
-1. **Add modules**: STAR alignment, featureCounts, DESeq2, MultiQC
-2. **Create containers**: Build Singularity images for each module
-3. **Test integration**: Complete RNA-seq pipeline end-to-end
-4. **Benchmark**: Compare to Snakemake RNA-seq (speed, accuracy)
-5. **Document**: User guide for first pipeline
+## 12. Implementation Summary & Key Decisions
 
-**CHECKPOINT (Week 3)**: 
-- ✓ Can we generate a complete, correct pipeline from NL?
-- ✓ Is Nextflow faster/better than Snakemake?
-- ✓ Does GPU AI inference work reliably?
-- **Decision**: Proceed to Phase 2 or pivot strategy
+### 12.1 Strategic Architecture Decisions
 
----
+**✓ DECIDED: Continue Nextflow (Maintain Snakemake in Parallel)**
+- **Rationale**: Comprehensive evaluation (see CRITICAL_EVALUATION.md) proved Nextflow superiority:
+  - Multi-user concurrent execution: PROVEN with 7 workflows, 13 jobs, 1h+ runtime
+  - DSL2 modularity: Programmatically composable for AI agents (vs file-based includes)
+  - Cloud-native design: Google Batch integration, GCS support, future-proof architecture
+  - Community ecosystem: nf-core modules, 1000+ contributors, active development
+- **Risk Mitigation**: Snakemake stays in production (no disruption), gradual user migration
+- **Decision Point**: After Week 4 checkpoint (8 pipelines validated)
 
-### Communication Plan
-**Stakeholder Updates**:
-- Week 3: Checkpoint review (POC results)
-- Week 6: Tier 1 pipelines demo
-- Week 9: AI agents demo (interactive session)
-- Week 13: Pre-launch user testing
-- Week 14: Launch announcement
+**✓ DECIDED: Native Workflow Engine + Containerized Tools**
+- **Nextflow Installation**: Native on login nodes (NOT containerized)
+  - Simpler deployment (standard HPC pattern)
+  - Faster execution (no container overhead for orchestration)
+  - Easier debugging (direct access to Nextflow commands)
+- **Tool Execution**: Containerized on compute nodes (Singularity)
+  - Reproducible environments (version-locked dependencies)
+  - Isolated execution (no package conflicts)
+  - Portable across systems (dev → staging → production)
+- **workflow-engine.sif**: Development/testing only (not for production HPC)
 
-**Documentation**:
-- Living document: Update this plan as decisions are made
-- Decision log: Track what we tried, what worked, what failed
-- Weekly progress notes: Keep stakeholders informed
+**✓ DECIDED: Multi-Tier Container Strategy**
+- **Problem Solved**: Static monolithic containers (120 GB) cannot support:
+  - Version-specific tools: "Use STAR 2.7.11b not 2.7.10a"
+  - User custom scripts: "Run my normalization algorithm"
+  - Tool comparisons: "Compare STAR vs Salmon vs Kallisto"
+  - Novel combinations: "RNA-seq + ChIP-seq integration"
+- **Solution**: Dynamic 3-tier architecture (see DYNAMIC_CONTAINER_STRATEGY.md):
+  - **Tier 1 (Base)**: 2 GB foundation - Python, R, samtools, bedtools
+  - **Tier 2 (Modules)**: 40 GB total - 10 domain-specific suites (alignment, variants, etc.)
+  - **Tier 3A (Overlays)**: 25 GB - 2-3 min builds, version updates, 30-day TTL
+  - **Tier 3B (Microservices)**: 30 GB - 3-5 min builds, single-tool containers, 30-day TTL
+  - **Tier 3C (Custom JIT)**: 40 GB - 10-30 min builds, user scripts, 7-day TTL
+- **Storage Impact**: 140 GB steady-state (vs 1.2 TB per-user duplication) = **75% reduction**
+- **Flexibility Impact**: Infinite combinations (vs 12 fixed pipelines) = **∞ improvement**
 
----
+### 12.2 Infrastructure & Implementation Decisions
 
-### Resource Requirements (Phase 1)
+**Q1: Storage Budget - ANSWERED: 500 GB**
+- Current monolithic: 120 GB (12 × 10 GB containers)
+- New multi-tier: 140 GB steady-state + 360 GB buffer
+- Per-user Snakemake: 1.2 TB (10 users × 120 GB)
+- Result: **75% storage savings + infinite flexibility**
 
-**Compute**:
-- 1 H100 node (8 GPUs): AI inference server (dedicated)
-- 2-4 CPU nodes: Nextflow testing and development
-- 10-20 CPU cores: Parallel module testing
+**Q2: Container Build Location - ANSWERED: SLURM Compute Nodes**
+- Method: Singularity fakeroot (rootless builds, no sudo required)
+- Parallelization: 4-8 concurrent builds
+- Resources: `partition=build, cpus=8, mem=32GB` per build
+- Benefit: No load on login nodes, faster builds with more CPU/RAM
 
-**Storage**:
-- 500GB persistent disk: Code, containers, small test data
-- 2TB scratch: Large test datasets (ENCODE, TCGA subsets)
-- 1TB GCS: Archival of test results and benchmarks
+**Q3: Build Queuing Strategy - ANSWERED: Option C (Smart Queuing)**
+- Quick builds (<5 min estimated): Wait for completion, show progress bar
+- Long builds (>5 min estimated): Queue SLURM job, notify when ready
+- User override: `--wait` or `--queue` flag to force behavior
+- Expected: 90% of builds <10 min, 98% < 30 min (acceptable UX)
 
-**Personnel**:
-- Primary developer: Full-time on Nextflow platform
-- Domain expert: Part-time for pipeline validation
-- System admin: Support for GCP and GPU setup (as needed)
+**Q4: Container Privacy - ANSWERED: Opt-In Sharing**
+- Default: Private containers (user-specific cache)
+- Sharing: Opt-in after validation (admin approval required)
+- Validation: Test imports, version checks, security scan
+- Cache: Shared for common tools (Tier 1-2), private for custom scripts (Tier 3C)
 
----
+**Build Infrastructure Details**:
+- Location: `/scratch/container_cache/` (fast local storage)
+- TTL Enforcement: Daily cron job cleans expired containers
+- Promotion: Popular Tier 3 containers (>10 users) → Tier 2 modules
+- Cache Warming: Pre-build popular tool versions during off-hours
 
-## Conclusion
+### 12.3 AI Agent Architecture Decisions
 
-This new Nextflow-based platform represents a **fundamental architectural shift** from fixed pipelines to **AI-driven, dynamic workflow generation**, leveraging Google Cloud's H100 GPU infrastructure for on-premise AI inference. Key advantages:
+**ContainerStrategyAgent**: Selects optimal container tier
+- Input: User query analysis (tool requirements, version constraints, custom scripts)
+- Logic:
+  1. Check cache for exact match → return existing container (instant)
+  2. Check base + overlay feasibility → Tier 3A (2-3 min)
+  3. Check microservice template → Tier 3B (3-5 min)
+  4. Fall back to JIT → Tier 3C (10-30 min, queued)
+- Output: Container path or build specification + estimated build time
 
-1. **GPU-Accelerated AI**: Self-hosted LLMs on H100s (no API costs, data privacy, <500ms latency)
-2. **User-Centric**: Pipelines tailored to research questions, not forced into templates
-3. **Cloud-Native GCP**: Native integration with Google Batch, Cloud Storage, lifecycle management
-4. **Parallel Systems**: Coexists with Snakemake - users choose best tool for their needs
-5. **Scalable**: Modular architecture supports infinite pipeline combinations (10 users/week → 100s)
-6. **Intelligent**: Multi-agent system with learning from usage patterns
-7. **Maintainable**: Small, tested modules following nf-core best practices
-8. **Quality-Focused**: 14-week thoughtful development over rushed 10-week sprint
+**ContainerBuilderAgent**: Executes container builds
+- Actions:
+  1. Generate Singularity definition file (tool-specific template)
+  2. Submit SLURM job (`sbatch containers/build_container.sh`)
+  3. Monitor build progress (log tailing, status updates)
+  4. Validate container (test imports, version check, security scan)
+  5. Cache with metadata (TTL, usage stats, privacy settings)
+- Fallback: If build fails → use Tier 1-2 base containers → retry with adjustments
+- Notification: Email/Slack when long builds complete
 
-### Strategic Positioning
+**Multi-Agent Coordination**:
+- PipelinePlannerAgent: High-level workflow design (Llama 3.3 70B)
+- ToolSelectorAgent: Chooses best tools for each step (Qwen 2.5 72B)
+- ContainerStrategyAgent: Determines container requirements (rule-based + LLM)
+- ContainerBuilderAgent: Builds containers on-demand (orchestration)
+- ValidatorAgent: Checks pipeline correctness (rule-based + LLM)
 
-**Current State (Snakemake)**:
-- 10 fixed pipelines, fully containerized
-- Works well for standard analyses
-- Difficult to customize or extend
-- Manual parameter tuning required
+### 12.4 Implementation Timeline & Phases (UPDATED)
 
-**Future State (Nextflow + AI)**:
-- Infinite custom pipelines from natural language
-- AI-optimized tool selection and parameters
-- Self-service for researchers (reduced bioinformatics bottleneck)
-- Cloud-ready for scale-out when needed
+**Phase 1: Nextflow Validation (Week 1)** - ✅ COMPLETE
+- Goal: Prove Nextflow viability, validate concurrent execution
+- Achieved: 7-10 concurrent workflows without locking issues
+- Translated: 8-10 pipelines from Snakemake to Nextflow
+- Validated: Multi-user architecture works
+- Discovered: 12 existing comprehensive containers
+- **Outcome**: Nextflow proven superior to Snakemake
 
-**Transition Strategy**:
-- No disruption: Snakemake continues production use
-- Gradual adoption: Early adopters test Nextflow platform
-- Natural migration: Users choose superior system over time
-- No forced timeline: Quality and user satisfaction drive adoption
+**Phase 2: Composition Infrastructure (Weeks 2-3)** - 🔄 IN PROGRESS (REVISED)
+- **DISCARDED**: Building Tier 2 container modules (failed approach)
+- **NEW APPROACH**: Tool catalog + module library using existing containers
+- Week 2 Goals:
+  - Create tool catalog (5000+ tools → container mapping)
+  - Build 15-20 core modules (STAR, BWA, featureCounts, etc.)
+  - Test manual workflow composition
+  - Document usage patterns
+- Week 3 Goals:
+  - Expand to 30-50 modules  
+  - Create 10+ example workflows
+  - User documentation
+  - Validate all existing containers work
+- Deliverable: Module library ready for AI integration
 
-### Success Metrics (6-Month Post-Launch)
+**Phase 3: AI Workflow Composer (Weeks 4-6)** - 🎯 CORE FEATURE
+- Goal: Enable dynamic workflow generation from natural language
+- Week 4: Intent parser + tool selector
+  - Parse user requests ("I want STAR + featureCounts")
+  - Map to appropriate modules and containers
+  - Validate feasibility
+- Week 5: Workflow generator + executor
+  - Generate Nextflow DSL2 code from modules
+  - Parameter optimization
+  - Execute and monitor
+- Week 6: Testing + iteration
+  - Test with 10-20 real user scenarios
+  - Refine intent parsing
+  - Handle edge cases
+- Deliverable: Working AI-driven pipeline generation
+
+**Phase 4: Custom Tool Integration (Weeks 7-8)** - 🚀 ADVANCED
+- Goal: Support user scripts and custom tools
+- Week 7: Overlay system
+  - Mount user scripts into existing containers
+  - 30-second turnaround for simple cases
+  - Documentation and examples
+- Week 8: Extension builder
+  - pip/conda extension of containers (2-5 min)
+  - Custom container builds (last resort, 10-30 min)
+  - Smart caching and reuse
+- Deliverable: Complete custom integration system
+
+**Phase 5: Production & Scale (Weeks 9-10)** - 📈 OPTIONAL
+- Monitoring (Nextflow Tower, dashboards)
+- Cloud burst (Google Batch integration)
+- User training and onboarding
+- Performance optimization
+
+### 12.5 Expected Outcomes & Benefits
+
+**For Researchers**:
+- Self-service pipeline creation (no bioinformatics bottleneck)
+- Version-specific tools (test reproducibility with exact versions)
+- Custom script integration (run proprietary algorithms)
+- Tool comparisons (evaluate multiple methods scientifically)
+- Faster iteration (2-5 min container builds vs hours of environment setup)
+
+**For Administrators**:
+- 75% storage reduction (140 GB vs 1.2 TB)
+- 30% support time reduction (self-service reduces tickets)
+- Scalable architecture (10-100+ concurrent users)
+- Cloud-ready (future GCP burst capacity)
+- Automated maintenance (TTL cleanup, cache warming)
+
+**For Platform**:
+- Infinite pipeline flexibility (vs 12 fixed pipelines)
+- Multi-user concurrent execution (proven with Nextflow)
+- Modular architecture (reusable components)
+- AI-driven intelligence (parameter optimization, tool selection)
+- Production-ready design (robust error handling, validation, monitoring)
+
+### 12.6 Success Criteria (Phase 3 Completion)
 
 **Technical Excellence**:
-- 80%+ AI-generated pipelines run successfully without modification
-- 95%+ pipeline resumption success after failures
-- Results match or exceed Snakemake quality (validated on benchmarks)
-- <1 hour from query to running pipeline (including AI generation)
+- ✓ 8-10 Nextflow pipelines in production (Phase 1)
+- ✓ 10 Tier 2 module containers built (Phase 2)
+- ✓ 95%+ container build success rate (Phase 3)
+- ✓ 90%+ builds complete in <10 min (Phase 3)
+- ✓ Storage under 500 GB budget (all phases)
 
-**User Adoption**:
-- 10 active users/week generating custom pipelines
-- 80%+ user satisfaction score
-- 50%+ of new projects choose Nextflow over Snakemake
-- 20+ unique pipeline types generated (vs 10 fixed Snakemake)
+**User Experience**:
+- ✓ 80%+ query success rate (AI → correct pipeline)
+- ✓ <5 min time to first result (Phase 1-2)
+- ✓ 4/5 satisfaction with container wait times (Phase 3)
+- ✓ 50%+ of new projects choose Nextflow (Phase 3-4)
 
-**Operational Efficiency**:
-- 30%+ reduction in bioinformatics support time (self-service)
-- 20%+ cost reduction through GCS lifecycle management
-- Zero data loss incidents
-- 99%+ system uptime
+**Scientific Quality**:
+- ✓ 100% result reproducibility (Nextflow = Snakemake)
+- ✓ 100% tool version tracking (container immutability)
+- ✓ 100% provenance tracking (Nextflow work/ directory)
 
-### Risk Mitigation
+### 12.7 Reference Documents
 
-**Technical Risks**: Addressed via checkpoints at weeks 3, 9, 13 (go/no-go decisions)
-**User Adoption**: Parallel systems reduce risk, no forced migration
-**GPU Availability**: Dedicated H100 node for AI, no competition with compute jobs
-**Data Privacy**: Self-hosted AI keeps all data on-premise (no cloud APIs)
-**Maintenance Burden**: Modular design and comprehensive docs reduce long-term costs
+**Core Architecture**:
+- `NEXTFLOW_ARCHITECTURE_PLAN.md` (this document) - Master architecture plan
+- `CRITICAL_EVALUATION.md` - Snakemake vs Nextflow comparison (14 sections, Nextflow wins 5/5 criteria)
+- `DYNAMIC_CONTAINER_STRATEGY.md` - Multi-tier container strategy (Q1-Q4 decisions, AI agents, caching)
 
-### Next Decision Points
+**Implementation Guides**:
+- `containers/modules/README.md` - How to build Tier 2 modules (Phase 2)
+- `containers/microservices/README.md` - Microservice templates (Phase 3)
+- `src/agents/README.md` - AI agent implementation guide (Phase 3)
 
-1. **Week 3**: Is GPU AI + Nextflow viable? (Technical validation)
-2. **Week 9**: Are AI agents good enough? (Quality gate: 80% accuracy)
-3. **Week 13**: Ready for production? (User acceptance testing)
-4. **Week 20**: Scale up or pivot? (Based on 6 weeks of real usage)
-
-**Recommendation**: Proceed with 14-week phased development, building the best possible system at our own pace. Quality and user trust are more valuable than speed.
-
----
-
-**Document Status**: Living Document - Update as implementation progresses  
-**Last Updated**: November 23, 2025  
-**Next Review**: After Week 3 Checkpoint (GPU + Nextflow POC)  
-**Approved By**: Development team (stakeholder sign-off pending)
+**Status Tracking**:
+- `PIPELINE_STATUS_FINAL.md` - Current Snakemake pipeline status
+- `nextflow-pipelines/STATUS.md` - Nextflow translation progress (Phase 1)
 
 ---
 
