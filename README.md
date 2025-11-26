@@ -1,32 +1,54 @@
 # BioPipelines
 
-A comprehensive, production-ready bioinformatics repository for NGS and genomic data analysis pipelines.
+> **AI-Powered Bioinformatics Workflow Generation**  
+> Natural language → Production Nextflow pipelines → Results
+
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
+[![Nextflow](https://img.shields.io/badge/nextflow-DSL2-green.svg)](https://www.nextflow.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+## 🚀 Quick Start (30 seconds)
+
+```bash
+# 1. Activate environment
+conda activate biopipelines
+
+# 2. Set API key (Lightning.ai is FREE - 30M tokens!)
+export LIGHTNING_API_KEY="your-key"
+
+# 3. Launch web interface
+./scripts/start_gradio.sh
+
+# 4. Open browser and type:
+#    "RNA-seq differential expression for mouse, paired-end reads"
+```
+
+📖 **[Complete Architecture & Guide](docs/ARCHITECTURE_AND_GUIDE.md)** - Everything in one document
+
+---
 
 ## Features
 
 ### 🤖 AI-Powered Workflow Composer
 
-Generate production-ready Nextflow pipelines from natural language descriptions:
+Generate production-ready Nextflow pipelines from natural language:
 
 ```python
 from workflow_composer import Composer
-from workflow_composer.llm import get_llm
 
-# Use OpenAI GPT-4o or local vLLM with Llama/Mistral
-composer = Composer(llm=get_llm("openai"))  # or "vllm"
-
+composer = Composer()  # Uses Lightning.ai by default (FREE)
 workflow = composer.generate(
-    "RNA-seq differential expression for mouse, paired-end, treatment vs control"
+    "RNA-seq differential expression for mouse, treatment vs control"
 )
 workflow.save("my_rnaseq_workflow/")
 ```
 
 **LLM Providers:**
-- ✅ **OpenAI** - GPT-4o, GPT-4-turbo (cloud)
-- ✅ **vLLM** - Llama 3.1, Mistral, Qwen on GPUs (self-hosted)
-- ✅ **HuggingFace** - API, transformers, or vLLM backend
-- ✅ **Anthropic** - Claude 3.5 Sonnet, Opus
-- ✅ **Ollama** - Local models
+- ⚡ **Lightning.ai** - 30M FREE tokens! (default)
+- 🟢 **OpenAI** - GPT-4o, GPT-4-turbo
+- 🔵 **Anthropic** - Claude 3.5 Sonnet, Opus
+- 🟠 **Ollama** - Local models (llama3, mistral)
+- 🟣 **vLLM** - GPU-accelerated local inference
 
 See [LLM Setup Guide](docs/LLM_SETUP.md) for configuration.
 
@@ -196,40 +218,30 @@ See [Workflow Composer Guide](docs/WORKFLOW_COMPOSER_GUIDE.md) for detailed docu
 
 ## Documentation
 
-- **[LLM Setup Guide](docs/LLM_SETUP.md)** - Configure OpenAI/vLLM
-- **[Workflow Composer Guide](docs/WORKFLOW_COMPOSER_GUIDE.md)** - Full API reference
-- **[Tutorials](docs/TUTORIALS.md)** - Step-by-step guides
-- **[Composition Patterns](docs/COMPOSITION_PATTERNS.md)** - 27 workflow examples
-- **[Architecture Review](ARCHITECTURE_REVIEW.md)** - Codebase organization
+📖 **[Architecture & Complete Guide](docs/ARCHITECTURE_AND_GUIDE.md)** - Start here! One document with everything.
 
-### Quick Links
-- [LLM Setup](docs/LLM_SETUP.md)
-- [Workflow Tutorials](docs/TUTORIALS.md)
-- [Troubleshooting Guide](docs/status/CLEANUP_COMPLETED.md)
+### Additional References
+- [LLM Setup Guide](docs/LLM_SETUP.md) - Configure API keys
+- [Container Architecture](docs/CONTAINER_ARCHITECTURE.md) - Singularity containers
+- [Quick Start Containers](docs/QUICK_START_CONTAINERS.md) - Build instructions
 
 ## Requirements
 
 - Python >= 3.10
 - Conda/Mamba
-- Snakemake >= 7.30
-- See `environment.yml` for complete list
+- Nextflow >= 23.0
+- Singularity >= 3.8
+- SLURM (for HPC execution)
 
 ## Contributing
 
-Contributions are welcome! Please read our contributing guidelines.
+Contributions welcome! Please open an issue first to discuss changes.
 
 ## License
 
-MIT License - see LICENSE file for details.
-
-## Citation
-
-If you use BioPipelines in your research, please cite:
-```
-[Citation to be added]
-```
+MIT License - see [LICENSE](LICENSE) for details.
 
 ## Contact
 
-For questions and support, please open an issue on GitHub.
-# BioPipelines
+For questions, please open an issue on GitHub.
+
