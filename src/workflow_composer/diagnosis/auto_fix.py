@@ -2,7 +2,7 @@
 Auto-fix execution engine for applying suggested fixes.
 
 Handles safe automatic fixes and user-confirmed fixes with
-proper logging and rollback capabilities.
+proper logging, rollback capabilities, and history tracking.
 """
 
 import os
@@ -120,6 +120,7 @@ class AutoFixEngine:
         dry_run: bool = False,
         log_dir: Optional[Path] = None,
         max_execution_time: int = 300,
+        track_history: bool = True,
     ):
         """
         Initialize the auto-fix engine.
@@ -128,14 +129,46 @@ class AutoFixEngine:
             dry_run: If True, don't actually execute commands
             log_dir: Directory for fix logs
             max_execution_time: Max seconds for command execution
+            track_history: Whether to record fix results to history
         """
         self.dry_run = dry_run
         self.log_dir = log_dir or Path("logs/auto_fix")
         self.max_execution_time = max_execution_time
+        self.track_history = track_history
         self.sessions: Dict[str, FixSession] = {}
+        self._history = None
+        
+        if track_history:
+            try:
+                from .history import get_diagnosis_history
+                self._history = get_diagnosis_history()
+            except Exception as e:
+                logger.warning(f"Failed to load history for fix tracking: {e}")
         
         # Ensure log directory exists
         self.log_dir.mkdir(parents=True, exist_ok=True)
+    
+    def _record_fix_result(
+        self,
+        job_id: str,
+        fix: FixSuggestion,
+        success: bool,
+        notes: str = ""
+    ) -> None:
+        """Record fix result to history for learning."""
+        if not self._history:
+            return
+        
+        try:
+            self._history.update_resolution(
+                job_id=job_id,
+                fix_applied=fix.description,
+                fix_success=success,
+                notes=notes,
+            )
+            logger.debug(f"Recorded fix result for {job_id}: {success}")
+        except Exception as e:
+            logger.warning(f"Failed to record fix result: {e}")
     
     async def execute(
         self,
@@ -259,11 +292,21 @@ class AutoFixEngine:
             List of FixResult for each attempted fix
         """
         results = []
+        job_id = context.get("job_id", "unknown") if context else "unknown"
         
         for fix in diagnosis.suggested_fixes:
             if fix.risk_level == FixRiskLevel.SAFE or fix.auto_executable:
                 result = await self.execute(fix, context, confirmed=False)
                 results.append(result)
+                
+                # Record to history for learning
+                if self.track_history and not self.dry_run:
+                    self._record_fix_result(
+                        job_id=job_id,
+                        fix=fix,
+                        success=result.success,
+                        notes=result.message,
+                    )
                 
                 # Stop on first success (usually that's the main fix)
                 if result.success:
@@ -290,12 +333,22 @@ class AutoFixEngine:
             List of FixResult
         """
         results = []
+        job_id = context.get("job_id", "unknown") if context else "unknown"
         
         for idx in fix_indices:
             if 0 <= idx < len(diagnosis.suggested_fixes):
                 fix = diagnosis.suggested_fixes[idx]
                 result = await self.execute(fix, context, confirmed=True)
                 results.append(result)
+                
+                # Record to history for learning
+                if self.track_history and not self.dry_run:
+                    self._record_fix_result(
+                        job_id=job_id,
+                        fix=fix,
+                        success=result.success,
+                        notes=result.message,
+                    )
         
         return results
     

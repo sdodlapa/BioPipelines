@@ -94,6 +94,15 @@ ERROR_PATTERNS: Dict[ErrorCategory, ErrorPattern] = {
             r"mmap: Cannot allocate memory",
             r"ENOMEM",
             r"Insufficient memory",
+            # Nextflow-specific OOM patterns
+            r"Process requirement exceeds available memory",
+            r"req: \d+ GB; avail: \d+ GB",
+            r"exit status:\s*137",  # OOM kill exit code
+            r"exit code:\s*137",
+            r"Command exit status:\s*137",
+            r"killed by signal 9",  # SIGKILL from OOM
+            r"oom_reaper",
+            r"invoked oom-killer",
         ],
         description="The process ran out of available memory",
         common_causes=[
@@ -145,6 +154,14 @@ ERROR_PATTERNS: Dict[ErrorCategory, ErrorPattern] = {
             r"failed to resolve reference",
             r"pull access denied",
             r"FATAL:.*Unable to",
+            # Additional patterns for container issues
+            r"Singularity cannot find",
+            r"cannot find the container",
+            r"container.*not found",
+            r"no such file.*\.sif",
+            r"unable to find container",
+            r"image.*does not exist",
+            r"docker pull.*failed",
         ],
         description="Container (Singularity/Docker) error",
         common_causes=[
@@ -243,15 +260,37 @@ ERROR_PATTERNS: Dict[ErrorCategory, ErrorPattern] = {
             r"which: no (.+) in",
             r"(.+): not found",
             r"No module named (.+)",
+            # Conda/Mamba dependency resolution failures
+            r"LibMambaUnsatisfiableError",
+            r"Could not solve for environment specs",
+            r"Encountered problems while solving",
+            r"The following packages are incompatible",
+            r"package .+ requires .+, but none of the providers can be installed",
+            r"CreateCondaEnvironmentException",
+            r"Could not create conda environment",
+            r"ResolvePackageNotFound",
+            r"UnsatisfiableError",
+            r"PackagesNotFoundError",
+            r"EnvironmentCreationError",
+            r"conda env create.*failed",
+            r"mamba create.*failed",
+            r"Solving environment:.*failed",
+            # Snakemake environment issues
+            r"Creating conda environment.*\n.*Exception",
+            r"Failed to create conda environment",
         ],
-        description="A required software dependency is missing",
+        description="A required software dependency is missing or incompatible",
         common_causes=[
             "Python package not installed",
             "Tool not in PATH",
             "Module not loaded",
             "Conda environment not activated",
+            "Incompatible package versions in environment.yml",
+            "Package not available in specified conda channels",
+            "Dependency conflict between packages",
+            "Old/stale conda cache causing resolution issues",
         ],
-        keywords=["module", "import", "package", "command", "found"],
+        keywords=["module", "import", "package", "command", "found", "conda", "mamba", "environment", "solve", "incompatible"],
         suggested_fixes=[
             FixSuggestion(
                 description="Check if tool exists in container",
@@ -274,6 +313,37 @@ ERROR_PATTERNS: Dict[ErrorCategory, ErrorPattern] = {
             FixSuggestion(
                 description="Install missing Python package",
                 command="pip install {package}",
+                risk_level=FixRiskLevel.MEDIUM,
+                auto_executable=False,
+            ),
+            # Conda dependency resolution fixes
+            FixSuggestion(
+                description="Clear conda cache and retry",
+                command="conda clean --all --yes",
+                risk_level=FixRiskLevel.SAFE,
+                auto_executable=True,
+            ),
+            FixSuggestion(
+                description="Remove conflicting Snakemake conda environment",
+                command="rm -rf .snakemake/conda/*",
+                risk_level=FixRiskLevel.MEDIUM,
+                auto_executable=True,
+            ),
+            FixSuggestion(
+                description="Use mamba for faster dependency resolution",
+                command="conda install -n base mamba && snakemake --use-conda --conda-frontend mamba",
+                risk_level=FixRiskLevel.MEDIUM,
+                auto_executable=False,
+            ),
+            FixSuggestion(
+                description="Pin problematic package to specific version in environment.yml",
+                command="# Edit environment.yml to pin package versions",
+                risk_level=FixRiskLevel.MEDIUM,
+                auto_executable=False,
+            ),
+            FixSuggestion(
+                description="Use --use-singularity instead of --use-conda",
+                command="snakemake --use-singularity --singularity-args '-B /scratch'",
                 risk_level=FixRiskLevel.MEDIUM,
                 auto_executable=False,
             ),

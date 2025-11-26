@@ -4,7 +4,8 @@ Main Error Diagnosis Agent.
 Provides AI-powered error diagnosis for bioinformatics workflow failures
 using a tiered approach:
 1. Pattern matching (fast, offline)
-2. LLM analysis (comprehensive, contextual)
+2. Historical learning (boost confidence from past diagnoses)
+3. LLM analysis (comprehensive, contextual)
 """
 
 import re
@@ -28,6 +29,7 @@ from .prompts import (
     SYSTEM_PROMPT_DIAGNOSIS,
     build_diagnosis_prompt,
 )
+from .history import get_diagnosis_history, record_diagnosis, DiagnosisHistory
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +97,8 @@ class ErrorDiagnosisAgent:
         llm=None,
         provider_priority: List[str] = None,
         pattern_confidence_threshold: float = 0.75,
+        enable_history: bool = True,
+        history_boost_factor: float = 0.1,
     ):
         """
         Initialize the diagnosis agent.
@@ -103,6 +107,8 @@ class ErrorDiagnosisAgent:
             llm: Pre-configured LLM adapter (optional)
             provider_priority: Ordered list of LLM providers to try
             pattern_confidence_threshold: Min confidence to use pattern match
+            enable_history: Whether to use historical learning
+            history_boost_factor: How much to boost confidence from history (0.0-0.2)
         """
         self.llm = llm
         self.provider_priority = provider_priority or [
@@ -115,6 +121,150 @@ class ErrorDiagnosisAgent:
         self.pattern_confidence_threshold = pattern_confidence_threshold
         self.log_collector = LogCollector()
         self._llm_cache = {}
+        
+        # History-based learning
+        self.enable_history = enable_history
+        self.history_boost_factor = min(0.2, max(0.0, history_boost_factor))
+        self._history: Optional[DiagnosisHistory] = None
+        if enable_history:
+            try:
+                self._history = get_diagnosis_history()
+            except Exception as e:
+                logger.warning(f"Failed to load diagnosis history: {e}")
+    
+    def _get_historical_confidence_boost(self, category: ErrorCategory) -> float:
+        """
+        Get confidence boost based on historical success rate.
+        
+        Args:
+            category: Error category to check
+            
+        Returns:
+            Confidence boost value (0.0 to history_boost_factor)
+        """
+        if not self._history:
+            return 0.0
+        
+        try:
+            success_rates = self._history.get_fix_success_rate()
+            cat_success = success_rates.get(category.value, 0.0)
+            
+            # Also check how often this category appears (frequency)
+            category_counts = self._history.get_common_errors(20)
+            total = sum(c["count"] for c in category_counts)
+            cat_count = next(
+                (c["count"] for c in category_counts if c["category"] == category.value),
+                0
+            )
+            frequency_factor = cat_count / total if total > 0 else 0.0
+            
+            # Boost = success_rate * frequency_factor * boost_factor
+            # High success rate + high frequency = more confident
+            boost = cat_success * frequency_factor * self.history_boost_factor
+            
+            if boost > 0:
+                logger.debug(
+                    f"Historical boost for {category.value}: {boost:.3f} "
+                    f"(success={cat_success:.2f}, freq={frequency_factor:.2f})"
+                )
+            
+            return boost
+        except Exception as e:
+            logger.warning(f"Error calculating historical boost: {e}")
+            return 0.0
+    
+    def _get_historical_fixes(self, category: ErrorCategory) -> List[str]:
+        """
+        Get fixes that have worked for this category in the past.
+        
+        Args:
+            category: Error category
+            
+        Returns:
+            List of successful fix descriptions
+        """
+        if not self._history:
+            return []
+        
+        try:
+            records = self._history.get_by_category(category.value)
+            successful = [
+                r.fix_applied for r in records
+                if r.fix_success and r.fix_applied
+            ]
+            # Return unique fixes, most recent first
+            seen = set()
+            unique = []
+            for fix in reversed(successful):
+                if fix not in seen:
+                    seen.add(fix)
+                    unique.append(fix)
+            return unique[:5]  # Top 5 successful fixes
+        except Exception:
+            return []
+    
+    def _record_diagnosis(self, diagnosis: ErrorDiagnosis, job) -> None:
+        """Record diagnosis to history for future learning."""
+        if not self._history:
+            return
+        
+        try:
+            record_diagnosis(
+                diagnosis=diagnosis,
+                job_id=getattr(job, 'job_id', 'unknown'),
+                workflow_name=getattr(job, 'workflow_name', 'Unknown'),
+            )
+        except Exception as e:
+            logger.warning(f"Failed to record diagnosis: {e}")
+    
+    def _enhance_with_history(self, diagnosis: ErrorDiagnosis) -> ErrorDiagnosis:
+        """
+        Enhance diagnosis with historical learning.
+        
+        Args:
+            diagnosis: Original diagnosis
+            
+        Returns:
+            Enhanced diagnosis with boosted confidence and historical fixes
+        """
+        if not self._history:
+            return diagnosis
+        
+        # Boost confidence based on historical success
+        history_boost = self._get_historical_confidence_boost(diagnosis.category)
+        boosted_confidence = min(0.99, diagnosis.confidence + history_boost)
+        
+        # Get historically successful fixes
+        historical_fixes = self._get_historical_fixes(diagnosis.category)
+        
+        # Add note about historical learning
+        enhanced_explanation = diagnosis.user_explanation
+        if history_boost > 0:
+            enhanced_explanation += (
+                f"\n\n📊 *Historical confidence boost: +{history_boost:.1%} "
+                f"based on past successful diagnoses.*"
+            )
+        
+        if historical_fixes:
+            enhanced_explanation += (
+                f"\n\n✅ *Previously successful fixes for this error type:*\n"
+                + "\n".join(f"  • {fix}" for fix in historical_fixes[:3])
+            )
+        
+        # Create enhanced diagnosis
+        return ErrorDiagnosis(
+            category=diagnosis.category,
+            confidence=boosted_confidence,
+            root_cause=diagnosis.root_cause,
+            user_explanation=enhanced_explanation,
+            log_excerpt=diagnosis.log_excerpt,
+            suggested_fixes=diagnosis.suggested_fixes,
+            pattern_matched=diagnosis.pattern_matched,
+            failed_process=diagnosis.failed_process,
+            work_directory=diagnosis.work_directory,
+            llm_provider_used=diagnosis.llm_provider_used,
+            historical_boost=history_boost,
+        )
     
     async def diagnose(self, job) -> ErrorDiagnosis:
         """
@@ -136,26 +286,38 @@ class ErrorDiagnosisAgent:
         # Step 2: Try pattern matching first (fast)
         pattern_result = self._match_patterns(logs)
         
+        # Step 3: Apply historical learning boost
+        if pattern_result and self.enable_history:
+            pattern_result = self._enhance_with_history(pattern_result)
+        
         if pattern_result and pattern_result.confidence >= self.pattern_confidence_threshold:
             logger.info(
                 f"Pattern match found: {pattern_result.category.value} "
                 f"(confidence: {pattern_result.confidence:.0%})"
             )
+            # Record for future learning
+            self._record_diagnosis(pattern_result, job)
             return pattern_result
         
-        # Step 3: Use LLM for complex errors
+        # Step 4: Use LLM for complex errors
         llm = self._get_available_llm()
         if llm:
             try:
                 logger.info(f"Using LLM for deep analysis...")
                 llm_result = await self._llm_diagnosis(logs, job, llm)
                 if llm_result and llm_result.confidence > 0.5:
+                    # Apply historical enhancement to LLM result too
+                    if self.enable_history:
+                        llm_result = self._enhance_with_history(llm_result)
+                    # Record for future learning
+                    self._record_diagnosis(llm_result, job)
                     return llm_result
             except Exception as e:
                 logger.warning(f"LLM diagnosis failed: {e}")
         
-        # Step 4: Return pattern result or unknown
+        # Step 5: Return pattern result or unknown
         if pattern_result:
+            self._record_diagnosis(pattern_result, job)
             return pattern_result
         
         return self._create_unknown_diagnosis(logs)
@@ -195,6 +357,92 @@ class ErrorDiagnosisAgent:
             return result
         
         return self._create_unknown_diagnosis(logs)
+    
+    async def diagnose_from_logs_with_llm(self, log_text: str) -> ErrorDiagnosis:
+        """
+        Full diagnosis from raw log text including LLM analysis.
+        
+        Args:
+            log_text: Raw log content
+            
+        Returns:
+            ErrorDiagnosis with LLM-enhanced analysis if available
+        """
+        logs = CollectedLogs(nextflow_log=log_text)
+        
+        # Step 1: Try pattern matching first
+        pattern_result = self._match_patterns(logs)
+        
+        if pattern_result and pattern_result.confidence >= self.pattern_confidence_threshold:
+            logger.info(
+                f"Pattern match found: {pattern_result.category.value} "
+                f"(confidence: {pattern_result.confidence:.0%})"
+            )
+            # Still enhance with LLM if available for better explanation
+            llm = self._get_available_llm()
+            if llm:
+                try:
+                    # Create mock job for LLM context
+                    class MockJob:
+                        job_id = "log_analysis"
+                        workflow_name = "unknown"
+                        workflow_dir = "."
+                        slurm_job_id = None
+                        error_message = log_text[:500]
+                    
+                    enhanced = await self._llm_diagnosis(logs, MockJob(), llm)
+                    if enhanced and enhanced.confidence > pattern_result.confidence:
+                        return enhanced
+                except Exception as e:
+                    logger.warning(f"LLM enhancement failed: {e}")
+            
+            return pattern_result
+        
+        # Step 2: Use LLM for complex/unmatched errors
+        llm = self._get_available_llm()
+        if llm:
+            try:
+                logger.info(f"Using LLM for deep analysis...")
+                class MockJob:
+                    job_id = "log_analysis"
+                    workflow_name = "unknown"
+                    workflow_dir = "."
+                    slurm_job_id = None
+                    error_message = log_text[:500]
+                
+                llm_result = await self._llm_diagnosis(logs, MockJob(), llm)
+                if llm_result and llm_result.confidence > 0.5:
+                    return llm_result
+            except Exception as e:
+                logger.warning(f"LLM diagnosis failed: {e}")
+        
+        # Step 3: Return pattern result or unknown
+        if pattern_result:
+            return pattern_result
+        
+        return self._create_unknown_diagnosis(logs)
+    
+    def diagnose_from_logs_sync(self, log_text: str, use_llm: bool = False) -> ErrorDiagnosis:
+        """
+        Synchronous diagnosis from raw log text.
+        
+        Args:
+            log_text: Raw log content
+            use_llm: Whether to use LLM for enhanced analysis
+            
+        Returns:
+            ErrorDiagnosis
+        """
+        if not use_llm:
+            return self.diagnose_from_logs(log_text)
+        
+        try:
+            loop = asyncio.get_event_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        return loop.run_until_complete(self.diagnose_from_logs_with_llm(log_text))
     
     def _match_patterns(self, logs: CollectedLogs) -> Optional[ErrorDiagnosis]:
         """
@@ -311,20 +559,20 @@ class ErrorDiagnosisAgent:
         if self.llm:
             return self.llm
         
-        # Try to import and check providers
+        # Try to use new unified providers
         try:
-            from ..llm import check_providers, get_llm
+            from ..providers import get_provider, check_providers, get_available_providers
             
-            available = check_providers()
+            available = get_available_providers()
             
             for provider in self.provider_priority:
-                if available.get(provider):
+                if provider in available:
                     # Check cache first
                     if provider in self._llm_cache:
                         return self._llm_cache[provider]
                     
                     try:
-                        llm = get_llm(provider)
+                        llm = get_provider(provider)
                         self._llm_cache[provider] = llm
                         logger.info(f"Using LLM provider: {provider}")
                         return llm
@@ -332,7 +580,27 @@ class ErrorDiagnosisAgent:
                         logger.debug(f"Failed to initialize {provider}: {e}")
                         continue
         except ImportError:
-            logger.debug("LLM module not available")
+            # Fallback to old llm module
+            try:
+                from ..llm import check_providers as llm_check, get_llm
+                
+                available = llm_check()
+                
+                for provider in self.provider_priority:
+                    if available.get(provider):
+                        if provider in self._llm_cache:
+                            return self._llm_cache[provider]
+                        
+                        try:
+                            llm = get_llm(provider)
+                            self._llm_cache[provider] = llm
+                            logger.info(f"Using LLM provider: {provider}")
+                            return llm
+                        except Exception as e:
+                            logger.debug(f"Failed to initialize {provider}: {e}")
+                            continue
+            except ImportError:
+                logger.debug("Neither providers nor llm module available")
         
         return None
     
@@ -353,11 +621,15 @@ class ErrorDiagnosisAgent:
         Returns:
             ErrorDiagnosis or None
         """
+        # Try new providers Message, fallback to llm Message
         try:
-            from ..llm import Message
+            from ..providers import Message
         except ImportError:
-            logger.warning("Message class not available")
-            return None
+            try:
+                from ..llm import Message
+            except ImportError:
+                logger.warning("Message class not available")
+                return None
         
         # Build context
         workflow_name = getattr(job, 'name', 'Unknown')
@@ -521,15 +793,16 @@ def diagnose_job(job) -> ErrorDiagnosis:
     return agent.diagnose_sync(job)
 
 
-def diagnose_log(log_text: str) -> ErrorDiagnosis:
+def diagnose_log(log_text: str, use_llm: bool = False) -> ErrorDiagnosis:
     """
     Convenience function to diagnose from log text.
     
     Args:
         log_text: Raw log content
+        use_llm: Whether to use LLM for enhanced analysis (default: False)
         
     Returns:
         ErrorDiagnosis
     """
     agent = ErrorDiagnosisAgent()
-    return agent.diagnose_from_logs(log_text)
+    return agent.diagnose_from_logs_sync(log_text, use_llm=use_llm)

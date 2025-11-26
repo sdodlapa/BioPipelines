@@ -42,15 +42,35 @@ class CollectedLogs:
         
         # Extract error lines from Nextflow log
         if self.nextflow_log:
-            error_keywords = ['error', 'fail', 'exception', 'fatal', 'abort', 'halt']
-            lines = self.nextflow_log.split('\n')
-            error_lines = [
-                l for l in lines 
-                if any(kw in l.lower() for kw in error_keywords)
+            error_keywords = [
+                'error', 'fail', 'exception', 'fatal', 'abort', 'halt',
+                'caused by', 'singularity', 'container', 'cannot', 'not found',
+                'permission', 'denied', 'memory', 'killed', 'timeout', 'invalid',
+                'missing', 'no such', 'work dir', 'exit status', 'exit code',
             ]
+            lines = self.nextflow_log.split('\n')
+            error_lines = []
+            in_error_block = False
+            
+            for i, line in enumerate(lines):
+                line_lower = line.lower()
+                
+                # Detect start of error block
+                if any(kw in line_lower for kw in error_keywords):
+                    in_error_block = True
+                
+                # Include lines in error blocks or with context
+                if in_error_block:
+                    error_lines.append(line)
+                    # End block after empty line or reasonable context
+                    if not line.strip() and len(error_lines) > 3:
+                        in_error_block = False
+                    elif len(error_lines) > 30:
+                        in_error_block = False
+            
             if error_lines:
                 sections.append(
-                    f"### Nextflow Errors:\n```\n{chr(10).join(error_lines[-30:])}\n```"
+                    f"### Nextflow Errors:\n```\n{chr(10).join(error_lines[-50:])}\n```"
                 )
         
         # Include SLURM error

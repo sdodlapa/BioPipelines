@@ -95,6 +95,7 @@ class ErrorDiagnosis:
     failed_process: Optional[str] = None
     work_directory: Optional[str] = None
     similar_issues: List[str] = field(default_factory=list)
+    historical_boost: float = 0.0  # Confidence boost from historical learning
     
     @property
     def is_confident(self) -> bool:
@@ -130,4 +131,5 @@ class ErrorDiagnosis:
             "llm_provider_used": self.llm_provider_used,
             "pattern_matched": self.pattern_matched,
             "failed_process": self.failed_process,
+            "historical_boost": self.historical_boost,
         }
