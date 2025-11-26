@@ -82,6 +82,32 @@ except ImportError:
     FixRiskLevel = None
     print("Note: Error diagnosis agent not available.")
 
+# Import results visualization
+try:
+    from workflow_composer.results import (
+        ResultCollector,
+        ResultViewer,
+        ResultArchiver,
+    )
+    RESULTS_AVAILABLE = True
+except ImportError:
+    RESULTS_AVAILABLE = False
+    ResultCollector = None
+    ResultViewer = None
+    ResultArchiver = None
+    print("Note: Results visualization not available.")
+
+# Import data discovery
+try:
+    from workflow_composer.data.discovery import DataDiscovery, SearchQuery
+    from workflow_composer.data.browser import create_reference_browser_tab
+    DISCOVERY_AVAILABLE = True
+except ImportError:
+    DISCOVERY_AVAILABLE = False
+    DataDiscovery = None
+    create_reference_browser_tab = None
+    print("Note: Data discovery not available.")
+
 
 # ============================================================================
 # Pipeline Execution Classes
@@ -1859,6 +1885,297 @@ def refresh_monitoring() -> Tuple[str, str]:
 
 
 # ============================================================================
+# Results Visualization Functions
+# ============================================================================
+
+def get_completed_job_results_dirs() -> List[str]:
+    """Get list of result directories from completed jobs."""
+    result_dirs = []
+    
+    # Check completed jobs from executor
+    for job in pipeline_executor.list_jobs():
+        if job.status == JobStatus.COMPLETED and job.workflow_dir:
+            results_path = Path(job.workflow_dir) / "results"
+            if results_path.exists():
+                result_dirs.append(str(results_path))
+    
+    # Also check generated workflows for results
+    if GENERATED_DIR.exists():
+        for workflow_dir in GENERATED_DIR.iterdir():
+            if workflow_dir.is_dir():
+                results_path = workflow_dir / "results"
+                if results_path.exists() and str(results_path) not in result_dirs:
+                    result_dirs.append(str(results_path))
+    
+    # Check standard data/results path
+    data_results = BASE_DIR / "data" / "results"
+    if data_results.exists() and str(data_results) not in result_dirs:
+        result_dirs.insert(0, str(data_results))
+    
+    return result_dirs[:20]  # Limit to 20
+
+
+def scan_results_directory(results_dir: str, pipeline_type: str = "") -> Tuple[str, str, Any]:
+    """
+    Scan a results directory and return summary.
+    
+    Returns:
+        Tuple of (summary_markdown, file_tree_html, summary_data)
+    """
+    if not RESULTS_AVAILABLE:
+        return "⚠️ Results module not available.", "", None
+    
+    if not results_dir:
+        return "*Select a results directory to scan*", "", None
+    
+    results_path = Path(results_dir)
+    if not results_path.exists():
+        return f"❌ Directory not found: `{results_dir}`", "", None
+    
+    try:
+        collector = ResultCollector(pipeline_type=pipeline_type if pipeline_type else None)
+        summary = collector.scan(results_path)
+        
+        # Format summary as markdown
+        md = f"""## 📊 Results Summary
+
+**Directory:** `{results_dir}`
+
+| Metric | Value |
+|--------|-------|
+| **Total Files** | {summary.total_files:,} |
+| **Total Size** | {summary.size_human} |
+| **Downloadable** | {summary.downloadable_size_human} |
+
+### 📁 Files by Category
+"""
+        
+        category_icons = {
+            'qc_reports': '📋',
+            'visualizations': '📊',
+            'data_files': '📄',
+            'alignments': '🧬',
+            'logs': '📝',
+            'other': '📦',
+        }
+        
+        # Use the category summary from the model
+        category_summary = summary.get_category_summary()
+        for cat_name, count in category_summary.items():
+            if count > 0:
+                icon = category_icons.get(cat_name, '📦')
+                md += f"- {icon} **{cat_name.replace('_', ' ').title()}**: {count} files\n"
+        
+        # Show MultiQC if available
+        if summary.has_multiqc:
+            md += f"\n### ✨ Key Files\n"
+            md += f"- 📊 **MultiQC Report**: `{summary.multiqc_report.name}`\n"
+        
+        if summary.fastqc_reports:
+            md += f"- 📋 **FastQC Reports**: {len(summary.fastqc_reports)} files\n"
+        
+        # Build file tree HTML
+        file_tree = _build_file_tree_html(summary.file_tree, summary.all_files)
+        
+        return md, file_tree, summary
+        
+    except Exception as e:
+        import traceback
+        logger.error(f"Error scanning {results_dir}: {traceback.format_exc()}")
+        return f"❌ Error scanning directory: {str(e)}", "", None
+
+
+def _build_file_tree_html(tree_node, files: list, depth: int = 0) -> str:
+    """Build HTML representation of file tree."""
+    if tree_node is None:
+        return ""
+    
+    indent = "  " * depth
+    html = ""
+    
+    if tree_node.is_dir:
+        icon = "📁" if depth > 0 else "📂"
+        html += f"{indent}<details open><summary>{icon} <b>{tree_node.name}</b></summary>\n"
+        
+        # Sort children: directories first, then files
+        sorted_children = sorted(
+            tree_node.children,
+            key=lambda x: (not x.is_dir, x.name.lower())
+        )
+        
+        for child in sorted_children[:50]:  # Limit to 50 items per level
+            html += _build_file_tree_html(child, files, depth + 1)
+        
+        if len(tree_node.children) > 50:
+            html += f"{indent}  <div>... and {len(tree_node.children) - 50} more items</div>\n"
+        
+        html += f"{indent}</details>\n"
+    else:
+        # Find file info for size
+        size_str = ""
+        for f in files:
+            if f.name == tree_node.name:
+                size_str = f" ({f.size_human})"
+                break
+        
+        type_icons = {
+            'html': '🌐', 'png': '🖼️', 'jpg': '🖼️', 'pdf': '📕',
+            'csv': '📊', 'tsv': '📊', 'txt': '📄', 'log': '📝',
+            'bam': '🧬', 'vcf': '🧬', 'h5ad': '🔬', 'gz': '📦',
+        }
+        
+        ext = tree_node.name.split('.')[-1].lower() if '.' in tree_node.name else ''
+        icon = type_icons.get(ext, '📄')
+        
+        html += f'{indent}<div style="margin-left: 20px;">{icon} {tree_node.name}{size_str}</div>\n'
+    
+    return html
+
+
+def view_result_file(results_dir: str, file_path: str) -> Tuple[str, str, Any]:
+    """
+    View a specific result file.
+    
+    Returns:
+        Tuple of (content_type, content_markdown, content_component)
+    """
+    if not RESULTS_AVAILABLE:
+        return "text", "⚠️ Results module not available.", None
+    
+    if not file_path:
+        return "text", "*Select a file to view*", None
+    
+    try:
+        from workflow_composer.results.result_types import ResultFile, FileType, ResultCategory
+        from datetime import datetime
+        
+        viewer = ResultViewer()
+        
+        # Handle relative paths
+        if not os.path.isabs(file_path):
+            full_path = Path(results_dir) / file_path
+        else:
+            full_path = Path(file_path)
+        
+        if not full_path.exists():
+            return "text", f"❌ File not found: `{file_path}`", None
+        
+        # Create a ResultFile object for the viewer
+        from workflow_composer.results.detector import detect_file_type
+        file_type, category = detect_file_type(full_path)
+        stat = full_path.stat()
+        
+        result_file = ResultFile(
+            path=full_path,
+            name=full_path.name,
+            relative_path=file_path,
+            size=stat.st_size,
+            file_type=file_type,
+            category=category,
+            modified=datetime.fromtimestamp(stat.st_mtime),
+        )
+        
+        # Render the file
+        viewer_content = viewer.render(result_file)
+        
+        content_type = viewer_content.content_type
+        content = viewer_content.content
+        
+        # Handle errors
+        if viewer_content.is_error:
+            return "text", f"❌ {viewer_content.error}", None
+        
+        # Format based on type
+        if content_type == 'html':
+            return "html", content, None
+        elif content_type == 'image':
+            return "image", f"📷 **Image:** `{full_path.name}`", str(content)
+        elif content_type == 'table':
+            # Convert DataFrame to markdown
+            try:
+                md_table = content.head(50).to_markdown() if hasattr(content, 'to_markdown') else str(content)
+                return "table", md_table, None
+            except Exception:
+                return "text", str(content), None
+        elif content_type == 'pdf':
+            return "text", f"📕 **PDF Document:** `{full_path.name}`\n\n*Download to view.*", None
+        elif content_type in ('markdown', 'json', 'text'):
+            return "text", f"```\n{content}\n```" if content_type != 'markdown' else content, None
+        else:
+            # Default text rendering
+            if isinstance(content, str):
+                return "text", f"```\n{content[:5000]}\n```", None
+            else:
+                return "text", f"```\n{str(content)[:5000]}\n```", None
+            
+    except Exception as e:
+        import traceback
+        logger.error(f"Error viewing file: {traceback.format_exc()}")
+        return "text", f"❌ Error viewing file: {str(e)}", None
+
+
+def create_results_archive(results_dir: str, categories: List[str] = None) -> Optional[str]:
+    """
+    Create a downloadable archive of results.
+    
+    Returns:
+        Path to the created ZIP file, or None on error
+    """
+    if not RESULTS_AVAILABLE:
+        return None
+    
+    if not results_dir:
+        return None
+    
+    try:
+        archiver = ResultArchiver()
+        zip_path = archiver.create_archive(
+            Path(results_dir),
+            output_dir=Path(tempfile.gettempdir()),
+            categories=categories,
+        )
+        return str(zip_path)
+    except Exception as e:
+        print(f"Error creating archive: {e}")
+        return None
+
+
+def get_file_list_for_dropdown(results_dir: str) -> List[str]:
+    """Get list of viewable files for dropdown selection."""
+    if not results_dir or not RESULTS_AVAILABLE:
+        return []
+    
+    results_path = Path(results_dir)
+    if not results_path.exists():
+        return []
+    
+    try:
+        collector = ResultCollector()
+        summary = collector.scan(results_path)
+        
+        # Get prioritized files (QC reports and visualizations first)
+        priority_files = []
+        other_files = []
+        
+        for f in summary.all_files:
+            rel_path = str(f.path.relative_to(results_path))
+            cat = f.category.value if hasattr(f.category, 'value') else str(f.category)
+            
+            if cat in ('qc_reports', 'visualizations'):
+                priority_files.append(rel_path)
+            else:
+                other_files.append(rel_path)
+        
+        # Limit total files shown
+        all_files = priority_files[:30] + other_files[:20]
+        return sorted(all_files)
+        
+    except Exception as e:
+        logger.warning(f"Error listing files: {e}")
+        return []
+
+
+# ============================================================================
 # Gradio Interface
 # ============================================================================
 
@@ -2050,6 +2367,83 @@ def create_interface() -> gr.Blocks:
                         refresh_details_btn = gr.Button(visible=False)
                         auto_refresh = gr.Checkbox(visible=False, value=False)
             
+            # ========== RESULTS TAB ==========
+            with gr.TabItem("📊 Results", id="results") as results_tab:
+                gr.Markdown("## 📊 Results Visualization & Download")
+                
+                with gr.Row():
+                    # Left Panel: Directory Selection (40%)
+                    with gr.Column(scale=4):
+                        gr.Markdown("### 📁 Select Results Directory")
+                        
+                        results_dir_dropdown = gr.Dropdown(
+                            choices=get_completed_job_results_dirs(),
+                            label="Results Directory",
+                            interactive=True,
+                            allow_custom_value=True,
+                        )
+                        
+                        with gr.Row():
+                            refresh_results_dirs_btn = gr.Button("🔄", size="sm", scale=1)
+                            pipeline_type_dropdown = gr.Dropdown(
+                                choices=["", "rna_seq", "chip_seq", "dna_seq", "scrna_seq", 
+                                         "atac_seq", "metagenomics", "methylation", "long_read"],
+                                label="Pipeline Type",
+                                scale=3,
+                                value="",
+                            )
+                        
+                        scan_results_btn = gr.Button("🔍 Scan Directory", variant="primary")
+                        
+                        gr.Markdown("---")
+                        
+                        # Summary display
+                        results_summary_display = gr.Markdown("*Select a directory and click 'Scan' to see results*")
+                        
+                        gr.Markdown("---")
+                        
+                        # Download section
+                        gr.Markdown("### 📥 Download")
+                        with gr.Row():
+                            download_all_btn = gr.Button("📦 Download All", size="sm", variant="primary")
+                            download_qc_btn = gr.Button("📋 QC Reports Only", size="sm")
+                        
+                        results_download_file = gr.File(label="Download Archive", visible=False)
+                    
+                    # Right Panel: File Browser & Viewer (60%)
+                    with gr.Column(scale=6):
+                        gr.Markdown("### 📄 File Browser")
+                        
+                        # File tree (collapsible)
+                        with gr.Accordion("📁 File Tree", open=True):
+                            file_tree_display = gr.HTML("*Scan a directory to see file tree*")
+                        
+                        gr.Markdown("---")
+                        
+                        # File selection and viewer
+                        gr.Markdown("### 👁️ File Viewer")
+                        file_selector_dropdown = gr.Dropdown(
+                            choices=[],
+                            label="Select File to View",
+                            interactive=True,
+                        )
+                        
+                        view_file_btn = gr.Button("👁️ View File", size="sm")
+                        
+                        # Content display area (handles different types)
+                        with gr.Tabs() as viewer_tabs:
+                            with gr.TabItem("📝 Text/Markdown", id="text_viewer"):
+                                text_content_display = gr.Markdown("*Select a file to view its contents*")
+                            
+                            with gr.TabItem("🖼️ Image", id="image_viewer"):
+                                image_content_display = gr.Image(label="Image Preview", visible=True)
+                            
+                            with gr.TabItem("🌐 HTML Report", id="html_viewer"):
+                                html_content_display = gr.HTML("*HTML reports will be displayed here*")
+                
+                # Hidden state for results summary
+                results_summary_state = gr.State(None)
+            
             # ========== ADVANCED TAB ==========
             with gr.TabItem("⚙️ Advanced", id="advanced"):
                 gr.Markdown("## Advanced Configuration & Exploration")
@@ -2142,10 +2536,31 @@ def create_interface() -> gr.Blocks:
                 system_info = gr.Markdown(f"""
                 - **Workflow Composer:** {'✅ Available' if COMPOSER_AVAILABLE else '❌ Not installed'}
                 - **Model Orchestrator:** {'✅ Available' if ORCHESTRATOR_AVAILABLE else '❌ Not installed'}
+                - **Data Discovery:** {'✅ Available' if DISCOVERY_AVAILABLE else '❌ Not installed'}
                 - **Generated Workflows:** `{GENERATED_DIR}`
                 - **Environment:** `~/envs/biopipelines`
                 - **Python:** `{Path(__file__).parent}`
                 """)
+            
+            # ========== DATA DISCOVERY TAB ==========
+            with gr.TabItem("🔍 Data Discovery", id="data_discovery"):
+                if DISCOVERY_AVAILABLE and create_reference_browser_tab:
+                    # Use the modular Reference Browser component
+                    create_reference_browser_tab()
+                else:
+                    gr.Markdown("""
+                    ## 🔍 Data Discovery
+                    
+                    **Data Discovery is not available.**
+                    
+                    This feature allows you to:
+                    - Search ENCODE, GEO, SRA, and Ensembl databases
+                    - Use natural language queries (e.g., "human ChIP-seq H3K27ac in liver")
+                    - Download datasets directly
+                    - Browse reference genomes and annotations
+                    
+                    To enable, ensure the `workflow_composer.data.discovery` module is installed.
+                    """)
         
         # ========== EVENT HANDLERS ==========
         
@@ -2305,6 +2720,88 @@ def create_interface() -> gr.Blocks:
             fn=lambda active: gr.Timer(15, active=active),
             inputs=auto_refresh_toggle,
             outputs=auto_refresh_timer,
+        )
+        
+        # ========== Results Tab Event Handlers ==========
+        
+        # Refresh results directories list
+        refresh_results_dirs_btn.click(
+            fn=lambda: gr.update(choices=get_completed_job_results_dirs()),
+            outputs=results_dir_dropdown,
+        )
+        
+        # Scan results directory
+        def handle_scan_results(results_dir, pipeline_type):
+            """Handle scanning a results directory."""
+            summary_md, tree_html, summary_data = scan_results_directory(results_dir, pipeline_type)
+            file_choices = get_file_list_for_dropdown(results_dir)
+            return summary_md, tree_html, summary_data, gr.update(choices=file_choices)
+        
+        scan_results_btn.click(
+            fn=handle_scan_results,
+            inputs=[results_dir_dropdown, pipeline_type_dropdown],
+            outputs=[results_summary_display, file_tree_display, results_summary_state, file_selector_dropdown],
+        )
+        
+        # Also scan when directory changes
+        results_dir_dropdown.change(
+            fn=handle_scan_results,
+            inputs=[results_dir_dropdown, pipeline_type_dropdown],
+            outputs=[results_summary_display, file_tree_display, results_summary_state, file_selector_dropdown],
+        )
+        
+        # View selected file
+        def handle_view_file(results_dir, file_path):
+            """Handle viewing a file."""
+            content_type, content, image_path = view_result_file(results_dir, file_path)
+            
+            # Update the appropriate viewer
+            if content_type == 'image' and image_path:
+                return content, image_path, "", gr.Tabs(selected="image_viewer")
+            elif content_type == 'html':
+                return "", None, content, gr.Tabs(selected="html_viewer")
+            else:
+                return content, None, "", gr.Tabs(selected="text_viewer")
+        
+        view_file_btn.click(
+            fn=handle_view_file,
+            inputs=[results_dir_dropdown, file_selector_dropdown],
+            outputs=[text_content_display, image_content_display, html_content_display, viewer_tabs],
+        )
+        
+        # Also view on file selection change
+        file_selector_dropdown.change(
+            fn=handle_view_file,
+            inputs=[results_dir_dropdown, file_selector_dropdown],
+            outputs=[text_content_display, image_content_display, html_content_display, viewer_tabs],
+        )
+        
+        # Download all results
+        def handle_download_all(results_dir):
+            """Handle downloading all results."""
+            zip_path = create_results_archive(results_dir)
+            if zip_path:
+                return zip_path, gr.update(visible=True)
+            return None, gr.update(visible=False)
+        
+        download_all_btn.click(
+            fn=handle_download_all,
+            inputs=[results_dir_dropdown],
+            outputs=[results_download_file, results_download_file],
+        )
+        
+        # Download QC reports only
+        def handle_download_qc(results_dir):
+            """Handle downloading QC reports only."""
+            zip_path = create_results_archive(results_dir, categories=['qc_reports', 'visualizations'])
+            if zip_path:
+                return zip_path, gr.update(visible=True)
+            return None, gr.update(visible=False)
+        
+        download_qc_btn.click(
+            fn=handle_download_qc,
+            inputs=[results_dir_dropdown],
+            outputs=[results_download_file, results_download_file],
         )
         
         # Advanced Tab - Tool/Module search
