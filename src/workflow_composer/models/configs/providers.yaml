@@ -1,0 +1,140 @@
+# Provider Configurations
+# Ordered by priority (lower = higher priority)
+
+providers:
+  # ============================================================
+  # FREE TIER APIs (Priority 1-2)
+  # ============================================================
+  
+  lightning:
+    name: "Lightning.ai"
+    type: api
+    priority: 1
+    env_key: LIGHTNING_API_KEY
+    base_url: "https://api.lightning.ai/v1"
+    models:
+      - meta-llama/Llama-3.1-8B-Instruct
+      - mistralai/Mistral-7B-Instruct-v0.3
+    free_tier: true
+    rate_limit: "100/min"
+    monthly_limit: "30M tokens"
+    enabled: true
+    description: >
+      Lightning.ai provides 30M free tokens per month.
+      Primary provider for most requests.
+  
+  gemini:
+    name: "Google Gemini"
+    type: api
+    priority: 2
+    env_key: GOOGLE_API_KEY
+    base_url: "https://generativelanguage.googleapis.com/v1beta"
+    models:
+      - gemini-2.0-flash
+      - gemini-2.5-pro-preview-06-05
+      - gemini-2.5-flash-preview-05-20
+    free_tier: true
+    rate_limit: "15/min"
+    enabled: true
+    description: >
+      Google's Gemini API with free tier.
+      Good for longer context and complex reasoning.
+  
+  # ============================================================
+  # SUBSCRIBED APIs (Priority 3-4)
+  # ============================================================
+  
+  github_copilot:
+    name: "GitHub Copilot"
+    type: api
+    priority: 3
+    env_key: GITHUB_TOKEN
+    models:
+      - copilot
+    free_tier: false
+    subscription: "Copilot Pro ($10/month)"
+    enabled: true
+    description: >
+      GitHub Copilot integration. Primarily used through IDE.
+      Limited programmatic API access.
+  
+  openai:
+    name: "OpenAI"
+    type: api
+    priority: 4
+    env_key: OPENAI_API_KEY
+    base_url: "https://api.openai.com/v1"
+    models:
+      - gpt-4o
+      - gpt-4o-mini
+      - gpt-4-turbo
+    free_tier: false
+    rate_limit: "500/min"
+    enabled: true
+    description: >
+      OpenAI API. Paid per token.
+      Use as fallback when free tiers exhausted.
+  
+  # ============================================================
+  # LOCAL GPU MODELS (Priority 5+)
+  # ============================================================
+  
+  vllm:
+    name: "vLLM Local"
+    type: local
+    priority: 5
+    base_url: "http://localhost:8000/v1"
+    models:
+      - qwen-coder-32b
+      - deepseek-coder-v2
+      - llama-3.3-70b
+      - minimax-m2
+      - codellama-34b
+    free_tier: false
+    requires_gpu: true
+    enabled: true
+    description: >
+      Local vLLM server running on cluster GPUs.
+      Use as backup when all API providers exhausted.
+    startup_command: "scripts/llm/start_vllm.sh"
+    slurm_partition: "gpu"
+    
+# ============================================================
+# ROUTING CONFIGURATION
+# ============================================================
+
+routing:
+  # Default strategy: try providers in priority order
+  strategy: waterfall
+  
+  # Maximum retries per provider
+  max_retries: 3
+  
+  # Timeout for API calls (seconds)
+  timeout: 60
+  
+  # Local model timeout (longer for inference)
+  local_timeout: 300
+  
+  # Skip providers with this many recent failures
+  failure_threshold: 5
+  
+  # Reset failure count after this many seconds
+  failure_reset_seconds: 300
+
+# ============================================================
+# COST TRACKING
+# ============================================================
+
+costs:
+  # Approximate costs per 1M tokens (input + output average)
+  per_million_tokens:
+    lightning: 0.00      # Free tier
+    gemini: 0.00         # Free tier
+    github_copilot: 0.00 # Subscription
+    openai: 2.50         # GPT-4o-mini average
+    vllm: 0.00           # Local (electricity not included)
+  
+  # Monthly budgets (optional alerts)
+  monthly_budget:
+    openai: 50.00

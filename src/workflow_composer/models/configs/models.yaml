@@ -1,0 +1,167 @@
+# Local Model Configurations
+# These are loaded by the ModelRegistry at startup
+
+models:
+  # ============================================================
+  # PRIMARY CODING MODELS
+  # ============================================================
+  
+  qwen-coder-32b:
+    name: "Qwen2.5-Coder-32B-Instruct"
+    hf_id: "Qwen/Qwen2.5-Coder-32B-Instruct"
+    type: local
+    size_gb: 65
+    gpus_required: 1
+    context_length: 32768
+    capabilities: [code, chat, fill-in-middle]
+    priority: 5
+    enabled: true
+    vllm_args:
+      tensor_parallel_size: 1
+      max_model_len: 32768
+      dtype: float16
+      gpu_memory_utilization: 0.9
+    description: >
+      Best-in-class coding model at 32B scale. Excellent for code completion,
+      debugging, and general programming tasks. Fast inference on single GPU.
+  
+  deepseek-coder-v2:
+    name: "DeepSeek-Coder-V2-Instruct"
+    hf_id: "deepseek-ai/DeepSeek-Coder-V2-Instruct"
+    type: local
+    size_gb: 120
+    gpus_required: 2
+    context_length: 128000
+    capabilities: [code, chat, fill-in-middle, reasoning]
+    priority: 6
+    enabled: true
+    vllm_args:
+      tensor_parallel_size: 2
+      max_model_len: 65536
+      dtype: float16
+      gpu_memory_utilization: 0.9
+    description: >
+      Powerful MoE coding model with excellent reasoning capabilities.
+      Supports very long context (128K tokens). Good for complex codebases.
+  
+  # ============================================================
+  # GENERAL PURPOSE MODELS
+  # ============================================================
+  
+  llama-3.3-70b:
+    name: "Llama-3.3-70B-Instruct"
+    hf_id: "meta-llama/Llama-3.3-70B-Instruct"
+    type: local
+    size_gb: 140
+    gpus_required: 2
+    context_length: 128000
+    capabilities: [code, chat, reasoning]
+    priority: 7
+    enabled: true
+    vllm_args:
+      tensor_parallel_size: 2
+      max_model_len: 32768
+      dtype: float16
+      gpu_memory_utilization: 0.9
+    description: >
+      Latest Llama model with strong all-around capabilities.
+      Good balance of coding and general reasoning.
+  
+  # ============================================================
+  # AGENTIC / SPECIALIZED MODELS
+  # ============================================================
+  
+  minimax-m2:
+    name: "MiniMax-M2"
+    hf_id: "MiniMaxAI/MiniMax-M2"
+    type: local
+    size_gb: 230
+    gpus_required: 4
+    context_length: 128000
+    capabilities: [code, chat, reasoning, agentic]
+    priority: 8
+    enabled: true
+    vllm_args:
+      tensor_parallel_size: 4
+      max_model_len: 32768
+      dtype: float8
+      gpu_memory_utilization: 0.95
+    description: >
+      Large MoE model optimized for agentic workflows.
+      Strong on SWE-bench tasks. Requires 4 H100 GPUs.
+  
+  codellama-34b:
+    name: "CodeLlama-34B-Instruct"
+    hf_id: "codellama/CodeLlama-34b-Instruct-hf"
+    type: local
+    size_gb: 70
+    gpus_required: 1
+    context_length: 16384
+    capabilities: [code, fill-in-middle]
+    priority: 9
+    enabled: true
+    vllm_args:
+      tensor_parallel_size: 1
+      max_model_len: 16384
+      dtype: float16
+      gpu_memory_utilization: 0.9
+    description: >
+      Meta's code-specialized Llama model.
+      Good for code infilling and completion.
+
+  # ============================================================
+  # ADDITIONAL MODELS (can be enabled as needed)
+  # ============================================================
+  
+  deepseek-v3:
+    name: "DeepSeek-V3"
+    hf_id: "deepseek-ai/DeepSeek-V3"
+    type: local
+    size_gb: 400
+    gpus_required: 8
+    context_length: 128000
+    capabilities: [code, chat, reasoning, agentic]
+    priority: 10
+    enabled: false  # Requires all 8 GPUs
+    vllm_args:
+      tensor_parallel_size: 8
+      max_model_len: 32768
+      dtype: float8
+      gpu_memory_utilization: 0.95
+    description: >
+      DeepSeek's largest model (671B MoE). 
+      Exceptional reasoning and coding. Requires all 8 H100s.
+  
+  qwen-2.5-72b:
+    name: "Qwen2.5-72B-Instruct"
+    hf_id: "Qwen/Qwen2.5-72B-Instruct"
+    type: local
+    size_gb: 150
+    gpus_required: 2
+    context_length: 131072
+    capabilities: [code, chat, reasoning]
+    priority: 11
+    enabled: false
+    vllm_args:
+      tensor_parallel_size: 2
+      max_model_len: 32768
+      dtype: float16
+    description: >
+      Qwen's 72B general model. Strong all-around capabilities.
+  
+  starcoder2-15b:
+    name: "StarCoder2-15B-Instruct"
+    hf_id: "bigcode/starcoder2-15b-instruct-v0.1"
+    type: local
+    size_gb: 32
+    gpus_required: 1
+    context_length: 16384
+    capabilities: [code, fill-in-middle]
+    priority: 12
+    enabled: false
+    vllm_args:
+      tensor_parallel_size: 1
+      max_model_len: 16384
+      dtype: float16
+    description: >
+      Smaller code-focused model. Fast inference, good for simple tasks.
