@@ -1,4 +1,6 @@
-SLURM_JOB_ID=1051
-SLURM_NODELIST=hpcslurm-nsh100dualflex-0
-VLLM_URL=http://hpcslurm-nsh100dualflex-0:8000/v1
-GRADIO_URL=http://hpcslurm-nsh100dualflex-0:7860
+SLURM_JOB_ID=1052
+SLURM_NODELIST=hpcslurm-nsh100quadflex-0
+VLLM_URL=http://hpcslurm-nsh100quadflex-0:8000/v1
+VLLM_CODER_URL=http://hpcslurm-nsh100quadflex-0:8001/v1
+GRADIO_URL=http://hpcslurm-nsh100quadflex-0:7860
+MULTI_MODEL=true

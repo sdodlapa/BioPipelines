@@ -268,31 +268,13 @@ if [ "${MULTI_MODEL}" = "true" ]; then
     echo ""
     
     # Start supervisor model on GPU 0-1
-    CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server \\
-        --model "${MODEL_HF}" \\
-        --host 0.0.0.0 \\
-        --port ${VLLM_PORT} \\
-        --tensor-parallel-size 2 \\
-        --gpu-memory-utilization ${GPU_UTIL} \\
-        --max-model-len 32768 \\
-        --trust-remote-code \\
-        --enable-auto-tool-choice \\
-        --tool-call-parser hermes \\
-        2>&1 | tee ${PROJECT_DIR}/logs/vllm_supervisor_\${SLURM_JOB_ID}.log &
+    CUDA_VISIBLE_DEVICES=0,1 python -m vllm.entrypoints.openai.api_server --model "${MODEL_HF}" --host 0.0.0.0 --port ${VLLM_PORT} --tensor-parallel-size 2 --gpu-memory-utilization ${GPU_UTIL} --max-model-len 32768 --trust-remote-code --enable-auto-tool-choice --tool-call-parser hermes 2>&1 | tee ${PROJECT_DIR}/logs/vllm_supervisor_\${SLURM_JOB_ID}.log &
     SUPERVISOR_PID=\$!
     
     # Wait a bit then start coder model on GPU 2-3
     sleep 30
     
-    CUDA_VISIBLE_DEVICES=2,3 python -m vllm.entrypoints.openai.api_server \\
-        --model "${CODER_MODEL}" \\
-        --host 0.0.0.0 \\
-        --port ${VLLM_CODER_PORT} \\
-        --tensor-parallel-size 2 \\
-        --gpu-memory-utilization ${GPU_UTIL} \\
-        --max-model-len 65536 \\
-        --trust-remote-code \\
-        2>&1 | tee ${PROJECT_DIR}/logs/vllm_coder_\${SLURM_JOB_ID}.log &
+    CUDA_VISIBLE_DEVICES=2,3 python -m vllm.entrypoints.openai.api_server --model "${CODER_MODEL}" --host 0.0.0.0 --port ${VLLM_CODER_PORT} --tensor-parallel-size 2 --gpu-memory-utilization ${GPU_UTIL} --max-model-len 65536 --trust-remote-code 2>&1 | tee ${PROJECT_DIR}/logs/vllm_coder_\${SLURM_JOB_ID}.log &
     CODER_PID=\$!
     
     # Wait for both servers
@@ -316,17 +298,7 @@ if [ "${MULTI_MODEL}" = "true" ]; then
 else
     # Single model mode
     echo "=== Starting vLLM (${NUM_GPUS} GPUs) ==="
-    python -m vllm.entrypoints.openai.api_server \\
-        --model "${MODEL_HF}" \\
-        --host 0.0.0.0 \\
-        --port ${VLLM_PORT} \\
-        --tensor-parallel-size ${NUM_GPUS} \\
-        --gpu-memory-utilization ${GPU_UTIL} \\
-        --max-model-len 32768 \\
-        --trust-remote-code \\
-        --enable-auto-tool-choice \\
-        --tool-call-parser hermes \\
-        2>&1 | tee ${PROJECT_DIR}/logs/vllm_\${SLURM_JOB_ID}.log &
+    python -m vllm.entrypoints.openai.api_server --model "${MODEL_HF}" --host 0.0.0.0 --port ${VLLM_PORT} --tensor-parallel-size ${NUM_GPUS} --gpu-memory-utilization ${GPU_UTIL} --max-model-len 32768 --trust-remote-code --enable-auto-tool-choice --tool-call-parser hermes 2>&1 | tee ${PROJECT_DIR}/logs/vllm_\${SLURM_JOB_ID}.log &
     VLLM_PID=\$!
 
     echo "Waiting for vLLM..."

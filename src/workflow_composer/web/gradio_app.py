@@ -131,13 +131,6 @@ except ImportError:
 try:
     from workflow_composer.agents import AgentTools, process_tool_request, ToolResult
     from workflow_composer.agents import AgentBridge, get_agent_bridge
-    from workflow_composer.web.components.unified_workspace import (
-        create_unified_workspace,
-        refresh_manifest_panel,
-        refresh_jobs_panel,
-        refresh_workflows_list,
-        get_active_jobs_html,
-    )
     from workflow_composer.agents.context import ConversationContext
     AGENT_TOOLS_AVAILABLE = True
     
@@ -154,11 +147,31 @@ except ImportError as e:
     ToolResult = None
     AgentBridge = None
     get_agent_bridge = None
-    create_unified_workspace = None
     ConversationContext = None
     USE_LOCAL_LLM = False
     VLLM_URL = None
     print(f"Note: Agent tools not available: {e}")
+
+# Import enhanced agent components (ReAct, Memory, Self-Healing)
+try:
+    from workflow_composer.agents.chat_integration import (
+        AgentChatHandler,
+        get_chat_handler,
+        AGENTS_AVAILABLE as ENHANCED_AGENTS_AVAILABLE,
+    )
+    from workflow_composer.agents.self_healing import SelfHealer, get_self_healer
+    from workflow_composer.agents.memory import AgentMemory
+    ENHANCED_AGENTS = ENHANCED_AGENTS_AVAILABLE
+    if ENHANCED_AGENTS and USE_LOCAL_LLM:
+        print("✓ Enhanced agent system available (ReAct, Memory, Self-Healing)")
+except ImportError as e:
+    ENHANCED_AGENTS = False
+    AgentChatHandler = None
+    get_chat_handler = None
+    SelfHealer = None
+    get_self_healer = None
+    AgentMemory = None
+    print(f"Note: Enhanced agents not available: {e}")
 
 
 # ============================================================================
@@ -1126,6 +1139,104 @@ Be concise but helpful. Use markdown formatting."""
         error_msg = f"❌ Error: {str(e)}"
         history.append({"role": "assistant", "content": error_msg})
         yield history, ""
+
+
+# =============================================================================
+# Enhanced Chat with Agent System (ReAct, Memory, Self-Healing)
+# =============================================================================
+
+# Global handler instance
+_enhanced_handler: Optional[AgentChatHandler] = None
+
+
+def get_enhanced_handler(app_state: AppState = None) -> Optional[AgentChatHandler]:
+    """Get or create the enhanced agent chat handler."""
+    global _enhanced_handler
+    
+    if not ENHANCED_AGENTS or not USE_LOCAL_LLM:
+        return None
+    
+    if _enhanced_handler is None:
+        try:
+            _enhanced_handler = get_chat_handler(
+                app_state=app_state,
+                vllm_url=VLLM_URL,
+            )
+            logger.info("Enhanced agent handler initialized")
+        except Exception as e:
+            logger.warning(f"Could not initialize enhanced handler: {e}")
+            return None
+    elif app_state:
+        _enhanced_handler.app_state = app_state
+    
+    return _enhanced_handler
+
+
+def enhanced_chat_with_composer(
+    message: str,
+    history: List[Dict[str, str]],
+    provider: str,
+    app_state: AppState,
+    use_enhanced: bool = True,
+    enable_memory: bool = True,
+    enable_react: bool = True,
+    enable_self_healing: bool = True,
+) -> Generator[Tuple[List[Dict[str, str]], str], None, None]:
+    """
+    Enhanced chat function using the full agent system.
+    
+    Features:
+    - ReAct reasoning for complex multi-step queries
+    - Memory for learning from past interactions
+    - Self-healing for auto-fixing failed jobs
+    - Falls back to basic chat if enhanced not available
+    """
+    # Check if we should use enhanced mode
+    handler = get_enhanced_handler(app_state) if use_enhanced else None
+    
+    if not handler:
+        # Fall back to basic chat
+        yield from chat_with_composer(message, history, provider, app_state)
+        return
+    
+    if not message.strip():
+        yield history, ""
+        return
+    
+    # Configure handler features
+    handler.enable_memory = enable_memory
+    handler.enable_react = enable_react
+    handler.enable_self_healing = enable_self_healing
+    
+    # Add user message
+    history = history + [{"role": "user", "content": message}]
+    yield history, ""
+    
+    # Get context
+    ctx = app_state.conversation_context
+    context = {}
+    if ctx:
+        context = {
+            "data_loaded": ctx.data_path is not None,
+            "sample_count": len(ctx.samples) if ctx.samples else 0,
+            "data_path": ctx.data_path,
+            "last_workflow": ctx.generated_workflow,
+        }
+    
+    # Stream response from enhanced handler
+    history = history + [{"role": "assistant", "content": ""}]
+    response_text = ""
+    
+    try:
+        for chunk in handler.chat(message, history[:-2], context):
+            response_text += chunk
+            history[-1]["content"] = response_text
+            yield history, ""
+    except Exception as e:
+        logger.error(f"Enhanced chat error: {e}")
+        # Fall back to basic
+        history = history[:-2]  # Remove empty assistant message
+        yield from chat_with_composer(message, history, provider, app_state)
 
 
 def search_tools(query: str, container_filter: str, app_state: AppState) -> str:
@@ -2436,6 +2547,26 @@ def create_interface() -> gr.Blocks:
                             show_label=False,
                         )
                         
+                        # ===== AGENT MODE CONTROLS =====
+                        with gr.Accordion("🧠 Agent Mode", open=False, visible=ENHANCED_AGENTS and USE_LOCAL_LLM):
+                            use_enhanced_toggle = gr.Checkbox(
+                                label="Enhanced Agent",
+                                value=True,
+                                info="Use ReAct reasoning",
+                            )
+                            with gr.Row():
+                                enable_memory_toggle = gr.Checkbox(label="Memory", value=True, scale=1)
+                                enable_react_toggle = gr.Checkbox(label="ReAct", value=True, scale=1)
+                            enable_self_healing_toggle = gr.Checkbox(
+                                label="Self-Healing",
+                                value=True,
+                                info="Auto-fix failed jobs",
+                            )
+                            agent_status = gr.Markdown(
+                                "✅ **Enhanced mode active**" if (ENHANCED_AGENTS and USE_LOCAL_LLM) 
+                                else "⚠️ *Basic mode (no GPU)*"
+                            )
+                        
                         gr.Markdown("---")
                         
                         # ===== DATA MANIFEST PANEL =====
@@ -2773,10 +2904,25 @@ def create_interface() -> gr.Blocks:
         
         # ========== EVENT HANDLERS ==========
         
+        # Create wrapper for chat that respects agent mode toggles
+        def smart_chat(message, history, provider, app_state, use_enhanced, enable_memory, enable_react, enable_self_healing):
+            """Route to enhanced or basic chat based on settings."""
+            if use_enhanced and ENHANCED_AGENTS and USE_LOCAL_LLM:
+                yield from enhanced_chat_with_composer(
+                    message, history, provider, app_state,
+                    use_enhanced=True,
+                    enable_memory=enable_memory,
+                    enable_react=enable_react,
+                    enable_self_healing=enable_self_healing,
+                )
+            else:
+                yield from chat_with_composer(message, history, provider, app_state)
+        
         # Workspace Tab - Chat handlers
         msg_input.submit(
-            fn=chat_with_composer,
-            inputs=[msg_input, chatbot, provider_dropdown, app_state],
+            fn=smart_chat,
+            inputs=[msg_input, chatbot, provider_dropdown, app_state, 
+                    use_enhanced_toggle, enable_memory_toggle, enable_react_toggle, enable_self_healing_toggle],
             outputs=[msg_input, chatbot],
         ).then(
             fn=lambda: gr.update(choices=[j.job_id for j in pipeline_executor.list_jobs()]),
@@ -2791,8 +2937,9 @@ def create_interface() -> gr.Blocks:
         )
         
         send_btn.click(
-            fn=chat_with_composer,
-            inputs=[msg_input, chatbot, provider_dropdown, app_state],
+            fn=smart_chat,
+            inputs=[msg_input, chatbot, provider_dropdown, app_state,
+                    use_enhanced_toggle, enable_memory_toggle, enable_react_toggle, enable_self_healing_toggle],
             outputs=[chatbot, msg_input],
         ).then(
             fn=lambda: gr.update(choices=[j.job_id for j in pipeline_executor.list_jobs()]),
