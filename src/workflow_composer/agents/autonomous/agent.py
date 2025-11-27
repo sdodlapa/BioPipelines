@@ -951,8 +951,8 @@ class AutonomousAgent:
             if "file" in query_lower:
                 tool = self.tools.get("file_read") if self.tools else None
                 if tool:
-                    path = context.get("path", str(self.workspace_root))
-                    result = await tool.execute(path=path)
+                    file_path = context.get("path", str(self.workspace_root))
+                    result = await tool.execute(file_path=file_path)
                     return {
                         "output": result.data if hasattr(result, 'data') else str(result),
                         "success": True,
@@ -984,7 +984,7 @@ class AutonomousAgent:
         if "run" in query_lower or "execute" in query_lower:
             command = context.get("command")
             if command:
-                result = await self.sandbox.run(command)
+                result = self.sandbox.execute(command)
                 return {"output": result.stdout, "success": result.success, "actions": ["run_command"]}
         
         # Default: return query acknowledged
