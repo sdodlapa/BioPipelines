@@ -108,6 +108,58 @@ except ImportError:
     create_reference_browser_tab = None
     print("Note: Data discovery not available.")
 
+# Import new data-first components
+try:
+    from workflow_composer.web.components.data_tab import (
+        create_data_tab,
+        create_local_scanner_ui,
+        create_remote_search_ui,
+        create_reference_manager_ui,
+        create_data_summary_panel,
+    )
+    from workflow_composer.data import DataManifest, LocalSampleScanner, ReferenceManager
+    DATA_TAB_AVAILABLE = True
+except ImportError:
+    DATA_TAB_AVAILABLE = False
+    create_data_tab = None
+    DataManifest = None
+    LocalSampleScanner = None
+    ReferenceManager = None
+    print("Note: Data tab components not available.")
+
+# Import agent tools for unified workspace
+try:
+    from workflow_composer.agents import AgentTools, process_tool_request, ToolResult
+    from workflow_composer.agents import AgentBridge, get_agent_bridge
+    from workflow_composer.web.components.unified_workspace import (
+        create_unified_workspace,
+        refresh_manifest_panel,
+        refresh_jobs_panel,
+        refresh_workflows_list,
+        get_active_jobs_html,
+    )
+    from workflow_composer.agents.context import ConversationContext
+    AGENT_TOOLS_AVAILABLE = True
+    
+    # Check if local vLLM is configured (set by start_gradio.sh --gpu)
+    USE_LOCAL_LLM = os.environ.get("USE_LOCAL_LLM", "").lower() == "true"
+    VLLM_URL = os.environ.get("VLLM_URL", "http://localhost:8000/v1")
+    
+    if USE_LOCAL_LLM:
+        print(f"✓ Local LLM mode enabled: {VLLM_URL}")
+except ImportError as e:
+    AGENT_TOOLS_AVAILABLE = False
+    AgentTools = None
+    process_tool_request = None
+    ToolResult = None
+    AgentBridge = None
+    get_agent_bridge = None
+    create_unified_workspace = None
+    ConversationContext = None
+    USE_LOCAL_LLM = False
+    VLLM_URL = None
+    print(f"Note: Agent tools not available: {e}")
+
 
 # ============================================================================
 # Pipeline Execution Classes
@@ -527,6 +579,12 @@ class AppState:
         self.chat_history: List[Tuple[str, str]] = []
         self.last_generated_workflow: Optional[str] = None  # Track last workflow for quick run
         
+        # Conversation context for multi-turn dialogue
+        if ConversationContext:
+            self.conversation_context = ConversationContext()
+        else:
+            self.conversation_context = None
+        
     def initialize(self, provider: str = "openai", model: str = None):
         """Initialize or reinitialize with a specific provider."""
         try:
@@ -655,6 +713,11 @@ def chat_with_composer(
     Chat with the AI workflow composer.
     Streams responses for better UX.
     Uses Gradio 6.0 message format: [{"role": "user/assistant", "content": "..."}]
+    
+    Now includes agent tools for:
+    - Data scanning and discovery
+    - Job submission and monitoring
+    - Error diagnosis
     """
     if not message.strip():
         yield history, ""
@@ -676,11 +739,130 @@ def chat_with_composer(
     history.append({"role": "user", "content": message})
     yield history, ""
     
+    # Get conversation context
+    ctx = app_state.conversation_context
+    
+    # ===== CHECK FOR CLARIFICATION NEEDED =====
+    if ctx:
+        clarification = ctx.needs_clarification(message)
+        if clarification:
+            history.append({"role": "assistant", "content": f"🤔 {clarification}"})
+            yield history, ""
+            return
+    
+    # ===== CHECK FOR AGENT TOOL INVOCATION =====
+    # Tools: scan_data, search_databases, submit_job, get_logs, cancel_job, etc.
+    # Use AgentBridge with LLM routing when in GPU mode, otherwise regex-based
+    if AGENT_TOOLS_AVAILABLE:
+        tool_result = None
+        
+        # Try LLM-based routing if available
+        if AgentBridge and (USE_LOCAL_LLM or os.environ.get("LIGHTNING_API_KEY")):
+            try:
+                bridge = get_agent_bridge(app_state)
+                # Configure bridge for local or cloud
+                if USE_LOCAL_LLM:
+                    bridge.router.local_url = VLLM_URL
+                    bridge.router.use_local = True
+                
+                # Get context dict for router
+                ctx_dict = None
+                if ctx:
+                    ctx_dict = {
+                        "data_loaded": ctx.data_path is not None,
+                        "sample_count": len(ctx.samples) if ctx.samples else 0,
+                        "data_path": ctx.data_path,
+                        "last_workflow": ctx.generated_workflow,
+                    }
+                
+                result = bridge.process_message_sync(message, ctx_dict)
+                if result:
+                    if result.get("requires_generation"):
+                        # Let it fall through to workflow generation
+                        pass
+                    elif result.get("tool_result"):
+                        tool_result = result["tool_result"]
+                    elif result.get("response"):
+                        # Direct LLM response
+                        history.append({"role": "assistant", "content": result["response"]})
+                        yield history, ""
+                        return
+            except Exception as e:
+                logger.debug(f"AgentBridge failed, falling back to regex: {e}")
+        
+        # Fallback to regex-based tool detection
+        if tool_result is None and process_tool_request:
+            tool_result = process_tool_request(message, app_state)
+        
+        if tool_result:
+            # Tool was executed - update conversation context
+            if ctx and tool_result.success:
+                if tool_result.tool_name == "scan_data" and tool_result.data:
+                    ctx.set_scanned_data(
+                        path=tool_result.data.get("path", ""),
+                        samples=tool_result.data.get("samples", []),
+                    )
+                elif tool_result.tool_name == "search_databases" and tool_result.data:
+                    ctx.set_search_results(
+                        query=tool_result.data.get("query", ""),
+                        results=tool_result.data.get("results", []),
+                    )
+            
+            # Display result with contextual follow-up suggestions
+            response_msg = tool_result.message
+            
+            # Add contextual follow-up suggestion based on tool
+            if tool_result.tool_name == "scan_data" and tool_result.success:
+                # After scanning, suggest next steps based on data
+                response_msg += "\n\n💡 **What's next?** You can now:\n"
+                response_msg += "- Say \"create a workflow for this data\"\n"
+                response_msg += "- Ask \"check reference for human\" to verify references\n"
+                response_msg += "- Say \"compare samples\" to set up differential analysis"
+            elif tool_result.tool_name == "search_databases" and tool_result.success:
+                response_msg += "\n\n💡 **Tip:** Say \"download ENCSR...\" to add a dataset to your manifest."
+            elif tool_result.tool_name == "check_references" and tool_result.success:
+                if "Not found" in tool_result.message:
+                    response_msg += "\n\n💡 **Tip:** Say \"download human reference\" to fetch the genome."
+            
+            history.append({"role": "assistant", "content": response_msg})
+            yield history, ""
+            return
+    
     # Check if this is a workflow generation request
-    is_generation_request = any(kw in message.lower() for kw in [
-        "generate", "create", "build", "make", "workflow", "pipeline",
-        "analyze", "analysis", "process", "run"
+    # Be more specific - don't trigger on just "process" or "analysis" alone
+    message_lower = message.lower()
+    
+    # Explicit workflow generation keywords
+    explicit_generation = any(kw in message_lower for kw in [
+        "generate workflow", "create workflow", "build workflow", "make workflow",
+        "generate pipeline", "create pipeline", "build pipeline", "make pipeline",
+        "create a workflow", "build a workflow", "generate a pipeline",
+        "create workflow for this", "generate workflow for this", "build workflow for this",
     ])
+    
+    # Context-aware: user says "create a workflow for this data" after scanning
+    if ctx and ctx.manifest_sample_count > 0:
+        if any(kw in message_lower for kw in ["for this data", "for these samples", "for the data", "for this"]):
+            explicit_generation = True
+    
+    # Analysis type mentions (only trigger if not asking about scanning/data)
+    has_analysis_type = any(kw in message_lower for kw in [
+        "rna-seq", "rnaseq", "chip-seq", "chipseq", "atac-seq", "atacseq",
+        "methylation", "bisulfite", "wgbs", "rrbs", "dna-seq", "variant calling",
+        "differential expression", "peak calling", "metagenomics", "scrna",
+    ])
+    
+    # Check for data-first intent (scanning, finding data) - should NOT trigger workflow
+    is_data_request = any(kw in message_lower for kw in [
+        "scan", "find data", "find datasets", "what data", "which data",
+        "check for data", "discover data", "list data", "available data",
+    ])
+    
+    # Determine if this is truly a workflow generation request
+    is_generation_request = (
+        explicit_generation or 
+        (has_analysis_type and not is_data_request and any(kw in message_lower for kw in ["workflow", "pipeline", "create", "build", "generate"]))
+    )
     
     try:
         if is_generation_request and app_state.composer:
@@ -777,6 +959,10 @@ def chat_with_composer(
                 
                 # Track last generated workflow for quick run
                 app_state.last_generated_workflow = str(output_dir)
+                
+                # Update conversation context
+                if ctx:
+                    ctx.set_generated_workflow(path=str(output_dir), name=workflow_id)
                 
                 # Format response - extract clean data from workflow
                 tools_list = []
@@ -2197,10 +2383,10 @@ def create_interface() -> gr.Blocks:
         </div>
         """)
         
-        # Main Tabs - Minimalist 3-Tab Design
+        # Main Tabs - Unified Workspace Design (3 main tabs)
         with gr.Tabs() as main_tabs:
             
-            # ========== WORKSPACE TAB ==========
+            # ========== WORKSPACE TAB (UNIFIED - Main Entry Point) ==========
             with gr.TabItem("💬 Workspace", id="workspace") as workspace_tab:
                 with gr.Row():
                     # Main chat area (70%)
@@ -2225,7 +2411,7 @@ def create_interface() -> gr.Blocks:
                         with gr.Row():
                             msg_input = gr.Textbox(
                                 label="Your message",
-                                placeholder="Describe your bioinformatics analysis... (e.g., 'RNA-seq differential expression for human samples')",
+                                placeholder="Describe your analysis, scan data, run workflows... (e.g., 'Scan data in /path' or 'Create RNA-seq pipeline')",
                                 lines=2,
                                 scale=5,
                                 show_label=False,
@@ -2239,7 +2425,7 @@ def create_interface() -> gr.Blocks:
                                 label="Click an example to use it:",
                             )
                     
-                    # Sidebar (30%)
+                    # Sidebar (30%) - UNIFIED with Data + Jobs
                     with gr.Column(scale=3):
                         gr.Markdown("### 🤖 LLM Provider")
                         provider_dropdown = gr.Dropdown(
@@ -2251,35 +2437,75 @@ def create_interface() -> gr.Blocks:
                         )
                         
                         gr.Markdown("---")
-                        gr.Markdown("### 📋 Recent Workflows")
-                        recent_workflows_display = gr.Markdown(
-                            "\n".join([f"- `{w}`" for w in get_available_workflows()[:5]]) 
-                            if get_available_workflows() else "*No workflows yet*"
-                        )
+                        
+                        # ===== DATA MANIFEST PANEL =====
+                        with gr.Accordion("📁 Data Manifest", open=True):
+                            with gr.Row():
+                                sidebar_sample_count = gr.Markdown("**0** samples")
+                                sidebar_paired_count = gr.Markdown("**0** paired")
+                            sidebar_organisms = gr.Markdown("🧬 Not set")
+                            sidebar_reference = gr.Markdown("📚 Not configured")
+                            
+                            gr.Markdown("*Chat: 'scan data in /path' or 'search for...'*")
+                        
+                        gr.Markdown("---")
+                        
+                        # ===== ACTIVE JOBS PANEL =====
+                        with gr.Accordion("🚀 Active Jobs", open=True):
+                            sidebar_jobs_display = gr.HTML(
+                                value="<div style='font-size:0.9em;color:#666'><em>No active jobs</em></div>"
+                            )
+                            with gr.Row():
+                                sidebar_refresh_jobs_btn = gr.Button("🔄", size="sm", scale=1)
+                                sidebar_view_logs_btn = gr.Button("📄", size="sm", scale=1)
+                            
+                            # Auto-refresh timer for jobs
+                            sidebar_job_timer = gr.Timer(15, active=True)
+                        
+                        gr.Markdown("---")
+                        
+                        # ===== RECENT WORKFLOWS =====
+                        with gr.Accordion("📋 Recent Workflows", open=False):
+                            recent_workflows_display = gr.Markdown(
+                                "\n".join([f"- `{w}`" for w in get_available_workflows()[:5]]) 
+                                if get_available_workflows() else "*No workflows yet*"
+                            )
+                            sidebar_workflow_dropdown = gr.Dropdown(
+                                choices=get_available_workflows(),
+                                label="Select",
+                                interactive=True,
+                                show_label=False,
+                            )
+                            with gr.Row():
+                                sidebar_run_btn = gr.Button("▶️ Run", size="sm", variant="primary", scale=1)
+                                sidebar_view_btn = gr.Button("👁️ View", size="sm", scale=1)
                         
                         gr.Markdown("---")
                         gr.Markdown("### ⚡ Quick Actions")
-                        with gr.Column():
-                            clear_btn = gr.Button("🗑️ Clear Chat", size="sm", variant="secondary")
-                            goto_execute_btn = gr.Button("🚀 Go to Execute", size="sm", variant="primary")
-                            view_workflow_btn = gr.Button("👁️ View Last Workflow", size="sm", variant="secondary")
+                        with gr.Row():
+                            clear_btn = gr.Button("🗑️ Clear", size="sm", variant="secondary", scale=1)
+                            goto_results_btn = gr.Button("📊 Results", size="sm", scale=1)
                         
-                        # Workflow preview accordion (click to expand/collapse)
+                        # Workflow preview accordion
                         with gr.Accordion("📄 Workflow Preview", open=False, visible=False) as workflow_preview_accordion:
                             workflow_preview_content = gr.Markdown("*No workflow generated yet*")
                             workflow_preview_code = gr.Code(label="main.nf")
                         
                         gr.Markdown("---")
                         gr.Markdown("""
-                        ### 💡 Tips
-                        - Be specific about organism
-                        - Mention sample type
-                        - Include comparison groups
-                        - Specify preferred tools
+### 💡 Chat Commands
+- **"scan data in /path"** - Find FASTQ files
+- **"search for RNA-seq"** - Search databases
+- **"create pipeline"** - Generate workflow
+- **"run it on SLURM"** - Execute workflow
+- **"show logs"** - View job output
+- **"download results"** - Get outputs
+- **"help"** - Show all commands
                         """)
             
-            # ========== EXECUTE TAB (Simplified) ==========
-            with gr.TabItem("🚀 Execute", id="execute") as execute_tab:
+            # ========== EXECUTE TAB (Hidden - functionality in Workspace sidebar) ==========
+            # Keep this tab but simplify - all controls are now in Workspace sidebar
+            with gr.TabItem("🚀 Execute", id="execute", visible=False) as execute_tab:
                 with gr.Row():
                     # Left Panel: Submit (40%)
                     with gr.Column(scale=4):
@@ -2544,26 +2770,6 @@ def create_interface() -> gr.Blocks:
                 - **Environment:** `~/envs/biopipelines`
                 - **Python:** `{Path(__file__).parent}`
                 """)
-            
-            # ========== DATA DISCOVERY TAB ==========
-            with gr.TabItem("🔍 Data Discovery", id="data_discovery"):
-                if DISCOVERY_AVAILABLE and create_reference_browser_tab:
-                    # Use the modular Reference Browser component
-                    create_reference_browser_tab()
-                else:
-                    gr.Markdown("""
-                    ## 🔍 Data Discovery
-                    
-                    **Data Discovery is not available.**
-                    
-                    This feature allows you to:
-                    - Search ENCODE, GEO, SRA, and Ensembl databases
-                    - Use natural language queries (e.g., "human ChIP-seq H3K27ac in liver")
-                    - Download datasets directly
-                    - Browse reference genomes and annotations
-                    
-                    To enable, ensure the `workflow_composer.data.discovery` module is installed.
-                    """)
         
         # ========== EVENT HANDLERS ==========
         
@@ -2605,14 +2811,40 @@ def create_interface() -> gr.Blocks:
             outputs=[chatbot, msg_input],
         )
         
-        # Go to Execute tab button
-        goto_execute_btn.click(
-            fn=lambda: gr.Tabs(selected="execute"),
+        # Go to Results tab button (renamed from goto_execute_btn)
+        goto_results_btn.click(
+            fn=lambda: gr.Tabs(selected="results"),
             outputs=main_tabs,
         )
         
+        # Sidebar workflow run button
+        sidebar_run_btn.click(
+            fn=submit_pipeline,
+            inputs=[
+                sidebar_workflow_dropdown,
+                gr.State("slurm"),  # Default profile
+                gr.State(False),    # No resume
+                gr.State(""),       # reads
+                gr.State(""),       # genome
+                gr.State(""),       # outdir
+            ],
+            outputs=sidebar_jobs_display,
+        )
+        
+        # Sidebar job refresh
+        sidebar_refresh_jobs_btn.click(
+            fn=refresh_monitoring,
+            outputs=[sidebar_jobs_display, gr.State(None)],
+        )
+        
+        # Sidebar auto-refresh timer for jobs
+        sidebar_job_timer.tick(
+            fn=refresh_monitoring,
+            outputs=[sidebar_jobs_display, gr.State(None)],
+        )
+        
         # View workflow button - shows preview accordion
-        view_workflow_btn.click(
+        sidebar_view_btn.click(
             fn=get_workflow_preview,
             inputs=[app_state],
             outputs=[workflow_preview_accordion, workflow_preview_content, workflow_preview_code],
@@ -2862,13 +3094,31 @@ def create_interface() -> gr.Blocks:
 def main():
     """Launch the Gradio web interface."""
     import argparse
+    import socket
+    
+    def find_available_port(start_port: int, max_attempts: int = 100) -> int:
+        """Find an available port starting from start_port."""
+        for port in range(start_port, start_port + max_attempts):
+            try:
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                    s.bind(('', port))
+                    return port
+            except OSError:
+                continue
+        return start_port  # Fall back to original port
     
     parser = argparse.ArgumentParser(description="BioPipelines Web UI")
     parser.add_argument("--host", default="0.0.0.0", help="Host to bind to")
     parser.add_argument("--port", type=int, default=7860, help="Port to bind to")
+    parser.add_argument("--port-range", type=int, default=100, help="Range of ports to try if default is busy")
     parser.add_argument("--share", action="store_true", help="Create public link")
     parser.add_argument("--debug", action="store_true", help="Enable debug mode")
     args = parser.parse_args()
+    
+    # Find available port
+    actual_port = find_available_port(args.port, args.port_range)
+    if actual_port != args.port:
+        print(f"  ℹ️  Port {args.port} in use, using port {actual_port}")
     
     print("""
 ╔══════════════════════════════════════════════════════════════════╗
@@ -2883,11 +3133,14 @@ def main():
 ╚══════════════════════════════════════════════════════════════════╝
     """)
     
+    print(f"  🌐 Server: http://localhost:{actual_port}")
+    print(f"  🌐 Network: http://{args.host}:{actual_port}")
+    print()
+    
     # Initialize app state
     available = check_available_providers()
     if any(available.values()):
         provider = next(k for k, v in available.items() if v)
-        # app_state.initialize(provider) # Removed global state init
         print(f"  ✅ Default provider: {provider}")
     else:
         print("  ⚠️  No LLM providers available - running in demo mode")
@@ -2897,7 +3150,7 @@ def main():
     
     demo.launch(
         server_name=args.host,
-        server_port=args.port,
+        server_port=actual_port,
         share=args.share,
         debug=args.debug,
         show_error=True,

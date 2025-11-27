@@ -48,6 +48,9 @@ class Module:
         return f"include {{ {process_list} }} from '{rel_path}'"
 
 
+# Import TOOL_CONTAINER_MAP from preflight_validator for backwards compatibility
+from .preflight_validator import TOOL_CONTAINER_MAP
+
 # Mapping from tool names to module info
 
 def load_tool_mappings(config_path: Optional[Path] = None) -> Dict[str, Any]:

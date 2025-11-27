@@ -2,12 +2,15 @@
 Data Management Module
 ======================
 
-Tools for downloading and managing reference data.
+Tools for downloading, managing, and discovering reference data.
 
 Includes:
 - DataDownloader: Download reference genomes, annotations, and indexes
 - Discovery: LLM-powered data discovery across ENCODE, GEO, Ensembl
 - Browser: Gradio UI components for data browsing
+- Manifest: Data manifest for tracking samples and references
+- Scanner: Local file system scanner for FASTQ/BAM files
+- ReferenceManager: Unified reference genome management
 
 Quick Start:
     # Download references
@@ -19,6 +22,12 @@ Quick Start:
     from workflow_composer.data import DataDiscovery
     discovery = DataDiscovery()
     results = discovery.search("human liver ChIP-seq H3K27ac")
+    
+    # Scan local files
+    from workflow_composer.data import LocalSampleScanner, DataManifest
+    scanner = LocalSampleScanner()
+    samples = scanner.scan_directory("/path/to/fastq")
+    manifest = DataManifest.from_scan(samples)
 """
 
 from .downloader import (
@@ -52,6 +61,23 @@ from .discovery import (
     search_references,
 )
 
+# Import new data-first components
+from .manifest import (
+    DataManifest,
+    SampleInfo,
+    ReferenceInfo,
+    DataSourceType,
+    LibraryLayout,
+)
+
+from .scanner import (
+    LocalSampleScanner,
+)
+
+from .reference_manager import (
+    ReferenceManager,
+)
+
 # Import browser components (optional, requires gradio)
 try:
     from .browser import create_reference_browser_tab
@@ -79,6 +105,19 @@ __all__ = [
     "search_encode",
     "search_geo",
     "search_references",
+    
+    # Data Manifest (data-first workflow)
+    "DataManifest",
+    "SampleInfo",
+    "ReferenceInfo",
+    "DataSourceType",
+    "LibraryLayout",
+    
+    # Local Scanner
+    "LocalSampleScanner",
+    
+    # Reference Manager
+    "ReferenceManager",
     
     # Browser UI
     "create_reference_browser_tab",

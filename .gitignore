@@ -72,6 +72,12 @@ results/
 htmlcov/
 .tox/
 
+# Generated workflows (test outputs)
+generated_workflows/
+
+# Archive directory
+.archive/
+
 # Temporary files
 *.tmp
 *.bak

@@ -402,12 +402,14 @@ class WorkflowGenerator:
         """
         self.patterns_path = Path(patterns_path) if patterns_path else None
         self.module_base_path = module_base_path
+        self._current_manifest = None  # Set during generate() if manifest provided
     
     def generate(
         self,
         intent: ParsedIntent,
         modules: List[Module],
-        llm: Optional[LLMAdapter] = None
+        llm: Optional[LLMAdapter] = None,
+        data_manifest: Optional[Any] = None
     ) -> Workflow:
         """
         Generate a complete workflow.
@@ -422,11 +424,15 @@ class WorkflowGenerator:
             intent: Parsed user intent
             modules: List of modules to include
             llm: Optional LLM for custom generation
+            data_manifest: Optional DataManifest with sample/reference paths
             
         Returns:
             Generated Workflow
         """
         logger.info(f"Generating workflow for: {intent.analysis_type.value}")
+        
+        # Store manifest for use in generation methods
+        self._current_manifest = data_manifest
         
         # Priority 1: File-based templates (tested, reliable)
         if has_template and has_template(intent.analysis_type):
@@ -465,6 +471,19 @@ class WorkflowGenerator:
             "SINGLE_END": "false" if intent.paired_end else "true",
         }
         
+        # Add manifest paths if available
+        if self._current_manifest:
+            manifest = self._current_manifest
+            if manifest.reference:
+                if manifest.reference.genome_fasta:
+                    params["GENOME_PATH"] = str(manifest.reference.genome_fasta)
+                if manifest.reference.annotation_gtf:
+                    params["ANNOTATION_PATH"] = str(manifest.reference.annotation_gtf)
+            if manifest.samples:
+                # Infer reads pattern from samples
+                params["READS_PATTERN"] = self._infer_reads_pattern(manifest.samples)
+                params["SAMPLE_COUNT"] = str(len(manifest.samples))
+        
         # Customize template with parameters
         main_nf = template.customize(params)
         
@@ -488,6 +507,19 @@ class WorkflowGenerator:
             modules_used=modules
         )
     
+    def _infer_reads_pattern(self, samples) -> str:
+        """Infer a glob pattern for reads from sample list."""
+        if not samples:
+            return "data/raw/*_R{1,2}.fastq.gz"
+        
+        # Get directory from first sample
+        first_sample = samples[0]
+        if hasattr(first_sample, 'fastq_1') and first_sample.fastq_1:
+            sample_dir = first_sample.fastq_1.parent
+            return str(sample_dir / "*_R{1,2}.fastq.gz")
+        
+        return "data/raw/*_R{1,2}.fastq.gz"
+    
     def _generate_from_template(
         self,
         intent: ParsedIntent,
@@ -499,13 +531,29 @@ class WorkflowGenerator:
         # Generate imports
         imports = self._generate_imports(modules)
         
+        # Default paths
+        genome_path = f"data/references/{intent.genome_build}/genome.fa" if intent.genome_build else "data/references/genome.fa"
+        gtf_path = f"data/references/{intent.genome_build}/genes.gtf" if intent.genome_build else "data/references/genes.gtf"
+        reads_pattern = "data/raw/*_R{1,2}.fastq.gz"
+        
+        # Override with manifest paths if available
+        if self._current_manifest:
+            manifest = self._current_manifest
+            if manifest.reference:
+                if manifest.reference.genome_fasta:
+                    genome_path = str(manifest.reference.genome_fasta)
+                if manifest.reference.annotation_gtf:
+                    gtf_path = str(manifest.reference.annotation_gtf)
+            if manifest.samples:
+                reads_pattern = self._infer_reads_pattern(manifest.samples)
+        
         # Fill in template parameters
         params = {
             "date": datetime.now().strftime("%Y-%m-%d"),
             "imports": imports,
-            "reads_pattern": "data/raw/*_R{1,2}.fastq.gz",
-            "genome": f"data/references/{intent.genome_build}/genome.fa" if intent.genome_build else "data/references/genome.fa",
-            "gtf": f"data/references/{intent.genome_build}/genes.gtf" if intent.genome_build else "data/references/genes.gtf",
+            "reads_pattern": reads_pattern,
+            "genome": genome_path,
+            "gtf": gtf_path,
             "known_sites": "data/references/dbsnp.vcf.gz",
             "condition_col": "condition",
             "reference": intent.conditions[0] if len(intent.conditions) > 0 else "control",

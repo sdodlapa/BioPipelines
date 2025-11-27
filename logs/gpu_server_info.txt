@@ -1,0 +1,4 @@
+SLURM_JOB_ID=1051
+SLURM_NODELIST=hpcslurm-nsh100dualflex-0
+VLLM_URL=http://hpcslurm-nsh100dualflex-0:8000/v1
+GRADIO_URL=http://hpcslurm-nsh100dualflex-0:7860

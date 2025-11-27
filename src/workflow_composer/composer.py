@@ -19,11 +19,27 @@ Example:
         "RNA-seq differential expression, mouse, paired-end"
     )
     workflow.save("my_workflow/")
+    
+Data-First Workflow Example:
+    from workflow_composer import Composer
+    from workflow_composer.data import DataManifest, LocalSampleScanner
+    
+    # Scan for data first
+    scanner = LocalSampleScanner()
+    samples = scanner.scan_directory("/path/to/fastq")
+    manifest = DataManifest(samples=samples)
+    
+    # Generate workflow with real paths
+    composer = Composer()
+    workflow = composer.generate(
+        "RNA-seq differential expression",
+        data_manifest=manifest
+    )
 """
 
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, TYPE_CHECKING
 
 from .config import Config
 from .llm import LLMAdapter, get_llm
@@ -41,6 +57,14 @@ except ImportError:
     PREFLIGHT_AVAILABLE = False
     PreflightValidator = None
     ValidationResult = None
+
+# Import DataManifest (optional - for data-first workflow)
+try:
+    from .data.manifest import DataManifest
+    DATA_MANIFEST_AVAILABLE = True
+except ImportError:
+    DATA_MANIFEST_AVAILABLE = False
+    DataManifest = None
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +150,8 @@ class Composer:
         description: str,
         output_dir: Optional[str] = None,
         auto_create_modules: bool = True,
-        interactive: bool = False
+        interactive: bool = False,
+        data_manifest: Optional["DataManifest"] = None
     ) -> Workflow:
         """
         Generate a workflow from a natural language description.
@@ -136,11 +161,20 @@ class Composer:
             output_dir: Directory to save workflow (optional)
             auto_create_modules: Auto-create missing modules using LLM
             interactive: Enable interactive clarification
+            data_manifest: Optional DataManifest with sample/reference paths.
+                          When provided, workflow parameters will be populated
+                          with actual paths from the manifest.
             
         Returns:
             Generated Workflow object
         """
         logger.info(f"Generating workflow from: {description[:100]}...")
+        
+        # Log data manifest if provided
+        if data_manifest:
+            logger.info(f"  Data manifest provided: {len(data_manifest.samples)} samples")
+            if data_manifest.reference:
+                logger.info(f"  Reference: {data_manifest.reference.organism} ({data_manifest.reference.build})")
         
         # Step 1: Parse intent
         logger.info("Step 1: Parsing intent...")
@@ -148,6 +182,10 @@ class Composer:
         logger.info(f"  Analysis type: {intent.analysis_type.value}")
         logger.info(f"  Organism: {intent.organism}")
         logger.info(f"  Confidence: {intent.confidence:.2f}")
+        
+        # Enhance intent with manifest data if available
+        if data_manifest:
+            intent = self._enhance_intent_from_manifest(intent, data_manifest)
         
         # Interactive clarification if needed
         if interactive and intent.confidence < 0.7:
@@ -203,8 +241,15 @@ class Composer:
         # Step 4: Generate workflow
         logger.info("Step 4: Generating workflow...")
         workflow = self.workflow_generator.generate(
-            intent, modules, self.llm
+            intent, modules, self.llm, data_manifest=data_manifest
         )
+        
+        # If manifest provided, also generate samplesheet from it
+        if data_manifest and data_manifest.samples:
+            logger.info("Step 5: Generating samplesheet from manifest...")
+            samplesheet_content = data_manifest.to_samplesheet()
+            workflow.samplesheet_template = samplesheet_content
+            logger.info(f"  Generated samplesheet with {len(data_manifest.samples)} samples")
         
         # Save if output_dir specified
         if output_dir:
@@ -212,6 +257,73 @@ class Composer:
         
         logger.info(f"Workflow generation complete: {workflow.name}")
         return workflow
+    
+    def _enhance_intent_from_manifest(
+        self,
+        intent: ParsedIntent,
+        manifest: "DataManifest"
+    ) -> ParsedIntent:
+        """
+        Enhance parsed intent with information from the data manifest.
+        
+        This enriches the intent with concrete data about:
+        - Organism (from samples or reference)
+        - Paired-end vs single-end (from samples)
+        - Genome build (from reference)
+        - Sample count (for parameter suggestions)
+        
+        Args:
+            intent: Original parsed intent
+            manifest: Data manifest with sample/reference info
+            
+        Returns:
+            Enhanced ParsedIntent
+        """
+        # Infer organism from manifest
+        if manifest.reference and manifest.reference.organism:
+            # Reference organism takes precedence
+            inferred_organism = manifest.reference.organism
+        elif manifest.samples:
+            # Try to get organism from samples metadata
+            organisms = set()
+            for sample in manifest.samples:
+                if sample.metadata.get("organism"):
+                    organisms.add(sample.metadata["organism"])
+            if len(organisms) == 1:
+                inferred_organism = organisms.pop()
+            else:
+                inferred_organism = None
+        else:
+            inferred_organism = None
+        
+        # Update intent if we found organism and it wasn't specified
+        if inferred_organism and not intent.organism:
+            logger.info(f"  Inferred organism from manifest: {inferred_organism}")
+            intent.organism = inferred_organism
+        
+        # Infer paired-end from samples
+        if manifest.samples:
+            paired_samples = sum(1 for s in manifest.samples if s.is_paired)
+            total_samples = len(manifest.samples)
+            intent.paired_end = paired_samples > total_samples / 2
+            logger.info(f"  Paired-end: {intent.paired_end} ({paired_samples}/{total_samples} samples)")
+        
+        # Infer genome build from reference
+        if manifest.reference and manifest.reference.assembly:
+            if not intent.genome_build:
+                intent.genome_build = manifest.reference.assembly
+                logger.info(f"  Genome build from manifest: {intent.genome_build}")
+        
+        # Store manifest metadata in intent for template use
+        intent.metadata = intent.metadata or {}
+        intent.metadata["sample_count"] = len(manifest.samples)
+        intent.metadata["has_manifest"] = True
+        
+        if manifest.reference:
+            intent.metadata["genome_path"] = str(manifest.reference.genome_fasta or "")
+            intent.metadata["annotation_path"] = str(manifest.reference.annotation_gtf or "")
+        
+        return intent
     
     def parse_intent(self, description: str) -> ParsedIntent:
         """
