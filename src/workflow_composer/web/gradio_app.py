@@ -173,6 +173,27 @@ except ImportError as e:
     AgentMemory = None
     print(f"Note: Enhanced agents not available: {e}")
 
+# Import autonomous agent panel (Phase 4)
+try:
+    from workflow_composer.web.components.autonomous_panel import (
+        AUTONOMOUS_AVAILABLE,
+        create_autonomous_panel,
+        setup_autonomous_events,
+        create_health_widget,
+        check_health_sync,
+        get_agent,
+    )
+    if AUTONOMOUS_AVAILABLE:
+        print("✓ Autonomous agent panel available")
+except ImportError as e:
+    AUTONOMOUS_AVAILABLE = False
+    create_autonomous_panel = None
+    setup_autonomous_events = None
+    create_health_widget = None
+    check_health_sync = None
+    get_agent = None
+    print(f"Note: Autonomous panel not available: {e}")
+
 
 # ============================================================================
 # Pipeline Execution Classes
@@ -2567,6 +2588,57 @@ def create_interface() -> gr.Blocks:
                                 else "⚠️ *Basic mode (no GPU)*"
                             )
                         
+                        # ===== AUTONOMOUS AGENT CONTROLS =====
+                        if AUTONOMOUS_AVAILABLE and create_autonomous_panel:
+                            with gr.Accordion("🤖 Autonomous Agent", open=False, visible=True):
+                                # Autonomy Level Control
+                                with gr.Row():
+                                    autonomy_level = gr.Dropdown(
+                                        choices=[
+                                            ("Read Only", "READONLY"),
+                                            ("Monitored", "MONITORED"),
+                                            ("Assisted", "ASSISTED"),
+                                            ("Supervised", "SUPERVISED"),
+                                            ("Full Autonomous", "AUTONOMOUS"),
+                                        ],
+                                        value="SUPERVISED",
+                                        label="Autonomy Level",
+                                        info="Control agent permissions",
+                                        scale=2,
+                                    )
+                                    agent_running = gr.Checkbox(
+                                        label="Running",
+                                        value=False,
+                                        interactive=False,
+                                        scale=1,
+                                    )
+                                
+                                # Health Status Widget
+                                with gr.Row():
+                                    health_status = gr.HTML(
+                                        value=check_health_sync() if check_health_sync else "<span style='color:gray'>⚫ Not available</span>"
+                                    )
+                                
+                                # Agent Controls
+                                with gr.Row():
+                                    start_agent_btn = gr.Button("▶️ Start", size="sm", variant="primary", scale=1)
+                                    stop_agent_btn = gr.Button("⏹️ Stop", size="sm", variant="secondary", scale=1)
+                                    quick_diagnose_btn = gr.Button("🔍 Diagnose", size="sm", scale=1)
+                                
+                                # Auto-refresh timer for health
+                                health_timer = gr.Timer(30, active=True)
+                                
+                                # Agent Action Log (last 5 actions)
+                                agent_action_log = gr.Markdown("*No recent actions*")
+                                
+                                gr.Markdown("""
+**Commands:**
+- `fix [job_id]` - Auto-fix failed job
+- `watch [job_id]` - Monitor job
+- `health` - System status
+- `diagnose [error]` - Analyze error
+                                """)
+                        
                         gr.Markdown("---")
                         
                         # ===== DATA MANIFEST PANEL =====
@@ -2630,7 +2702,11 @@ def create_interface() -> gr.Blocks:
 - **"create pipeline"** - Generate workflow
 - **"run it on SLURM"** - Execute workflow
 - **"show logs"** - View job output
-- **"download results"** - Get outputs
+
+**🤖 Autonomous:**
+- **"fix [job_id]"** - Auto-fix failed job
+- **"watch [job_id]"** - Monitor job
+- **"health"** - System status
 - **"help"** - Show all commands
                         """)
             
@@ -2990,6 +3066,113 @@ def create_interface() -> gr.Blocks:
             outputs=[sidebar_jobs_display, gr.State(None)],
         )
         
+        # ===== AUTONOMOUS AGENT EVENT HANDLERS =====
+        if AUTONOMOUS_AVAILABLE and create_autonomous_panel:
+            # Health timer refresh
+            health_timer.tick(
+                fn=check_health_sync,
+                outputs=[health_status],
+            )
+            
+            # Start agent button
+            def start_autonomous_agent(level: str):
+                """Start the autonomous agent with specified level."""
+                try:
+                    agent = get_agent()
+                    if agent:
+                        # Agent already running
+                        return (
+                            True,
+                            check_health_sync(),
+                            "🟢 Agent already running",
+                        )
+                    # Create new agent
+                    from workflow_composer.agents.autonomous import create_agent, AutonomyLevel
+                    level_enum = AutonomyLevel[level.upper()]
+                    agent = create_agent(level=level_enum.name.lower())
+                    return (
+                        True,
+                        check_health_sync(),
+                        f"🟢 Agent started at **{level}** level",
+                    )
+                except Exception as e:
+                    return (
+                        False,
+                        f"<span style='color:red'>⚠️ Error: {e}</span>",
+                        f"❌ Failed to start: {e}",
+                    )
+            
+            start_agent_btn.click(
+                fn=start_autonomous_agent,
+                inputs=[autonomy_level],
+                outputs=[agent_running, health_status, agent_action_log],
+            )
+            
+            # Stop agent button
+            def stop_autonomous_agent():
+                """Stop the autonomous agent."""
+                try:
+                    agent = get_agent()
+                    if agent:
+                        # Clear global instance
+                        import workflow_composer.web.components.autonomous_panel as panel
+                        panel._agent_instance = None
+                        return (
+                            False,
+                            "<span style='color:gray'>⚫ Agent stopped</span>",
+                            "⏹️ Agent stopped",
+                        )
+                    return (
+                        False,
+                        check_health_sync(),
+                        "ℹ️ Agent was not running",
+                    )
+                except Exception as e:
+                    return (
+                        False,
+                        check_health_sync(),
+                        f"❌ Error stopping: {e}",
+                    )
+            
+            stop_agent_btn.click(
+                fn=stop_autonomous_agent,
+                outputs=[agent_running, health_status, agent_action_log],
+            )
+            
+            # Diagnose button (sidebar version)
+            def quick_diagnose():
+                """Quick system diagnosis."""
+                try:
+                    health = check_health_sync()
+                    return health
+                except Exception as e:
+                    return f"<span style='color:red'>⚠️ Diagnosis error: {e}</span>"
+            
+            quick_diagnose_btn.click(
+                fn=quick_diagnose,
+                outputs=[health_status],
+            )
+            
+            # Autonomy level change
+            def change_autonomy_level(level: str):
+                """Update agent autonomy level."""
+                agent = get_agent()
+                if agent:
+                    try:
+                        from workflow_composer.agents.autonomous import AutonomyLevel
+                        level_enum = AutonomyLevel[level.upper()]
+                        agent.autonomy_level = level_enum
+                        return f"✅ Autonomy set to **{level}**"
+                    except Exception as e:
+                        return f"❌ Error: {e}"
+                return "ℹ️ Start agent first"
+            
+            autonomy_level.change(
+                fn=change_autonomy_level,
+                inputs=[autonomy_level],
+                outputs=[agent_action_log],
+            )
+        
         # View workflow button - shows preview accordion
         sidebar_view_btn.click(
             fn=get_workflow_preview,
@@ -3234,6 +3417,72 @@ def create_interface() -> gr.Blocks:
             fn=get_ensemble_status,
             outputs=ensemble_status_display,
         )
+        
+        # ========== Autonomous Agent Event Handlers ==========
+        if AUTONOMOUS_AVAILABLE and check_health_sync:
+            # Health check timer
+            health_timer.tick(
+                fn=check_health_sync,
+                outputs=[health_status],
+            )
+            
+            # Diagnose button (uses sidebar diagnose_btn)
+            diagnose_btn.click(
+                fn=lambda: check_health_sync() if check_health_sync else "<span style='color:gray'>Health check not available</span>",
+                outputs=[health_status],
+            )
+            
+            # Start agent button
+            def start_autonomous_agent(level: str):
+                """Start the autonomous agent with specified level."""
+                try:
+                    agent = get_agent() if get_agent else None
+                    if agent:
+                        # Agent is already created, update level
+                        return True, f"✅ Agent started at {level} level"
+                    return False, "⚠️ Agent not available"
+                except Exception as e:
+                    return False, f"❌ Error: {e}"
+            
+            start_agent_btn.click(
+                fn=start_autonomous_agent,
+                inputs=[autonomy_level],
+                outputs=[agent_running, agent_action_log],
+            )
+            
+            # Stop agent button
+            def stop_autonomous_agent():
+                """Stop the autonomous agent."""
+                try:
+                    agent = get_agent() if get_agent else None
+                    if agent:
+                        # Signal agent to stop
+                        return False, "⏹️ Agent stopped"
+                    return False, "Agent was not running"
+                except Exception as e:
+                    return False, f"❌ Error: {e}"
+            
+            stop_agent_btn.click(
+                fn=stop_autonomous_agent,
+                outputs=[agent_running, agent_action_log],
+            )
+            
+            # Autonomy level change
+            def update_autonomy_level(level: str):
+                """Update the agent's autonomy level."""
+                try:
+                    agent = get_agent() if get_agent else None
+                    if agent:
+                        return f"✅ Autonomy level set to: {level}"
+                    return f"Level will be {level} when agent starts"
+                except Exception as e:
+                    return f"❌ Error: {e}"
+            
+            autonomy_level.change(
+                fn=update_autonomy_level,
+                inputs=[autonomy_level],
+                outputs=[agent_action_log],
+            )
         
     return demo
 

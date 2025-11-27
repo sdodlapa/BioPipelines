@@ -9,6 +9,7 @@ Features:
 - Memory-augmented responses
 - Self-healing for failed jobs
 - Streaming support for real-time feedback
+- Autonomous agent integration (Phase 4)
 """
 
 import os
@@ -35,6 +36,24 @@ except ImportError as e:
     logger.warning(f"Some agent components not available: {e}")
     AGENTS_AVAILABLE = False
     AgentRouter_type = None  # type: ignore
+
+# Import autonomous agent (Phase 4)
+try:
+    from .autonomous import (
+        AutonomousAgent,
+        create_agent,
+        HealthChecker,
+        HealthStatus,
+        RecoveryManager,
+        JobMonitor as AutonomousJobMonitor,
+    )
+    AUTONOMOUS_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Autonomous agent not available: {e}")
+    AUTONOMOUS_AVAILABLE = False
+    AutonomousAgent = None
+    create_agent = None
+    HealthChecker = None
 
 
 # =============================================================================
@@ -68,6 +87,8 @@ class AgentChatHandler:
         enable_memory: bool = True,
         enable_react: bool = True,
         enable_self_healing: bool = True,
+        enable_autonomous: bool = True,
+        autonomy_level: str = "assisted",
         memory_path: str = ".agent_memory.db",
     ):
         """
@@ -80,6 +101,8 @@ class AgentChatHandler:
             enable_memory: Use agent memory
             enable_react: Use ReAct for complex queries
             enable_self_healing: Enable auto-healing for failed jobs
+            enable_autonomous: Enable autonomous agent mode
+            autonomy_level: Level of autonomy (readonly/monitored/assisted/supervised/autonomous)
             memory_path: Path to memory database
         """
         self.vllm_url = vllm_url
@@ -96,11 +119,14 @@ class AgentChatHandler:
         self._self_healer: Optional[SelfHealer] = None
         self._router: Optional[AgentRouter] = None
         self._tools: Optional[Dict[str, Callable]] = None
+        self._autonomous_agent: Optional["AutonomousAgent"] = None
         
         # Feature flags
         self.enable_memory = enable_memory
         self.enable_react = enable_react
         self.enable_self_healing = enable_self_healing
+        self.enable_autonomous = enable_autonomous and AUTONOMOUS_AVAILABLE
+        self.autonomy_level = autonomy_level
         self.memory_path = memory_path
         
         # Tracking
@@ -130,6 +156,16 @@ class AgentChatHandler:
             except Exception as e:
                 logger.warning(f"Could not initialize memory: {e}")
         return self._memory
+    
+    @property
+    def autonomous_agent(self) -> Optional["AutonomousAgent"]:
+        """Lazy load autonomous agent."""
+        if self._autonomous_agent is None and self.enable_autonomous:
+            try:
+                self._autonomous_agent = create_agent(level=self.autonomy_level)
+            except Exception as e:
+                logger.warning(f"Could not initialize autonomous agent: {e}")
+        return self._autonomous_agent
     
     @property
     def tools(self) -> Dict[str, Callable]:
@@ -249,12 +285,87 @@ class AgentChatHandler:
         """Synchronous chat implementation."""
         
         # Check for simple patterns first
-        message_lower = message.lower()
+        message_lower = message.lower().strip()
         
         # Simple commands
-        if message_lower.strip() in ["help", "?", "commands"]:
+        if message_lower in ["help", "?", "commands"]:
             yield self._get_help()
             return
+        
+        # ===== AUTONOMOUS AGENT COMMANDS (Phase 4) =====
+        if self.enable_autonomous and self.autonomous_agent:
+            # Health check
+            if message_lower in ["health", "status", "health check", "check health", "system health"]:
+                yield "🏥 **System Health Check**\n\n"
+                try:
+                    health = asyncio.get_event_loop().run_until_complete(
+                        self.autonomous_agent.check_health()
+                    )
+                    yield self._format_health_status(health)
+                except Exception as e:
+                    yield f"❌ Health check failed: {e}"
+                return
+            
+            # Recovery commands
+            if message_lower.startswith("recover") or message_lower.startswith("fix server"):
+                yield "🔧 **Initiating Recovery**\n\n"
+                try:
+                    if "vllm" in message_lower or "server" in message_lower:
+                        result = asyncio.get_event_loop().run_until_complete(
+                            self.autonomous_agent.recovery.handle_server_failure("vllm")
+                        )
+                    else:
+                        # Check health and report
+                        health = asyncio.get_event_loop().run_until_complete(
+                            self.autonomous_agent.check_health()
+                        )
+                        yield self._format_health_status(health)
+                        return
+                    
+                    status = "✅" if result.success else "❌"
+                    yield f"{status} {result.message}\n"
+                    if result.details:
+                        yield f"\nDetails: {result.details}"
+                except Exception as e:
+                    yield f"❌ Recovery failed: {e}"
+                return
+            
+            # Agent control
+            if message_lower == "start agent":
+                try:
+                    asyncio.get_event_loop().run_until_complete(
+                        self.autonomous_agent.start_loop()
+                    )
+                    yield "✅ **Autonomous agent started**\n\n"
+                    yield "I'll now monitor jobs and apply fixes automatically.\n"
+                    yield f"Autonomy level: **{self.autonomy_level}**"
+                except Exception as e:
+                    yield f"❌ Could not start agent: {e}"
+                return
+            
+            if message_lower == "stop agent":
+                try:
+                    asyncio.get_event_loop().run_until_complete(
+                        self.autonomous_agent.stop_loop()
+                    )
+                    yield "⏹️ **Autonomous agent stopped**"
+                except Exception as e:
+                    yield f"❌ Could not stop agent: {e}"
+                return
+            
+            # Watch job command
+            if message_lower.startswith("watch job ") or message_lower.startswith("monitor job "):
+                job_id = message_lower.split()[-1]
+                try:
+                    self.autonomous_agent.watch_job(
+                        job_id=job_id,
+                        on_complete=lambda e: logger.info(f"Job {e.job_id} completed"),
+                    )
+                    yield f"👁️ **Watching job {job_id}**\n\n"
+                    yield "I'll notify you of status changes and attempt auto-recovery on failure."
+                except Exception as e:
+                    yield f"❌ Could not watch job: {e}"
+                return
         
         # Try simple agent for basic commands
         if self._is_simple_command(message_lower):
@@ -313,6 +424,26 @@ class AgentChatHandler:
                 
         except Exception as e:
             yield f"\n\n❌ Error: {e}"
+    
+    def _format_health_status(self, health) -> str:
+        """Format health status for chat display."""
+        status_icons = {
+            "healthy": "🟢",
+            "degraded": "🟡", 
+            "unhealthy": "🔴",
+            "unknown": "⚪",
+        }
+        
+        icon = status_icons.get(health.status.value, "⚪")
+        lines = [f"{icon} **Overall: {health.status.value.upper()}**\n"]
+        
+        for comp in health.components:
+            comp_icon = status_icons.get(comp.status.value, "⚪")
+            timing = f" ({comp.response_time_ms:.0f}ms)" if comp.response_time_ms else ""
+            lines.append(f"  {comp_icon} **{comp.name}**: {comp.message}{timing}")
+        
+        lines.append(f"\n_Checked at {health.checked_at.strftime('%H:%M:%S')}_")
+        return "\n".join(lines)
     
     async def _chat_async(
         self,
@@ -416,7 +547,7 @@ Be concise, helpful, and proactive with suggestions.
     
     def _get_help(self) -> str:
         """Get help text."""
-        return """# BioPipelines Commands
+        help_text = """# BioPipelines Commands
 
 ## 📁 Data Discovery
 - **"scan /path/to/data"** - Find FASTQ/BAM files
@@ -436,9 +567,24 @@ Be concise, helpful, and proactive with suggestions.
 ## 📊 Analysis
 - **"analyze my data"** - Full analysis flow
 - **"compare samples A vs B"** - Differential analysis
-
+"""
+        
+        # Add autonomous commands if available
+        if self.enable_autonomous:
+            help_text += """
+## 🤖 Autonomous Agent
+- **"health"** / **"status"** - Check system health
+- **"start agent"** - Start autonomous monitoring
+- **"stop agent"** - Stop autonomous mode
+- **"watch job 12345"** - Monitor job with auto-recovery
+- **"recover vllm"** - Restart vLLM server
+- **"fix server"** - Attempt server recovery
+"""
+        
+        help_text += """
 💡 **Tip:** You can chain commands: "scan my data and create a workflow"
 """
+        return help_text
 
 
 # =============================================================================

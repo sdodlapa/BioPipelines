@@ -36,6 +36,9 @@ from .health_checker import HealthChecker, HealthStatus, ComponentHealth, System
 from .recovery import RecoveryManager, RecoveryResult, RecoveryAction, RecoveryLoop
 from .agent import AutonomousAgent, Task, TaskStatus, Action, ActionType, create_agent
 
+# Import AutonomyLevel from executor for convenience
+from workflow_composer.agents.executor import AutonomyLevel
+
 __all__ = [
     # Main agent
     "AutonomousAgent",
@@ -44,6 +47,7 @@ __all__ = [
     "TaskStatus",
     "Action",
     "ActionType",
+    "AutonomyLevel",
     
     # Job monitoring
     "JobMonitor",
