@@ -325,6 +325,73 @@ class ModelRegistry:
                 ),
                 priority=9,
             ),
+            # H100-optimized models (80GB VRAM each)
+            "deepseek-coder-v2-lite": ModelConfig(
+                id="deepseek-coder-v2-lite",
+                name="DeepSeek-Coder-V2-Lite-Instruct",
+                hf_id="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct",
+                provider_type=ProviderType.LOCAL,
+                size_gb=32,
+                gpus_required=1,
+                context_length=128000,
+                capabilities=[
+                    ModelCapability.CODE,
+                    ModelCapability.CHAT,
+                    ModelCapability.FILL_IN_MIDDLE,
+                    ModelCapability.REASONING,
+                ],
+                vllm_args=VLLMArgs(
+                    tensor_parallel_size=1,
+                    max_model_len=65536,
+                    dtype="bfloat16",
+                    gpu_memory_utilization=0.90,
+                ),
+                priority=3,  # High priority for H100
+            ),
+            "qwen2.5-coder-32b-h100": ModelConfig(
+                id="qwen2.5-coder-32b-h100",
+                name="Qwen2.5-Coder-32B-H100",
+                hf_id="Qwen/Qwen2.5-Coder-32B-Instruct",
+                provider_type=ProviderType.LOCAL,
+                size_gb=65,
+                gpus_required=1,
+                context_length=131072,
+                capabilities=[
+                    ModelCapability.CODE,
+                    ModelCapability.CHAT,
+                    ModelCapability.FILL_IN_MIDDLE,
+                    ModelCapability.AGENTIC,
+                ],
+                vllm_args=VLLMArgs(
+                    tensor_parallel_size=1,
+                    max_model_len=65536,
+                    dtype="bfloat16",
+                    gpu_memory_utilization=0.90,
+                ),
+                priority=4,  # Great for H100 single GPU
+            ),
+            "llama-3.3-70b-h100": ModelConfig(
+                id="llama-3.3-70b-h100",
+                name="Llama-3.3-70B-H100-Optimized",
+                hf_id="meta-llama/Llama-3.3-70B-Instruct",
+                provider_type=ProviderType.LOCAL,
+                size_gb=140,
+                gpus_required=2,
+                context_length=128000,
+                capabilities=[
+                    ModelCapability.CODE,
+                    ModelCapability.CHAT,
+                    ModelCapability.REASONING,
+                    ModelCapability.AGENTIC,
+                ],
+                vllm_args=VLLMArgs(
+                    tensor_parallel_size=2,
+                    max_model_len=65536,
+                    dtype="bfloat16",
+                    gpu_memory_utilization=0.90,
+                ),
+                priority=2,  # Primary model for H100 2-GPU setup
+            ),
         }
         self._models.update(default_models)
     
