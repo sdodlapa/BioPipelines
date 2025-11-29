@@ -8,6 +8,7 @@ A robust chat handler that integrates:
 - Session management
 - Error handling with graceful degradation
 - Retry logic for transient failures
+- Hybrid intent parsing with active learning
 """
 
 import logging
@@ -321,6 +322,9 @@ class SessionManager:
 class UnifiedChatHandler:
     """
     Unified chat handler with:
+    - Hybrid intent parsing (pattern + semantic + NER)
+    - Active learning with feedback loop
+    - LLM fallback for ambiguous queries
     - Pattern-based tool detection (fast, no LLM cost)
     - LLM function calling (for complex queries)
     - Graceful fallbacks
@@ -328,18 +332,22 @@ class UnifiedChatHandler:
     - Retry logic for transient failures
     """
     
-    def __init__(self, llm_provider=None):
+    def __init__(self, llm_provider=None, enable_learning: bool = True):
         """
         Initialize the chat handler.
         
         Args:
             llm_provider: LLMProvider instance for API calls
+            enable_learning: Whether to enable active learning/feedback
         """
         self.llm_provider = llm_provider
         self.session_manager = SessionManager()
         self._tools = None
         self._tools_available = False
+        self._intent_parser = None
+        self._enable_learning = enable_learning
         self._init_tools()
+        self._init_intent_parser()
     
     def _init_tools(self):
         """Initialize the tools system."""
@@ -351,6 +359,76 @@ class UnifiedChatHandler:
         except ImportError as e:
             logger.warning(f"Tools not available: {e}")
             self._tools_available = False
+    
+    def _init_intent_parser(self):
+        """Initialize the hybrid intent parser with learning."""
+        try:
+            from workflow_composer.agents.intent import LearningHybridParser
+            
+            # Get LLM client for fallback if available
+            llm_client = None
+            if self.llm_provider and self.llm_provider.available:
+                client, model = self.llm_provider.get_client_and_model()
+                if client:
+                    llm_client = client
+            
+            self._intent_parser = LearningHybridParser(
+                llm_client=llm_client,
+                log_queries=self._enable_learning,
+                use_llm_fallback=llm_client is not None,
+                llm_fallback_threshold=0.3,
+            )
+            logger.info("Hybrid intent parser with learning initialized")
+        except ImportError as e:
+            logger.warning(f"Intent parser not available: {e}")
+            self._intent_parser = None
+        except Exception as e:
+            logger.warning(f"Intent parser initialization failed: {e}")
+            self._intent_parser = None
+    
+    @property
+    def intent_parser(self):
+        """Get the intent parser instance."""
+        return self._intent_parser
+    
+    def submit_feedback(self, query: str, correct_intent: str, feedback_text: str = "") -> Dict:
+        """
+        Submit user feedback on intent classification.
+        
+        Args:
+            query: The original query
+            correct_intent: The correct intent label
+            feedback_text: Optional feedback text
+            
+        Returns:
+            Feedback submission result
+        """
+        if not self._intent_parser:
+            return {"error": "Intent parser not available"}
+        
+        return self._intent_parser.submit_feedback(
+            query=query,
+            correct_intent=correct_intent,
+            feedback_text=feedback_text,
+        )
+    
+    def get_pending_reviews(self, limit: int = 50) -> List[Dict]:
+        """Get low-confidence queries pending human review."""
+        if not self._intent_parser:
+            return []
+        return self._intent_parser.get_pending_reviews(limit=limit)
+    
+    def get_learning_stats(self) -> Dict:
+        """Get learning system statistics."""
+        if not self._intent_parser:
+            return {}
+        return self._intent_parser.get_stats()
+    
+    def export_training_data(self, output_path: str = None) -> str:
+        """Export training data for fine-tuning."""
+        if not self._intent_parser:
+            return ""
+        return self._intent_parser.export_training_data(output_path)
     
     @property
     def agent_tools(self):
@@ -607,11 +685,23 @@ When user asks to "check if we have X, if not find online":
         if not detected:
             return None
         
+        # detected is a tuple of (ToolName enum, captured_args list)
+        tool_enum, captured_args = detected
+        tool_name = tool_enum.value  # Get string name from enum
+        
         # Extract any arguments from the message
-        arguments = self._extract_arguments(detected, message)
+        arguments = self._extract_arguments(tool_name, message)
+        
+        # Also include captured args from regex patterns
+        if captured_args:
+            # Map positional args based on tool type
+            if tool_name == "scan_data" and captured_args[0]:
+                arguments["path"] = captured_args[0]
+            elif tool_name in ("search_databases", "search_tcga") and captured_args[0]:
+                arguments["query"] = captured_args[0]
         
         # Execute the tool
-        result_msg, result_data = self.execute_tool(detected, arguments, session)
+        result_msg, result_data = self.execute_tool(tool_name, arguments, session)
         
         return result_msg
     

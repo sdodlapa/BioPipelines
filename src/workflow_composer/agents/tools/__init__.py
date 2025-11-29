@@ -180,6 +180,11 @@ class AgentTools:
         """
         self.base_path = Path(base_path) if base_path else Path.cwd()
         
+        # Initialize scanner for data discovery
+        self._scanner = None
+        self._manifest = None
+        self._init_data_components()
+        
         # Build tool dispatch table
         self._tool_dispatch = self._build_dispatch_table()
         
@@ -188,11 +193,23 @@ class AgentTools:
         
         logger.info(f"AgentTools initialized with {len(self._tool_dispatch)} tools")
     
+    def _init_data_components(self):
+        """Initialize data scanner and manifest."""
+        try:
+            from workflow_composer.data import LocalSampleScanner, DataManifest
+            self._scanner = LocalSampleScanner()
+            self._manifest = DataManifest()
+            logger.info("Data scanner initialized successfully")
+        except ImportError as e:
+            logger.warning(f"Data components not available: {e}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize data components: {e}")
+    
     def _build_dispatch_table(self) -> Dict[str, callable]:
         """Build mapping from tool name to implementation."""
         dispatch = {
-            # Data Discovery
-            "scan_data": lambda **kw: scan_data_impl(**kw),
+            # Data Discovery - pass scanner and manifest
+            "scan_data": lambda **kw: scan_data_impl(scanner=self._scanner, manifest=self._manifest, **kw),
             "search_databases": lambda **kw: search_databases_impl(**kw),
             "search_tcga": lambda **kw: search_tcga_impl(**kw),
             "describe_files": lambda **kw: describe_files_impl(**kw),

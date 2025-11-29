@@ -152,11 +152,45 @@ def create_app() -> gr.Blocks:
             )
             send = gr.Button("Send", variant="primary", scale=1)
         
+        # Feedback section (for intent corrections)
+        with gr.Accordion("📝 Feedback & Learning", open=False):
+            gr.Markdown("**Help improve the assistant by correcting intent classifications:**")
+            with gr.Row():
+                feedback_query = gr.Textbox(
+                    label="Query",
+                    placeholder="The query that was misclassified...",
+                    scale=3,
+                )
+                feedback_intent = gr.Dropdown(
+                    label="Correct Intent",
+                    choices=[
+                        "DATA_SEARCH", "DATA_DOWNLOAD", "DATA_SCAN", "DATA_VALIDATE",
+                        "WORKFLOW_CREATE", "WORKFLOW_LIST", "WORKFLOW_CONFIGURE",
+                        "JOB_SUBMIT", "JOB_STATUS", "JOB_CANCEL", "JOB_LOGS",
+                        "ANALYSIS_QC", "ANALYSIS_RESULTS", "ANALYSIS_COMPARE",
+                        "META_HELP", "META_EXPLAIN", "META_STATUS",
+                    ],
+                    scale=2,
+                )
+            feedback_text = gr.Textbox(
+                label="Additional Feedback (optional)",
+                placeholder="Any context that might help...",
+                lines=1,
+            )
+            feedback_btn = gr.Button("Submit Feedback", variant="secondary")
+            feedback_result = gr.Markdown("")
+            
+            # Learning stats
+            with gr.Row():
+                stats_btn = gr.Button("📊 Show Stats")
+                stats_output = gr.JSON(label="Learning Statistics")
+        
         # Settings (collapsed)
         with gr.Accordion("⚙️ Settings", open=False):
             settings_info = "**Handler:** " + ("Available ✓" if HANDLER_AVAILABLE else "Not available")
             if chat_handler:
                 settings_info += f"\n**Tools:** {len(chat_handler.agent_tools.tools) if chat_handler.agent_tools else 0}"
+                settings_info += f"\n**Intent Parser:** {'Available ✓' if chat_handler.intent_parser else 'Not available'}"
             gr.Markdown(settings_info)
             clear = gr.Button("🗑️ Clear Chat")
         
@@ -173,10 +207,27 @@ def create_app() -> gr.Blocks:
                 chat_handler.session_manager.clear_session()
             return [], ""
         
+        def submit_feedback(query, intent, text):
+            if not chat_handler:
+                return "❌ Handler not available"
+            if not query or not intent:
+                return "⚠️ Please provide both query and correct intent"
+            result = chat_handler.submit_feedback(query, intent, text)
+            if "error" in result:
+                return f"❌ {result['error']}"
+            return f"✅ Feedback recorded! (ID: {result.get('feedback_id', 'N/A')})"
+        
+        def get_learning_stats():
+            if not chat_handler:
+                return {}
+            return chat_handler.get_learning_stats()
+        
         # Wire up events
         msg.submit(submit, [msg, chatbot], [chatbot, msg])
         send.click(submit, [msg, chatbot], [chatbot, msg])
         clear.click(clear_chat, outputs=[chatbot, msg])
+        feedback_btn.click(submit_feedback, [feedback_query, feedback_intent, feedback_text], feedback_result)
+        stats_btn.click(get_learning_stats, outputs=stats_output)
     
     return app
 

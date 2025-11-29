@@ -159,21 +159,28 @@ class ENCODEAdapter(BaseAdapter):
         try:
             # Use searchTerm for a broader search
             search_terms = []
-            if query.organism:
-                search_terms.append(query.organism)
             if query.assay_type:
                 search_terms.append(query.assay_type)
             if query.tissue:
                 search_terms.append(query.tissue)
             if query.target:
                 search_terms.append(query.target)
+            # Add organism last (less important for filtering)
+            if query.organism:
+                search_terms.append(query.organism)
+            
+            # Also add keywords
+            if query.keywords:
+                search_terms.extend(query.keywords)
             
             if not search_terms:
                 return []
             
-            # Simple search URL
+            # Simple search URL - combine terms with + for AND search
             search_term = " ".join(search_terms)
-            url = f"{self.BASE_URL}/search/?type=Experiment&format=json&limit={query.max_results}&status=released&searchTerm={requests.utils.quote(search_term)}"
+            # Limit to 25 results max for reliability
+            max_results = min(query.max_results, 25)
+            url = f"{self.BASE_URL}/search/?type=Experiment&format=json&limit={max_results}&status=released&searchTerm={requests.utils.quote(search_term)}"
             
             logger.info(f"ENCODE fallback search: {url}")
             
@@ -350,10 +357,12 @@ class ENCODEAdapter(BaseAdapter):
         if query.assembly:
             params.append(("assembly", query.assembly))
         
-        # Keywords in searchTerm
+        # Keywords - combine into single searchTerm to avoid 404 errors
+        # Multiple searchTerm params can cause issues with ENCODE API
         if query.keywords:
-            for keyword in query.keywords:
-                params.append(("searchTerm", keyword))
+            # Join keywords with space for AND search
+            keyword_str = " ".join(query.keywords)
+            params.append(("searchTerm", keyword_str))
         
         return params
     

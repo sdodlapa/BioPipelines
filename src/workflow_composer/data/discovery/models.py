@@ -16,6 +16,8 @@ class DataSource(Enum):
     ENCODE = "encode"
     GEO = "geo"
     SRA = "sra"
+    GDC = "gdc"      # NCI Genomic Data Commons
+    TCGA = "tcga"    # The Cancer Genome Atlas (via GDC)
     ENSEMBL = "ensembl"
     GENCODE = "gencode"
     UCSC = "ucsc"

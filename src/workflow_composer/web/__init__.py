@@ -1,52 +1,48 @@
 """
 Web UI module for BioPipelines Workflow Composer.
 
-Provides multiple interfaces:
-- Gradio UI: Modern chat-based interface (recommended)
-- Flask App: Original web interface
-- FastAPI: REST API for programmatic access
+Provides a chat-first Gradio interface with:
+- Unified chat handler with tool integration
+- Session management
+- LLM fallback chain (local vLLM → GitHub Models → Gemini → OpenAI)
 
 Usage:
-    # Gradio UI (recommended)
-    python -m workflow_composer.web.gradio_app
+    # Start the web UI
+    python -m workflow_composer.web.app --share
     
-    # Flask App
-    python -m workflow_composer.web.app
-    
-    # FastAPI
-    uvicorn workflow_composer.web.api:app --reload
+    # Or via start_server.sh
+    ./scripts/start_server.sh --cloud   # Cloud LLM only
+    ./scripts/start_server.sh --gpu     # Local vLLM on GPU
 """
 
-# Import Flask app (original)
+# Import Gradio app (main interface)
 try:
-    from .app import app as flask_app, main as flask_main
+    from .app import create_app, main
 except ImportError:
-    flask_app = None
-    flask_main = None
+    create_app = None
+    main = None
 
-# Import Gradio app (recommended)
+# Import chat handler
 try:
-    from .gradio_app import create_interface, main as gradio_main
+    from .chat_handler import UnifiedChatHandler, get_chat_handler
 except ImportError:
-    create_interface = None
-    gradio_main = None
+    UnifiedChatHandler = None
+    get_chat_handler = None
 
-# Import FastAPI app
+# Import utilities
 try:
-    from .api import app as fastapi_app, main as api_main
+    from .utils import detect_vllm_endpoint, get_default_port, use_local_llm
 except ImportError:
-    fastapi_app = None
-    api_main = None
-
-# Default to Gradio
-main = gradio_main or flask_main
+    detect_vllm_endpoint = None
+    get_default_port = None
+    use_local_llm = None
 
 __all__ = [
-    'flask_app',
-    'flask_main',
-    'create_interface', 
-    'gradio_main',
-    'fastapi_app',
-    'api_main',
+    'create_app',
     'main',
+    'UnifiedChatHandler',
+    'get_chat_handler',
+    'detect_vllm_endpoint',
+    'get_default_port',
+    'use_local_llm',
 ]

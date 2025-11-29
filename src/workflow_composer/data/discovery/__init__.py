@@ -7,6 +7,7 @@ LLM-powered data discovery for genomics databases.
 This module provides intelligent search across multiple data sources:
 - ENCODE Portal (ChIP-seq, ATAC-seq, RNA-seq, etc.)
 - NCBI GEO/SRA (All experiment types)
+- NCI GDC/TCGA (Cancer genomics - methylation, expression, mutations)
 - Ensembl (Reference genomes, annotations)
 
 Features:
@@ -31,6 +32,9 @@ Quick Start:
         print(f"  Assay: {dataset.assay_type}")
         print(f"  URL: {dataset.web_url}")
         print()
+    
+    # Search TCGA cancer data
+    results = discovery.search("brain cancer methylation", sources=["gdc"])
     
     # Download a dataset
     discovery.download(results.datasets[0], output_dir="/data/downloads")
@@ -97,6 +101,7 @@ from .adapters import (
     BaseAdapter,
     ENCODEAdapter,
     GEOAdapter,
+    GDCAdapter,
     EnsemblAdapter,
     get_adapter,
     list_available_sources,
@@ -104,6 +109,7 @@ from .adapters import (
     # Convenience functions
     search_encode as encode_search,
     search_geo as geo_search,
+    search_gdc as gdc_search,
     get_human_genome_url,
     get_human_gtf_url,
     get_mouse_genome_url,
@@ -135,6 +141,7 @@ __all__ = [
     "BaseAdapter",
     "ENCODEAdapter",
     "GEOAdapter",
+    "GDCAdapter",
     "EnsemblAdapter",
     "get_adapter",
     "list_available_sources",
@@ -146,6 +153,7 @@ __all__ = [
     "search_references",
     "encode_search",
     "geo_search",
+    "gdc_search",
     "get_human_genome_url",
     "get_human_gtf_url",
     "get_mouse_genome_url",

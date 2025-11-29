@@ -7,12 +7,14 @@ Database-specific adapters for searching and downloading genomics data.
 Supported databases:
 - ENCODE Portal (ChIP-seq, ATAC-seq, RNA-seq, etc.)
 - NCBI GEO/SRA (All experiment types)  
+- NCI GDC/TCGA (Cancer genomics data)
 - Ensembl (Reference genomes, annotations)
 
 Usage:
     from workflow_composer.data.discovery.adapters import (
         ENCODEAdapter,
         GEOAdapter,
+        GDCAdapter,
         EnsemblAdapter,
     )
     
@@ -24,6 +26,10 @@ Usage:
     geo = GEOAdapter()
     results = geo.search(SearchQuery(organism="human", assay_type="RNA-seq"))
     
+    # Search GDC/TCGA
+    gdc = GDCAdapter()
+    results = gdc.search(SearchQuery(keywords=["brain", "methylation"]))
+    
     # Get reference data
     ensembl = EnsemblAdapter()
     refs = ensembl.search(SearchQuery(organism="human", keywords=["genome"]))
@@ -32,6 +38,7 @@ Usage:
 from .base import BaseAdapter
 from .encode import ENCODEAdapter, search_encode
 from .geo import GEOAdapter, search_geo
+from .gdc import GDCAdapter, search_gdc
 from .ensembl import (
     EnsemblAdapter,
     get_human_genome_url,
@@ -47,11 +54,13 @@ __all__ = [
     # Adapters
     "ENCODEAdapter",
     "GEOAdapter",
+    "GDCAdapter",
     "EnsemblAdapter",
     
     # Convenience functions
     "search_encode",
     "search_geo",
+    "search_gdc",
     "get_human_genome_url",
     "get_human_gtf_url",
     "get_mouse_genome_url",
@@ -64,6 +73,8 @@ ADAPTER_REGISTRY = {
     "encode": ENCODEAdapter,
     "geo": GEOAdapter,
     "sra": GEOAdapter,  # GEO adapter also handles SRA
+    "gdc": GDCAdapter,
+    "tcga": GDCAdapter,  # Alias for GDC
     "ensembl": EnsemblAdapter,
 }
 

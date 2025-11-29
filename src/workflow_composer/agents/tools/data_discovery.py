@@ -186,20 +186,32 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
         results = []
         errors = []
         
-        # Initialize the orchestrator (searches ENCODE, GEO, SRA, Ensembl in parallel)
+        # Detect if this is a cancer-related query
+        cancer_keywords = ['cancer', 'tumor', 'carcinoma', 'adenocarcinoma', 'glioblastoma', 
+                           'glioma', 'leukemia', 'lymphoma', 'melanoma', 'sarcoma', 'metastatic',
+                           'gbm', 'brca', 'luad', 'lihc', 'tcga', 'gdc']
+        is_cancer_query = any(kw in query.lower() for kw in cancer_keywords)
+        
+        # Initialize the orchestrator (searches all databases in parallel)
         discovery = DataDiscovery(max_workers=4, timeout=30)
         
-        # Perform federated search across ALL major databases (ENCODE, GEO, SRA)
-        # Explicitly pass sources to ensure comprehensive search
+        # Perform federated search across ALL major databases
+        # Include GDC for cancer queries
         all_sources = ["encode", "geo"]  # SRA uses same adapter as GEO
+        if is_cancer_query and include_tcga:
+            all_sources.append("gdc")  # Add GDC for cancer-related queries
         
-        logger.info(f"Starting comprehensive search for: {query}")
+        logger.info(f"Starting comprehensive search for: {query} (sources: {all_sources})")
         search_results = discovery.search(query, sources=all_sources, max_results=10)
         
         # Convert DatasetInfo objects to result dicts
         for dataset in search_results.datasets:
+            source_name = dataset.source.value.upper() if dataset.source else "UNKNOWN"
+            # Map GDC to TCGA for display consistency
+            if source_name == "GDC":
+                source_name = "TCGA"
             results.append({
-                "source": dataset.source.value.upper() if dataset.source else "UNKNOWN",
+                "source": source_name,
                 "id": dataset.id,
                 "title": dataset.title or dataset.id,
                 "organism": dataset.organism or "",
@@ -212,33 +224,7 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
         if search_results.errors:
             errors.extend(search_results.errors)
         
-        # Also search TCGA for cancer-related queries
-        cancer_keywords = ['cancer', 'tumor', 'carcinoma', 'adenocarcinoma', 'glioblastoma', 
-                           'glioma', 'leukemia', 'lymphoma', 'melanoma', 'sarcoma', 'metastatic']
-        is_cancer_query = any(kw in query.lower() for kw in cancer_keywords)
-        
-        if include_tcga and is_cancer_query:
-            logger.info("Cancer-related query detected, also searching TCGA...")
-            try:
-                tcga_result = search_tcga_impl(
-                    cancer_type=query,  # Let TCGA search parse it
-                    data_type="methylation" if "methylation" in query.lower() else None
-                )
-                if tcga_result.success and tcga_result.data:
-                    tcga_projects = tcga_result.data.get('projects', [])
-                    for proj in tcga_projects[:5]:
-                        results.append({
-                            "source": "TCGA",
-                            "id": proj.get('project_id', ''),
-                            "title": proj.get('name', proj.get('project_id', '')),
-                            "organism": "Homo sapiens",
-                            "assay": proj.get('data_types', [''])[0] if proj.get('data_types') else '',
-                            "tissue": proj.get('primary_site', ''),
-                            "url": f"https://portal.gdc.cancer.gov/projects/{proj.get('project_id', '')}"
-                        })
-            except Exception as e:
-                logger.debug(f"TCGA search failed: {e}")
-                errors.append(f"TCGA: {e}")
+        # Note: GDC/TCGA is now searched via the orchestrator when is_cancer_query=True
         
         if results:
             # Deduplicate by ID
@@ -260,7 +246,7 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
                     return f"https://www.encodeproject.org/experiments/{id}"
                 elif source == "GEO":
                     return f"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={id}"
-                elif source == "TCGA":
+                elif source in ("TCGA", "GDC"):
                     return f"https://portal.gdc.cancer.gov/projects/{id}"
                 elif source == "SRA":
                     return f"https://www.ncbi.nlm.nih.gov/sra/{id}"
@@ -293,7 +279,8 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
 **Tips for better results:**
 - Include organism (human, mouse)
 - Specify assay type (RNA-seq, ChIP-seq, ATAC-seq)
-- Add tissue or cell line"""
+- Add tissue or cell line
+- For cancer data, include: cancer, tumor, TCGA, GBM, BRCA, etc."""
         
         return ToolResult(
             success=True,

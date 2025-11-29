@@ -40,7 +40,7 @@ from .models import (
 )
 from .query_parser import QueryParser, ParseResult
 from .adapters import (
-    BaseAdapter, ENCODEAdapter, GEOAdapter, EnsemblAdapter,
+    BaseAdapter, ENCODEAdapter, GEOAdapter, GDCAdapter, EnsemblAdapter,
     get_adapter, list_available_sources
 )
 
@@ -84,6 +84,8 @@ class DataDiscovery:
             DataSource.ENCODE: ENCODEAdapter(enable_caching, timeout),
             DataSource.GEO: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
             DataSource.SRA: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
+            DataSource.GDC: GDCAdapter(timeout=timeout),
+            DataSource.TCGA: GDCAdapter(timeout=timeout),  # Alias for GDC
             DataSource.ENSEMBL: EnsemblAdapter(enable_caching, timeout),
         }
         
