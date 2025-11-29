@@ -116,6 +116,7 @@ class ProviderHealth:
     available_models: int = 0
     error: Optional[str] = None
     last_checked: Optional[str] = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
 
 
 # =============================================================================

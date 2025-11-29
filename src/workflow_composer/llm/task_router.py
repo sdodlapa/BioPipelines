@@ -161,10 +161,11 @@ TASK_PATTERNS: Dict[TaskType, List[str]] = {
         r"^validate\b",  # "validate" at start
     ],
     TaskType.CODE_GENERATION: [
-        r"generat\w* (?:a )?(?:script|code|function|class)",
-        r"write (?:a )?(?:script|code|function|class|python|bash)",
-        r"create (?:a )?(?:script|function)",
-        r"implement",
+        r"generat\w* (?:a )?(?:\w+ )?(?:script|code|function|class)",
+        r"write (?:a )?(?:\w+ )?(?:script|code|function|class)",
+        r"write (?:a )?python\b",  # "write a python script"
+        r"create (?:a )?(?:\w+ )?(?:script|function)",
+        r"implement\b",
     ],
     TaskType.CODE_REVIEW: [
         r"review (?:this )?code",
@@ -192,12 +193,15 @@ TASK_PATTERNS: Dict[TaskType, List[str]] = {
         r"statistic",
     ],
     TaskType.ERROR_DIAGNOSIS: [
-        r"error:?\s",
-        r"exception:?\s",
-        r"failed:?\s",
+        r"error\b",  # Match standalone "error"
+        r"exception\b",
+        r"fail\w*",  # Match fail, failed, failing, failure
         r"diagnos\w*",
         r"what went wrong",
-        r"why did (?:it|this) fail",
+        r"why (?:is|did) (?:it|this|my)\b.+(?:fail|error)",  # "why is my workflow failing"
+        r"what does (?:this )?error",  # "what does this error mean"
+        r"exit code\s+\d+",  # "exit code 137"
+        r"FileNotFoundError|KeyError|ValueError|TypeError|ImportError|AttributeError",
     ],
     TaskType.TOOL_RECOMMENDATION: [
         r"recommend (?:a )?tool",

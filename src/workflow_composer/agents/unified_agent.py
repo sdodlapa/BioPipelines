@@ -293,6 +293,7 @@ class UnifiedAgent:
         workspace_root: Optional[Path] = None,
         enable_audit: bool = True,
         approval_callback: Optional[Callable] = None,
+        orchestrator_preset: Optional[str] = None,
     ):
         """
         Initialize the unified agent.
@@ -302,9 +303,11 @@ class UnifiedAgent:
             workspace_root: Root directory for file operations
             enable_audit: Whether to enable audit logging
             approval_callback: Function to call for approvals (async)
+            orchestrator_preset: Preset for LLM orchestrator ("development", "production", "critical")
         """
         self.autonomy_level = autonomy_level
         self.workspace_root = workspace_root or Path.cwd()
+        self._orchestrator_preset = orchestrator_preset
         
         # Initialize permission manager
         self.permissions = PermissionManager(
@@ -329,6 +332,7 @@ class UnifiedAgent:
         self._health_checker: Optional[HealthChecker] = None
         self._recovery_manager: Optional[RecoveryManager] = None
         self._job_monitor: Optional[JobMonitor] = None
+        self._orchestrator = None
         
         # Execution history
         self._history: List[AgentResponse] = []
@@ -362,6 +366,30 @@ class UnifiedAgent:
         if self._job_monitor is None:
             self._job_monitor = JobMonitor()
         return self._job_monitor
+    
+    @property
+    def orchestrator(self):
+        """
+        Get or initialize the LLM orchestrator for smart model routing.
+        
+        The orchestrator provides:
+        - Automatic local/cloud model selection
+        - Cost-aware routing
+        - Fallback handling
+        - Ensemble for critical tasks
+        
+        Returns:
+            ModelOrchestrator instance
+            
+        Example:
+            # Use orchestrator for LLM calls
+            response = await agent.orchestrator.complete("Generate workflow")
+            print(f"Used: {response.provider}, Cost: ${response.cost:.4f}")
+        """
+        if self._orchestrator is None:
+            from ..llm import get_orchestrator
+            self._orchestrator = get_orchestrator(preset=self._orchestrator_preset)
+        return self._orchestrator
         
     # =========================================================================
     # Permission Checking

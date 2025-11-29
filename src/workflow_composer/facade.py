@@ -121,6 +121,7 @@ class BioPipelines:
     - Data discovery and management
     - Job submission and monitoring
     - Tool catalog access
+    - Smart LLM orchestration (local/cloud routing)
     
     Example:
         bp = BioPipelines()
@@ -136,6 +137,9 @@ class BioPipelines:
         
         # Monitor
         status = bp.status(job.id)
+        
+        # Use orchestrator for smart LLM routing
+        response = await bp.orchestrator.complete("Generate workflow")
     """
     
     def __init__(
@@ -144,6 +148,7 @@ class BioPipelines:
         llm_model: Optional[str] = None,
         cluster: str = "local",
         config_path: Optional[str] = None,
+        orchestrator_preset: Optional[str] = None,
         **kwargs
     ):
         """
@@ -154,6 +159,7 @@ class BioPipelines:
             llm_model: Model name (provider-specific)
             cluster: Execution target ("local", "slurm")
             config_path: Path to configuration file
+            orchestrator_preset: Preset for LLM orchestrator ("development", "production", "critical")
             **kwargs: Additional configuration options
         """
         # Lazy imports to avoid circular dependencies
@@ -169,11 +175,14 @@ class BioPipelines:
             self._config.llm.intent_parser_model = llm_model
         
         self._cluster = cluster
+        self._orchestrator_preset = orchestrator_preset
         self._kwargs = kwargs
         
         # Lazy initialization
         self._composer = None
         self._agent = None
+        self._orchestrator = None
+        self._cost_tracker = None
         self._initialized = False
         
         logger.info(f"BioPipelines initialized (llm={llm_provider or 'default'})")
@@ -209,6 +218,44 @@ class BioPipelines:
             from .agents import UnifiedAgent
             self._agent = UnifiedAgent()
         return self._agent
+    
+    @property
+    def orchestrator(self) -> "ModelOrchestrator":
+        """
+        Access the LLM orchestrator for smart model routing.
+        
+        The orchestrator provides:
+        - Automatic local/cloud model selection
+        - Cost-aware routing
+        - Fallback handling
+        - Ensemble for critical tasks
+        
+        Example:
+            # Get smart model routing
+            response = await bp.orchestrator.complete("Generate workflow")
+            print(f"Used: {response.provider}, Cost: ${response.cost:.4f}")
+            
+            # Check usage stats
+            print(bp.orchestrator.stats)
+        """
+        if self._orchestrator is None:
+            from .llm import get_orchestrator
+            self._orchestrator = get_orchestrator(preset=self._orchestrator_preset)
+        return self._orchestrator
+    
+    @property
+    def cost_tracker(self) -> "CostTracker":
+        """
+        Access the cost tracker for budget management.
+        
+        Example:
+            print(f"Total spent: ${bp.cost_tracker.total_cost:.2f}")
+            print(bp.cost_tracker.summary())
+        """
+        if self._cost_tracker is None:
+            from .llm import CostTracker
+            self._cost_tracker = CostTracker()
+        return self._cost_tracker
     
     # =========================================================================
     # Core API - Workflow Generation

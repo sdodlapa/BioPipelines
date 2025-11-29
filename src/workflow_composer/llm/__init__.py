@@ -70,6 +70,14 @@ from .task_router import (
     RouterConfig,
 )
 
+# === Cost Tracker (v2.0) ===
+from .cost_tracker import (
+    CostTracker,
+    CostEntry,
+    BudgetAlert,
+    CostSummary,
+)
+
 # === Provider Layer (v2.0) ===
 from .providers import (
     # Types
@@ -127,6 +135,12 @@ __all__ = [
     "TaskAnalysis",
     "TaskRouter",
     "RouterConfig",
+    
+    # === Cost Tracker API ===
+    "CostTracker",
+    "CostEntry",
+    "BudgetAlert",
+    "CostSummary",
     
     # === Provider API ===
     "ProviderProtocol",
