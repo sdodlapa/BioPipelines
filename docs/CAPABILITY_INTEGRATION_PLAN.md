@@ -1,8 +1,32 @@
 # Capability Integration Plan
 
-**Document Version:** 1.0  
+**Document Version:** 1.1  
 **Created:** November 29, 2025  
-**Status:** Planning Phase
+**Updated:** November 29, 2025  
+**Status:** ✅ PHASE 1 COMPLETE
+
+---
+
+## Progress Summary
+
+| Phase | Status | Tools Added | Lines Integrated |
+|-------|--------|-------------|------------------|
+| Phase 1: Core Integration | ✅ COMPLETE | 3 new tools | ~4,000 |
+| Phase 2: Autonomous Agent | 🔲 Planned | TBD | ~3,000 |
+| Phase 3: Testing & Validation | 🔲 Planned | - | - |
+
+### Phase 1 Completion Details
+
+**Tools Enhanced (now using full capabilities):**
+- `diagnose_error` → ErrorDiagnosisAgent (50+ patterns, LLM fallback, auto-fix)
+- `analyze_results` → ResultCollector + ResultViewer (smart discovery, rich previews)
+- `check_references` → ReferenceManager (comprehensive status, download URLs)
+- `get_job_status` → WorkflowMonitor (Nextflow trace parsing, progress bars)
+
+**New Tools Added (23 total, up from 20):**
+- `download_reference` → Download genomes/GTF from Ensembl
+- `build_index` → Build STAR/Salmon/BWA/HISAT2/Kallisto indexes
+- `visualize_workflow` → Generate DAG diagrams with graphviz
 
 ---
 
@@ -12,21 +36,21 @@ After a comprehensive code audit, we identified **~8,000+ lines** of sophisticat
 
 ### Key Findings
 
-| Category | Unused Modules | LOC | Priority |
-|----------|---------------|-----|----------|
-| Error Diagnosis | 6 modules | 2,850 | HIGH |
-| Reference Management | 2 modules | 710 | HIGH |
-| Results Viewer | 7 modules | 2,880 | MEDIUM |
-| Workflow Monitoring | 1 module | 415 | MEDIUM |
-| Workflow Visualization | 1 module | 460 | LOW |
-| **TOTAL** | **17 modules** | **~7,300** | - |
+| Category | Unused Modules | LOC | Priority | Status |
+|----------|---------------|-----|----------|--------|
+| Error Diagnosis | 6 modules | 2,850 | HIGH | ✅ INTEGRATED |
+| Reference Management | 2 modules | 710 | HIGH | ✅ INTEGRATED |
+| Results Viewer | 7 modules | 2,880 | MEDIUM | ✅ INTEGRATED |
+| Workflow Monitoring | 1 module | 415 | MEDIUM | ✅ INTEGRATED |
+| Workflow Visualization | 1 module | 460 | LOW | ✅ INTEGRATED |
+| **TOTAL** | **17 modules** | **~7,300** | - | ✅ |
 
 > **Note:** The autonomous agent system (~3,000 lines) is deferred as it requires architectural changes.
 
 ### Current vs. Target Architecture
 
 ```
-CURRENT STATE:
+ORIGINAL STATE (20 tools):
 ┌─────────────────────────────────────────────────────┐
 │              UnifiedChatHandler                      │
 │                     ↓                                │
@@ -36,11 +60,11 @@ CURRENT STATE:
 │   check_references_impl() → Path scanning only      │
 └─────────────────────────────────────────────────────┘
 
-TARGET STATE:
+CURRENT STATE (23 tools) ✅ ACHIEVED:
 ┌─────────────────────────────────────────────────────┐
 │              UnifiedChatHandler                      │
 │                     ↓                                │
-│              AgentTools (20+ tools)                  │
+│              AgentTools (23 tools)                   │
 │   diagnose_error_impl() → ErrorDiagnosisAgent       │
 │     ├── Pattern Matching (702 lines, 50+ patterns)  │
 │     ├── Historical Learning (333 lines)             │
@@ -49,9 +73,9 @@ TARGET STATE:
 │   analyze_results_impl() → ResultCollector+Viewer   │
 │   check_references_impl() → ReferenceManager        │
 │   get_job_status_impl() → WorkflowMonitor           │
-│   NEW: visualize_workflow → WorkflowVisualizer      │
-│   NEW: apply_fix → AutoFixEngine                    │
-│   NEW: download_reference → ReferenceManager        │
+│   download_reference → ReferenceManager             │
+│   build_index → ReferenceManager                    │
+│   visualize_workflow → WorkflowVisualizer           │
 └─────────────────────────────────────────────────────┘
 ```
 
