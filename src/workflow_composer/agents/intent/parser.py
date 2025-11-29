@@ -100,6 +100,10 @@ class IntentType(Enum):
     META_THANKS = auto()         # Thank you
     META_UNKNOWN = auto()        # Cannot determine intent
     
+    # Context-Aware Intents
+    CONTEXT_RECALL = auto()      # Recall/reference previous results
+    CONTEXT_METADATA = auto()    # Get metadata about previous results
+    
     # Composite Intents (multi-step)
     COMPOSITE_CHECK_THEN_SEARCH = auto()  # Check local, then search online
     COMPOSITE_SEARCH_THEN_DOWNLOAD = auto()  # Search then download

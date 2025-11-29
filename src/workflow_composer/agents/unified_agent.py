@@ -110,6 +110,20 @@ INTENT_TO_TOOL: Dict[str, ToolName] = {
     "EDUCATION_EXPLAIN": ToolName.EXPLAIN_CONCEPT,
     "EDUCATION_HELP": ToolName.SHOW_HELP,
     
+    # Data Description
+    "DATA_DESCRIBE": ToolName.DESCRIBE_FILES,
+    
+    # Context-Aware (use previous results)
+    "CONTEXT_RECALL": None,  # Handled specially - recalls previous search results
+    "CONTEXT_METADATA": None,  # Handled specially - gets metadata from context
+    
+    # Data Description
+    "DATA_DESCRIBE": ToolName.DESCRIBE_FILES,
+    
+    # Context-Aware (use previous results)
+    "CONTEXT_RECALL": None,  # Handled specially - recalls previous search results
+    "CONTEXT_METADATA": None,  # Handled specially - gets metadata from context
+    
     # Meta/Composite (handled specially)
     "META_CONFIRM": None,
     "META_CANCEL": None,
@@ -677,6 +691,11 @@ class UnifiedAgent:
                     hybrid_params = self._build_params_from_parse_result(parse_result, query)
                     detected_args = list(hybrid_params.values()) if hybrid_params else []
                     logger.info(f"Mapped intent '{parse_result.intent}' to tool: {detected_tool}, params: {hybrid_params}")
+                
+                # Handle context-aware intents specially
+                if parse_result.intent in ("CONTEXT_RECALL", "CONTEXT_METADATA"):
+                    return await self._handle_context_query(parse_result.intent, query, task_type)
+                    
             except Exception as e:
                 logger.warning(f"HybridParser failed, falling back to regex: {e}")
         
@@ -1041,6 +1060,174 @@ class UnifiedAgent:
             suggestions=suggestions[:5],  # Limit suggestions
         )
         
+    async def _handle_context_query(
+        self,
+        intent: str,
+        query: str,
+        task_type: TaskType
+    ) -> AgentResponse:
+        """Handle queries that reference previous context (search results, etc.)."""
+        
+        # Get previous search results from context
+        last_search = self.context.get_state("last_search_results")
+        last_datasets = self.context.get_state("last_datasets")
+        
+        if not last_search and not last_datasets:
+            return AgentResponse(
+                success=False,
+                message="I don't have any previous search results to reference. Try searching for data first:\n\n"
+                        "Example: `search ENCODE for H3K27ac ChIP-seq in brain`",
+                response_type=ResponseType.ERROR,
+                task_type=task_type,
+            )
+        
+        # Build response from context
+        datasets = last_datasets or last_search.get("datasets", []) if last_search else []
+        
+        if intent == "CONTEXT_METADATA":
+            # Return detailed metadata about previous results
+            if not datasets:
+                return AgentResponse(
+                    success=True,
+                    message="No datasets found in context. The previous search may not have returned results.",
+                    response_type=ResponseType.INFO,
+                    task_type=task_type,
+                )
+            
+            # Format metadata table
+            lines = ["## 📋 Metadata for Previous Search Results\n"]
+            lines.append(f"Found **{len(datasets)}** datasets:\n")
+            lines.append("| # | ID | Source | Type | Description |")
+            lines.append("|---|-----|--------|------|-------------|")
+            
+            for i, ds in enumerate(datasets[:20], 1):  # Limit to 20
+                ds_id = ds.get("id", ds.get("accession", "N/A"))
+                source = ds.get("source", "Unknown")
+                dtype = ds.get("assay_type", ds.get("data_type", ds.get("type", "N/A")))
+                desc = ds.get("description", ds.get("title", ""))[:50]
+                lines.append(f"| {i} | `{ds_id}` | {source} | {dtype} | {desc}... |")
+            
+            lines.append("\n💡 Say `download all` to download these datasets, or `download <ID>` for specific ones.")
+            
+            return AgentResponse(
+                success=True,
+                message="\n".join(lines),
+                response_type=ResponseType.SUCCESS,
+                task_type=task_type,
+                data={"datasets": datasets},
+            )
+        
+        elif intent == "CONTEXT_RECALL":
+            # Simply recall what was found
+            count = len(datasets)
+            sources = set(ds.get("source", "Unknown") for ds in datasets)
+            
+            message = f"From your previous search, I found **{count}** datasets from {', '.join(sources)}.\n\n"
+            message += "Would you like me to:\n"
+            message += "- Show detailed metadata (`show metadata`)\n"
+            message += "- Download all datasets (`download all`)\n"
+            message += "- Download specific ones (`download <ID>`)\n"
+            
+            return AgentResponse(
+                success=True,
+                message=message,
+                response_type=ResponseType.SUCCESS,
+                task_type=task_type,
+                data={"count": count, "sources": list(sources)},
+            )
+        
+        # Fallback
+        return AgentResponse(
+            success=True,
+            message="I found previous results in context. What would you like to do with them?",
+            response_type=ResponseType.INFO,
+            task_type=task_type,
+        )
+    
+    async def _handle_context_query(
+        self,
+        intent: str,
+        query: str,
+        task_type: TaskType
+    ) -> AgentResponse:
+        """Handle queries that reference previous context (search results, etc.)."""
+        
+        # Get previous search results from context
+        last_search = self.context.get_state("last_search_results")
+        last_datasets = self.context.get_state("last_datasets")
+        
+        if not last_search and not last_datasets:
+            return AgentResponse(
+                success=False,
+                message="I don't have any previous search results to reference. Try searching for data first:\n\n"
+                        "Example: `search ENCODE for H3K27ac ChIP-seq in brain`",
+                response_type=ResponseType.ERROR,
+                task_type=task_type,
+            )
+        
+        # Build response from context
+        datasets = last_datasets or last_search.get("datasets", []) if last_search else []
+        
+        if intent == "CONTEXT_METADATA":
+            # Return detailed metadata about previous results
+            if not datasets:
+                return AgentResponse(
+                    success=True,
+                    message="No datasets found in context. The previous search may not have returned results.",
+                    response_type=ResponseType.INFO,
+                    task_type=task_type,
+                )
+            
+            # Format metadata table
+            lines = ["## 📋 Metadata for Previous Search Results\n"]
+            lines.append(f"Found **{len(datasets)}** datasets:\n")
+            lines.append("| # | ID | Source | Type | Description |")
+            lines.append("|---|-----|--------|------|-------------|")
+            
+            for i, ds in enumerate(datasets[:20], 1):  # Limit to 20
+                ds_id = ds.get("id", ds.get("accession", "N/A"))
+                source = ds.get("source", "Unknown")
+                dtype = ds.get("assay_type", ds.get("data_type", ds.get("type", "N/A")))
+                desc = ds.get("description", ds.get("title", ""))[:50]
+                lines.append(f"| {i} | `{ds_id}` | {source} | {dtype} | {desc}... |")
+            
+            lines.append("\n💡 Say `download all` to download these datasets, or `download <ID>` for specific ones.")
+            
+            return AgentResponse(
+                success=True,
+                message="\n".join(lines),
+                response_type=ResponseType.SUCCESS,
+                task_type=task_type,
+                data={"datasets": datasets},
+            )
+        
+        elif intent == "CONTEXT_RECALL":
+            # Simply recall what was found
+            count = len(datasets)
+            sources = set(ds.get("source", "Unknown") for ds in datasets)
+            
+            message = f"From your previous search, I found **{count}** datasets from {', '.join(sources)}.\n\n"
+            message += "Would you like me to:\n"
+            message += "- Show detailed metadata (`show metadata`)\n"
+            message += "- Download all datasets (`download all`)\n"
+            message += "- Download specific ones (`download <ID>`)\n"
+            
+            return AgentResponse(
+                success=True,
+                message=message,
+                response_type=ResponseType.SUCCESS,
+                task_type=task_type,
+                data={"count": count, "sources": list(sources)},
+            )
+        
+        # Fallback
+        return AgentResponse(
+            success=True,
+            message="I found previous results in context. What would you like to do with them?",
+            response_type=ResponseType.INFO,
+            task_type=task_type,
+        )
+    
     async def _handle_general_query(
         self, 
         query: str, 

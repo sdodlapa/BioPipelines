@@ -140,9 +140,6 @@ def create_app() -> gr.Blocks:
         # Header
         gr.Markdown("# 🧬 BioPipelines\n*AI-powered bioinformatics workflow composer*")
         
-        # Status bar (auto-refresh every 30s)
-        status = gr.Markdown(value=get_status, every=30)
-        
         # Main layout: Chat + Job Panel side by side
         with gr.Row():
             # Main Chat Column (75%)
@@ -278,11 +275,9 @@ def create_app() -> gr.Blocks:
         stats_btn.click(get_learning_stats, outputs=stats_output)
         
         # Job panel events
-        def refresh_jobs():
-            return format_jobs_table(get_user_jobs())
-        
-        def refresh_recent():
-            return format_jobs_table(get_recent_jobs())
+        def refresh_all_jobs():
+            """Refresh both active and recent job panels."""
+            return format_jobs_table(get_user_jobs()), format_jobs_table(get_recent_jobs())
         
         def view_job_log(job_id):
             if not job_id or not job_id.strip():
@@ -294,16 +289,16 @@ def create_app() -> gr.Blocks:
                 return "Enter a job ID"
             return cancel_job(job_id.strip())
         
-        jobs_refresh_btn.click(refresh_jobs, outputs=[active_jobs_html])
+        jobs_refresh_btn.click(refresh_all_jobs, outputs=[active_jobs_html, recent_jobs_html])
         view_log_btn.click(view_job_log, inputs=[quick_job_id], outputs=[job_action_output])
         cancel_job_btn.click(cancel_slurm_job, inputs=[quick_job_id], outputs=[job_action_output])
         
-        # Auto-refresh jobs every 30 seconds
+        # Auto-refresh both panels every 30 seconds
         job_timer = gr.Timer(value=30)
-        job_timer.tick(refresh_jobs, outputs=[active_jobs_html])
+        job_timer.tick(refresh_all_jobs, outputs=[active_jobs_html, recent_jobs_html])
         
         # Load jobs on page open
-        app.load(refresh_jobs, outputs=[active_jobs_html])
+        app.load(refresh_all_jobs, outputs=[active_jobs_html, recent_jobs_html])
     
     return app
 
