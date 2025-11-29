@@ -1,0 +1,119 @@
+%% BioPipelines Component Diagram
+%% Render with: https://mermaid.live or VS Code Mermaid extension
+
+graph LR
+    subgraph Facade["facade.py"]
+        BP["BioPipelines"]
+    end
+
+    subgraph Infrastructure["infrastructure/"]
+        direction TB
+        C["container.py<br/>DI Container"]
+        P["protocols.py<br/>Interfaces"]
+        E["exceptions.py<br/>Error Hierarchy"]
+        L["logging.py<br/>Structured Logs"]
+        S["settings.py<br/>Configuration"]
+    end
+
+    subgraph Agents["agents/"]
+        direction TB
+        UA["unified_agent.py"]
+        SH["self_healing.py"]
+        
+        subgraph ToolsBox["tools/"]
+            TB["base.py"]
+            TR["registry.py"]
+            TDD["data_discovery/"]
+            TDM["data_management/"]
+            TW["workflow/"]
+            TE["execution/"]
+            TDG["diagnostics/"]
+            TED["education/"]
+        end
+    end
+
+    subgraph Composer["composer/"]
+        direction TB
+        CO["composer.py"]
+        MM["module_mapper.py"]
+        TL["template_engine.py"]
+        TS["tool_selector.py"]
+    end
+
+    subgraph LLMBox["llm/"]
+        direction TB
+        LB["base.py"]
+        LF["factory.py"]
+        LV["vllm_adapter.py"]
+        LO["ollama_adapter.py"]
+        LA["openai_adapter.py"]
+        LC["anthropic_adapter.py"]
+    end
+
+    subgraph Data["data/"]
+        direction TB
+        DS["scanner.py"]
+        DD["downloader.py"]
+        DR["reference_manager.py"]
+        
+        subgraph Discovery["discovery/"]
+            DO["orchestrator.py"]
+            DA["adapters/"]
+        end
+    end
+
+    subgraph Diagnosis["diagnosis/"]
+        direction TB
+        DAG["agent.py"]
+        DP["patterns.py"]
+        DAF["auto_fix.py"]
+        DH["history.py"]
+    end
+
+    subgraph Results["results/"]
+        direction TB
+        RC["collector.py"]
+        RV["viewer.py"]
+        RA["archiver.py"]
+    end
+
+    subgraph Web["web/"]
+        direction TB
+        WA["app.py"]
+        WC["chat_handler.py"]
+    end
+
+    %% Connections
+    BP --> UA
+    BP --> Infrastructure
+    
+    UA --> ToolsBox
+    UA --> LLMBox
+    
+    CO --> LLMBox
+    CO --> MM
+    
+    TDD --> Discovery
+    TE --> SLURM["SLURM"]
+    TDG --> Diagnosis
+    TW --> Composer
+    
+    WA --> BP
+    WC --> UA
+
+    %% Styling
+    classDef facade fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef infra fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef agent fill:#2196F3,stroke:#1565C0,color:white
+    classDef llm fill:#00BCD4,stroke:#00838F,color:white
+    classDef data fill:#FF9800,stroke:#EF6C00,color:white
+    classDef diag fill:#F44336,stroke:#C62828,color:white
+    classDef web fill:#795548,stroke:#4E342E,color:white
+
+    class BP facade
+    class C,P,E,L,S infra
+    class UA,SH,TB,TR agent
+    class LB,LF,LV,LO,LA,LC llm
+    class DS,DD,DR,DO,DA data
+    class DAG,DP,DAF,DH diag
+    class WA,WC web

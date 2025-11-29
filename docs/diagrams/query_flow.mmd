@@ -1,0 +1,57 @@
+%% BioPipelines Query Flow - Sequence Diagram
+%% Render with: https://mermaid.live or VS Code Mermaid extension
+
+sequenceDiagram
+    autonumber
+    participant U as 👤 User
+    participant F as 🎯 BioPipelines<br/>Facade
+    participant A as 🤖 Unified<br/>Agent
+    participant T as 🔧 Agent<br/>Tools
+    participant C as 📋 Composer
+    participant L as 🧠 LLM<br/>Adapter
+    participant S as 💻 SLURM
+
+    rect rgb(240, 248, 255)
+        Note over U,S: Query Processing Phase
+        U->>+F: chat("Generate RNA-seq workflow for /data/samples")
+        F->>F: set_correlation_id("req-12345")
+        F->>F: log(operation.started)
+        F->>+A: process_query(query)
+    end
+
+    rect rgb(255, 248, 240)
+        Note over A,T: Intent Classification Phase
+        A->>A: classify_query() → WORKFLOW_GENERATION
+        A->>A: detect_tool() → ToolName.GENERATE_WORKFLOW
+        A->>A: check_permission("write") → APPROVED
+        A->>+T: execute_tool("generate_workflow", params)
+    end
+
+    rect rgb(240, 255, 240)
+        Note over T,L: Workflow Generation Phase
+        T->>+C: generate_workflow("rnaseq", "/data/samples")
+        C->>C: scan_data("/data/samples") → 4 samples
+        C->>+L: complete("Select tools for RNA-seq pipeline")
+        L-->>-C: ["fastqc", "star", "featurecounts"]
+        C->>C: map_to_modules()
+        C->>C: generate_nextflow_dsl2()
+        C-->>-T: workflow_dir="generated_workflows/rnaseq_..."
+    end
+
+    rect rgb(255, 240, 255)
+        Note over T,U: Response Phase
+        T-->>-A: ToolResult(success=true, data={...})
+        A-->>-F: AgentResponse(message="✅ Generated...")
+        F->>F: log(operation.completed, duration_ms=2345)
+        F-->>-U: "✅ Generated RNA-seq workflow with 4 steps"
+    end
+
+    rect rgb(248, 248, 248)
+        Note over U,S: Optional: Job Submission
+        U->>+F: submit(workflow_dir)
+        F->>+T: execute_tool("submit_job")
+        T->>+S: sbatch submit.sh
+        S-->>-T: job_id=67890
+        T-->>-F: ToolResult(job_id=67890)
+        F-->>-U: "Job submitted: 67890"
+    end

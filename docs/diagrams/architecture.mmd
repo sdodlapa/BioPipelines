@@ -1,0 +1,88 @@
+%% BioPipelines v2.0 Architecture Diagram
+%% Render with: https://mermaid.live or VS Code Mermaid extension
+
+graph TB
+    subgraph UI["User Interface Layer"]
+        WebUI["Web UI<br/>(Gradio)"]
+        CLI["Command Line"]
+        API["Python API"]
+        Facade["BioPipelines<br/>Facade"]
+    end
+
+    subgraph Agent["Agent Layer"]
+        UA["Unified Agent"]
+        QR["Query Router"]
+        TS["Tool Selector"]
+        AC["Autonomy<br/>Controller"]
+    end
+
+    subgraph Tools["Tool Categories"]
+        DD["Data Discovery"]
+        WF["Workflow"]
+        EX["Execution"]
+        DG["Diagnostics"]
+        ED["Education"]
+    end
+
+    subgraph Infra["Infrastructure Layer"]
+        DI["DI Container"]
+        PR["Protocols"]
+        EX2["Exceptions"]
+        LG["Logging"]
+        ST["Settings"]
+    end
+
+    subgraph LLM["LLM Providers"]
+        VLLM["vLLM<br/>(Local)"]
+        OL["Ollama<br/>(Local)"]
+        OA["OpenAI<br/>(Cloud)"]
+        AN["Anthropic<br/>(Cloud)"]
+    end
+
+    subgraph External["External Systems"]
+        SLURM["SLURM<br/>Cluster"]
+        NF["Nextflow"]
+        DB["Databases<br/>(GEO, ENCODE)"]
+    end
+
+    WebUI --> Facade
+    CLI --> Facade
+    API --> Facade
+    Facade --> UA
+    
+    UA --> QR
+    UA --> TS
+    UA --> AC
+    
+    QR --> DD
+    QR --> WF
+    QR --> EX
+    QR --> DG
+    QR --> ED
+    
+    TS --> VLLM
+    TS --> OL
+    TS --> OA
+    TS --> AN
+    
+    DD --> DB
+    WF --> NF
+    EX --> SLURM
+    
+    Infra -.-> UA
+    Infra -.-> Tools
+    Infra -.-> LLM
+
+    classDef facade fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef agent fill:#2196F3,stroke:#1565C0,color:white
+    classDef tool fill:#FF9800,stroke:#EF6C00,color:white
+    classDef infra fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef llm fill:#00BCD4,stroke:#00838F,color:white
+    classDef external fill:#607D8B,stroke:#37474F,color:white
+
+    class Facade facade
+    class UA,QR,TS,AC agent
+    class DD,WF,EX,DG,ED tool
+    class DI,PR,EX2,LG,ST infra
+    class VLLM,OL,OA,AN llm
+    class SLURM,NF,DB external

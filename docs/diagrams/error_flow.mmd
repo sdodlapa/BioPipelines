@@ -1,0 +1,78 @@
+%% BioPipelines Error Handling Flow
+%% Render with: https://mermaid.live or VS Code Mermaid extension
+
+flowchart TD
+    subgraph Start["Error Occurrence"]
+        E1["Exception Raised"]
+    end
+
+    subgraph Classification["Error Classification"]
+        C1{"Is BioPipelinesError?"}
+        C2["Wrap in BioPipelinesError"]
+        C3["Get error_code"]
+        C4{"Is recoverable?"}
+    end
+
+    subgraph Logging["Logging & Tracing"]
+        L1["Log with correlation_id"]
+        L2["Record stack trace"]
+        L3["Store in error history"]
+    end
+
+    subgraph Recovery["Recovery Attempt"]
+        R1{"Auto-recovery enabled?"}
+        R2["Identify recovery strategy"]
+        R3{"Strategy available?"}
+        R4["Execute recovery"]
+        R5{"Recovery successful?"}
+    end
+
+    subgraph Fallback["Fallback Handling"]
+        F1["Try fallback provider"]
+        F2{"Fallback successful?"}
+    end
+
+    subgraph Response["User Response"]
+        U1["Return success with fallback note"]
+        U2["Return error with suggestions"]
+        U3["Return critical error"]
+    end
+
+    E1 --> C1
+    C1 -->|No| C2 --> C3
+    C1 -->|Yes| C3
+    C3 --> L1 --> L2 --> L3
+    L3 --> C4
+    
+    C4 -->|Yes| R1
+    C4 -->|No| U3
+    
+    R1 -->|Yes| R2 --> R3
+    R1 -->|No| F1
+    
+    R3 -->|Yes| R4 --> R5
+    R3 -->|No| F1
+    
+    R5 -->|Yes| U1
+    R5 -->|No| F1
+    
+    F1 --> F2
+    F2 -->|Yes| U1
+    F2 -->|No| U2
+
+    %% Styling
+    classDef start fill:#FF5722,stroke:#E64A19,color:white
+    classDef classify fill:#9C27B0,stroke:#6A1B9A,color:white
+    classDef log fill:#607D8B,stroke:#37474F,color:white
+    classDef recover fill:#2196F3,stroke:#1565C0,color:white
+    classDef fallback fill:#FF9800,stroke:#EF6C00,color:white
+    classDef success fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef error fill:#F44336,stroke:#C62828,color:white
+
+    class E1 start
+    class C1,C2,C3,C4 classify
+    class L1,L2,L3 log
+    class R1,R2,R3,R4,R5 recover
+    class F1,F2 fallback
+    class U1 success
+    class U2,U3 error
