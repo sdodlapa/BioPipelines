@@ -215,12 +215,35 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
             file_count = dataset.file_count or len(dataset.download_urls)
             size_str = dataset.total_size_human if hasattr(dataset, 'total_size_human') else "Unknown"
             
-            # Get file types from download URLs
-            file_types = set()
-            for url in dataset.download_urls[:10]:  # Check first 10 files
-                fmt = getattr(url, 'file_format', None) or ''
-                if fmt:
-                    file_types.add(fmt.upper())
+            # Get file types with counts and sizes
+            file_type_info = {}  # {format: {"count": n, "size": bytes}}
+            for url in dataset.download_urls:
+                fmt = (getattr(url, 'file_format', None) or 'OTHER').upper()
+                size = getattr(url, 'size_bytes', 0) or 0
+                if fmt not in file_type_info:
+                    file_type_info[fmt] = {"count": 0, "size": 0}
+                file_type_info[fmt]["count"] += 1
+                file_type_info[fmt]["size"] += size
+            
+            # Format file breakdown
+            def format_size(bytes):
+                if bytes == 0:
+                    return ""
+                for unit in ['B', 'KB', 'MB', 'GB']:
+                    if bytes < 1024:
+                        return f"{bytes:.1f}{unit}"
+                    bytes /= 1024
+                return f"{bytes:.1f}TB"
+            
+            file_breakdown = []
+            for fmt, info in sorted(file_type_info.items(), key=lambda x: -x[1]["size"]):
+                size_str_fmt = format_size(info["size"])
+                file_breakdown.append({
+                    "format": fmt,
+                    "count": info["count"],
+                    "size": size_str_fmt,
+                    "size_bytes": info["size"]
+                })
             
             results.append({
                 "source": source_name,
@@ -232,7 +255,8 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
                 "url": dataset.web_url or "",
                 "file_count": file_count,
                 "total_size": size_str,
-                "file_types": list(file_types)[:5],  # Top 5 file types
+                "file_types": [f["format"] for f in file_breakdown[:5]],
+                "file_breakdown": file_breakdown[:5],  # Detailed breakdown
             })
         
         # Add any search errors
@@ -273,22 +297,29 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
             sources_found = list(set(r['source'] for r in results))
             
             def format_result(r):
-                """Format a single result with file metadata."""
+                """Format a single result with file type breakdown."""
                 assay_info = r.get('assay', '') or r.get('tissue', '')
-                title = (r['title'][:35] + '...') if len(r.get('title', '')) > 35 else r.get('title', '')
+                title = (r['title'][:30] + '...') if len(r.get('title', '')) > 30 else r.get('title', '')
                 
-                # File info
-                file_info = ""
-                if r.get('file_count'):
-                    file_info = f" | 📁 {r['file_count']} files"
-                if r.get('total_size') and r['total_size'] != 'Unknown':
-                    file_info += f" ({r['total_size']})"
-                if r.get('file_types'):
-                    file_info += f" | {', '.join(r['file_types'][:3])}"
+                # Main line
+                size_info = f" ({r['total_size']})" if r.get('total_size') and r['total_size'] != 'Unknown' else ""
+                main_line = f"**{r['source']}**: [{r['id']}]({get_url(r)}) | {assay_info}{size_info}"
                 
-                return f"  - **{r['source']}**: [{r['id']}]({get_url(r)}) | {assay_info}{file_info} | {title}"
+                # File breakdown line
+                breakdown = r.get('file_breakdown', [])
+                if breakdown:
+                    parts = []
+                    for fb in breakdown[:4]:
+                        if fb['size']:
+                            parts.append(f"{fb['count']}× {fb['format']} ({fb['size']})")
+                        else:
+                            parts.append(f"{fb['count']}× {fb['format']}")
+                    file_line = f"  └─ {' | '.join(parts)}"
+                    return f"{main_line}\n{file_line}"
+                
+                return main_line
             
-            result_list = "\n".join([format_result(r) for r in results[:15]])
+            result_list = "\n".join([format_result(r) for r in results[:12]])
             
             sources_info = f"Searched: {', '.join(sources_found)}"
             if errors:

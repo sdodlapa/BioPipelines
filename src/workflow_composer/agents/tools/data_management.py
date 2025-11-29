@@ -38,6 +38,9 @@ def download_dataset_impl(
     output_dir: str = None,
     data_type: str = None,
     execute: bool = True,
+    dry_run: bool = False,
+    file_filter: str = None,
+    confirm: bool = False,
 ) -> ToolResult:
     """
     Download a dataset from GEO, ENCODE, or TCGA/GDC.
@@ -49,13 +52,16 @@ def download_dataset_impl(
         output_dir: Output directory for downloaded files
         data_type: Type of data to download (methylation, rnaseq, etc.)
         execute: Whether to actually run download commands
+        dry_run: Preview what would be downloaded without actually downloading
+        file_filter: Filter files (e.g., "no fastq", "only bed", "processed only")
+        confirm: User has confirmed the download after dry-run preview
         
     Returns:
         ToolResult with download status
     """
     # Handle batch download ("download all")
     if download_all and dataset_ids:
-        return _download_batch(dataset_ids, output_dir, data_type, execute)
+        return _download_batch(dataset_ids, output_dir, data_type, execute, dry_run, file_filter, confirm)
     
     if not dataset_id:
         return ToolResult(
@@ -268,7 +274,8 @@ xargs -L 1 curl -O -J -L < files.txt
     )
 
 
-def _download_batch(dataset_ids: list, output_dir: str, data_type: str, execute: bool) -> ToolResult:
+def _download_batch(dataset_ids: list, output_dir: str, data_type: str, execute: bool, 
+                    dry_run: bool = False, file_filter: str = None, confirm: bool = False) -> ToolResult:
     """
     Download multiple datasets via SLURM job submission (non-blocking).
     
@@ -276,6 +283,11 @@ def _download_batch(dataset_ids: list, output_dir: str, data_type: str, execute:
     - Clear failure isolation (each source shows its own status)
     - Better parallelism (all sources download simultaneously)
     - Easier retry of failed sources
+    
+    Args:
+        dry_run: If True, show preview of what would be downloaded
+        file_filter: Filter expression (e.g., "no fastq", "only processed")
+        confirm: User has confirmed after seeing dry-run preview
     """
     if not dataset_ids:
         return ToolResult(
@@ -292,6 +304,78 @@ def _download_batch(dataset_ids: list, output_dir: str, data_type: str, execute:
     geo_ids = [d for d in dataset_ids if d.startswith("GSE")]
     encode_ids = [d for d in dataset_ids if d.startswith("ENCSR")]
     tcga_ids = [d for d in dataset_ids if d.startswith("TCGA") or ("-" in d and len(d) > 30)]
+    
+    # Parse file filter if provided
+    exclude_formats = set()
+    include_only = set()
+    if file_filter:
+        filter_lower = file_filter.lower()
+        # Parse "no fastq", "without bam", "exclude raw"
+        for fmt in ["fastq", "bam", "sam", "cram", "sra"]:
+            if f"no {fmt}" in filter_lower or f"without {fmt}" in filter_lower or f"exclude {fmt}" in filter_lower:
+                exclude_formats.add(fmt.upper())
+        if "no raw" in filter_lower or "without raw" in filter_lower:
+            exclude_formats.update(["FASTQ", "BAM", "SAM", "CRAM", "SRA"])
+        # Parse "only bed", "only processed"
+        for fmt in ["bed", "bigbed", "bigwig", "wig", "txt", "tsv", "csv"]:
+            if f"only {fmt}" in filter_lower:
+                include_only.add(fmt.upper())
+        if "only processed" in filter_lower or "processed only" in filter_lower:
+            include_only.update(["BED", "BIGBED", "BIGWIG", "WIG", "TXT", "TSV", "CSV", "PEAKS"])
+    
+    # Dry-run: show preview of what would be downloaded
+    if dry_run or (not confirm and len(dataset_ids) > 1):
+        preview_lines = ["�� **Download Preview**\n"]
+        
+        if exclude_formats:
+            preview_lines.append(f"🚫 Excluding: {', '.join(sorted(exclude_formats))}")
+        if include_only:
+            preview_lines.append(f"✅ Including only: {', '.join(sorted(include_only))}")
+        preview_lines.append("")
+        
+        # Show by source
+        if encode_ids:
+            preview_lines.append(f"**ENCODE** ({len(encode_ids)} datasets):")
+            for eid in encode_ids[:5]:
+                preview_lines.append(f"  • {eid}")
+            if len(encode_ids) > 5:
+                preview_lines.append(f"  • ... and {len(encode_ids) - 5} more")
+        
+        if geo_ids:
+            preview_lines.append(f"\n**GEO** ({len(geo_ids)} datasets):")
+            for gid in geo_ids[:5]:
+                preview_lines.append(f"  • {gid}")
+            if len(geo_ids) > 5:
+                preview_lines.append(f"  • ... and {len(geo_ids) - 5} more")
+        
+        if tcga_ids:
+            preview_lines.append(f"\n**TCGA** ({len(tcga_ids)} datasets):")
+            for tid in tcga_ids[:5]:
+                preview_lines.append(f"  • {tid[:20]}..." if len(tid) > 20 else f"  • {tid}")
+            if len(tcga_ids) > 5:
+                preview_lines.append(f"  • ... and {len(tcga_ids) - 5} more")
+        
+        preview_lines.extend([
+            "",
+            "---",
+            '💡 Say **"confirm download"** to proceed',
+            '💡 Or add filters: "download without fastq", "download processed only"',
+        ])
+        
+        return ToolResult(
+            success=True,
+            tool_name="download_dataset",
+            data={
+                "preview": True,
+                "dataset_ids": dataset_ids,
+                "encode_count": len(encode_ids),
+                "geo_count": len(geo_ids),
+                "tcga_count": len(tcga_ids),
+                "exclude_formats": list(exclude_formats),
+                "include_only": list(include_only),
+            },
+            message="\n".join(preview_lines)
+        )
     
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     script_dir = base_output / "download_jobs"
