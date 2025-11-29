@@ -58,10 +58,18 @@ BioPipelines is an AI-powered bioinformatics workflow automation platform that e
 │  └───────────────────────────────────────────────────────────────────────┘  │
 │                                │                                            │
 │  ┌───────────────────────────────────────────────────────────────────────┐  │
-│  │                    External Services                                   │  │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────────────┐  │  │
-│  │  │  vLLM   │ │ Ollama  │ │ OpenAI  │ │Anthropic│ │    Lightning    │  │  │
-│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────────────┘  │  │
+│  │                    LLM Providers                                       │  │
+│  │                                                                        │  │
+│  │  ┌─────────────────────────┐    ┌─────────────────────────────────┐   │  │
+│  │  │      LOCAL (GPU)        │    │           CLOUD                  │   │  │
+│  │  │  ┌─────────────────┐    │    │  ┌─────────────────────────┐    │   │  │
+│  │  │  │  vLLM (Primary) │    │    │  │  Lightning.ai           │    │   │  │
+│  │  │  │  Qwen, DeepSeek │    │    │  │  (DeepSeek, GPT, Claude)│    │   │  │
+│  │  │  └─────────────────┘    │    │  └─────────────────────────┘    │   │  │
+│  │  └─────────────────────────┘    └─────────────────────────────────┘   │  │
+│  │                                                                        │  │
+│  │  Note: Ollama, OpenAI, Anthropic adapters exist but Lightning.ai      │  │
+│  │  provides unified cloud access to multiple providers.                  │  │
 │  └───────────────────────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
@@ -233,15 +241,18 @@ Orchestrates all AI-powered operations with:
 
 ### 5. LLM Adapters (`llm/`)
 
-Unified interface for multiple LLM providers:
+Unified interface for LLM providers:
 
-| Adapter | Provider | Use Case |
-|---------|----------|----------|
-| `VLLMAdapter` | Local vLLM | Primary (GPU cluster) |
-| `OllamaAdapter` | Local Ollama | Fallback (lightweight) |
-| `OpenAIAdapter` | OpenAI API | Cloud option |
-| `AnthropicAdapter` | Claude API | Cloud option |
-| `LightningAdapter` | Lightning AI | Managed cloud |
+| Adapter | Provider | Status | Use Case |
+|---------|----------|--------|----------|
+| `VLLMAdapter` | Local vLLM | **Primary** | GPU cluster inference (Qwen, DeepSeek) |
+| `LightningAdapter` | Lightning.ai | **Active** | Cloud access to DeepSeek, GPT, Claude (30M free tokens/month) |
+| `OllamaAdapter` | Local Ollama | Available | Lightweight local fallback (code exists, not primary) |
+| `OpenAIAdapter` | OpenAI API | Available | Direct OpenAI access (code exists) |
+| `AnthropicAdapter` | Claude API | Available | Direct Anthropic access (code exists) |
+
+> **Note**: In practice, we use **vLLM** for local GPU inference and **Lightning.ai** for cloud access. 
+> Lightning.ai provides a unified API to multiple providers (DeepSeek, OpenAI, Anthropic) with one API key.
 
 ---
 

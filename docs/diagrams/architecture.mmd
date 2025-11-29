@@ -36,10 +36,12 @@ graph TB
     end
 
     subgraph LLM["LLM Providers"]
-        VLLM["vLLM<br/>(Local)"]
-        OL["Ollama<br/>(Local)"]
-        OA["OpenAI<br/>(Cloud)"]
-        AN["Anthropic<br/>(Cloud)"]
+        subgraph Local["Local (GPU)"]
+            VLLM["vLLM<br/>(Primary)<br/>Qwen, DeepSeek"]
+        end
+        subgraph Cloud["Cloud"]
+            LIT["Lightning.ai<br/>(DeepSeek, GPT, Claude)"]
+        end
     end
 
     subgraph External["External Systems"]
@@ -64,9 +66,7 @@ graph TB
     QR --> ED
     
     TS --> VLLM
-    TS --> OL
-    TS --> OA
-    TS --> AN
+    TS --> LIT
     
     DD --> DB
     WF --> NF
@@ -90,5 +90,5 @@ graph TB
     class UA,QR,TS,AC agent
     class DD,WF,EX,DG,ED tool
     class DI,PR,EX2,LG,ST infra
-    class VLLM,OL,OA,AN llm
+    class VLLM,LIT llm
     class SLURM,NF,DB external
