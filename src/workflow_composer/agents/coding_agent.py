@@ -177,10 +177,15 @@ class CodingAgent:
     - Fallback: GPT-4o or the main supervisor model
     
     Also uses fast pattern matching for common errors.
+    
+    Supports dependency injection: pass llm_client directly for better
+    testability and decoupling (similar to ReactAgent pattern).
     """
     
     def __init__(
         self,
+        llm_client: Any = None,
+        model: str = None,
         coder_url: Optional[str] = None,
         coder_model: str = "Qwen/Qwen2.5-Coder-32B-Instruct",
         fallback_url: Optional[str] = None,
@@ -190,11 +195,22 @@ class CodingAgent:
         Initialize the coding agent.
         
         Args:
+            llm_client: Optional pre-configured OpenAI-compatible client (dependency injection)
+            model: Model name to use with llm_client
             coder_url: URL of coding model vLLM server (e.g., http://localhost:8001/v1)
             coder_model: HuggingFace model ID for coding
             fallback_url: URL of fallback model server
             fallback_model: Model to use if coder unavailable
+            
+        Note:
+            If llm_client is provided, it takes precedence over URL-based discovery.
+            This enables dependency injection for testing and decoupling.
         """
+        # Dependency injection: if client provided, use it directly
+        self._provided_client = llm_client
+        self._provided_model = model
+        
+        # URL-based discovery (fallback if no client provided)
         self.coder_url = coder_url or os.environ.get("VLLM_CODER_URL")
         self.coder_model = coder_model
         self.fallback_url = fallback_url or os.environ.get("VLLM_URL", "http://localhost:8000/v1")
@@ -209,10 +225,17 @@ class CodingAgent:
         if self._client is not None:
             return self._client, self._model
         
+        # Priority 1: Use injected client (dependency injection)
+        if self._provided_client is not None:
+            self._client = self._provided_client
+            self._model = self._provided_model or "injected-model"
+            logger.info("Using injected LLM client")
+            return self._client, self._model
+        
         try:
             from openai import OpenAI
             
-            # Try coder model first
+            # Priority 2: Try coder model first
             if self.coder_url:
                 try:
                     client = OpenAI(base_url=self.coder_url, api_key="not-needed")
