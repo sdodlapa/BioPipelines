@@ -67,10 +67,12 @@ from .execution import (
     GET_JOB_STATUS_PATTERNS,
     GET_LOGS_PATTERNS,
     CANCEL_JOB_PATTERNS,
+    CHECK_SYSTEM_HEALTH_PATTERNS,
     submit_job_impl,
     get_job_status_impl,
     get_logs_impl,
     cancel_job_impl,
+    check_system_health_impl,
 )
 
 from .diagnostics import (
@@ -123,6 +125,7 @@ ALL_TOOL_PATTERNS = [
     (ToolName.GET_JOB_STATUS, GET_JOB_STATUS_PATTERNS),
     (ToolName.GET_LOGS, GET_LOGS_PATTERNS),
     (ToolName.CANCEL_JOB, CANCEL_JOB_PATTERNS),
+    (ToolName.CHECK_SYSTEM_HEALTH, CHECK_SYSTEM_HEALTH_PATTERNS),
     
     # Diagnostics
     (ToolName.DIAGNOSE_ERROR, DIAGNOSE_ERROR_PATTERNS),
@@ -198,6 +201,7 @@ class AgentTools:
             "get_job_status": lambda **kw: get_job_status_impl(**kw),
             "get_logs": lambda **kw: get_logs_impl(**kw),
             "cancel_job": lambda **kw: cancel_job_impl(**kw),
+            "check_system_health": lambda **kw: check_system_health_impl(**kw),
             
             # Diagnostics
             "diagnose_error": lambda **kw: diagnose_error_impl(**kw),
@@ -409,6 +413,15 @@ class AgentTools:
                         "workflow_path": {"type": "string", "description": "Path to workflow"},
                         "profile": {"type": "string", "enum": ["slurm", "local", "docker"]},
                     },
+                    "required": []
+                }
+            },
+            {
+                "name": "check_system_health",
+                "description": "Check system health including vLLM server, GPU status, disk space, memory, and SLURM availability.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
                     "required": []
                 }
             },

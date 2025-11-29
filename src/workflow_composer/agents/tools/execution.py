@@ -428,3 +428,166 @@ def cancel_job_impl(job_id: str = None) -> ToolResult:
             error=str(e),
             message=f"❌ Error cancelling job: {e}"
         )
+
+
+# =============================================================================
+# CHECK_SYSTEM_HEALTH
+# =============================================================================
+
+CHECK_SYSTEM_HEALTH_PATTERNS = [
+    r"(?:check|show|what\s+is)\s+(?:the\s+)?(?:system\s+)?health",
+    r"(?:is\s+the\s+)?(?:system|vllm|gpu|disk)\s+(?:healthy|ok|running)",
+    r"health\s+(?:check|status)",
+]
+
+
+def check_system_health_impl() -> ToolResult:
+    """
+    Check system health including vLLM, GPU, disk, and memory.
+    
+    Uses HealthChecker from the autonomous module for comprehensive
+    system health monitoring.
+    
+    Returns:
+        ToolResult with health status
+    """
+    try:
+        # Try to use HealthChecker
+        try:
+            from workflow_composer.agents.autonomous.health_checker import (
+                HealthChecker,
+                HealthStatus,
+            )
+            use_checker = True
+        except ImportError:
+            use_checker = False
+            logger.debug("HealthChecker not available")
+        
+        if use_checker:
+            checker = HealthChecker()
+            
+            # Run sync health check
+            import asyncio
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            health = loop.run_until_complete(checker.check_all())
+            
+            # Format results
+            status_emoji = {
+                HealthStatus.HEALTHY: "✅",
+                HealthStatus.DEGRADED: "⚠️",
+                HealthStatus.UNHEALTHY: "❌",
+                HealthStatus.UNKNOWN: "❓",
+            }
+            
+            overall_emoji = status_emoji.get(health.status, "❓")
+            
+            components_list = []
+            for comp in health.components:
+                emoji = status_emoji.get(comp.status, "❓")
+                response = f" ({comp.response_time_ms:.0f}ms)" if comp.response_time_ms else ""
+                components_list.append(f"  {emoji} **{comp.name}**: {comp.message}{response}")
+            
+            components_str = "\n".join(components_list)
+            
+            message = f"""🏥 **System Health Check**
+
+**Overall Status:** {overall_emoji} {health.status.value.upper()}
+
+**Components:**
+{components_str}
+
+_Checked at: {health.checked_at.strftime('%Y-%m-%d %H:%M:%S')}_
+"""
+            
+            return ToolResult(
+                success=health.status.is_ok,
+                tool_name="check_system_health",
+                data=health.to_dict(),
+                message=message
+            )
+        
+        else:
+            # Fallback: basic checks
+            import shutil
+            import psutil
+            
+            results = []
+            
+            # Disk check
+            disk = shutil.disk_usage("/")
+            disk_percent = (disk.used / disk.total) * 100
+            disk_free_gb = disk.free / (1024**3)
+            if disk_percent > 90:
+                results.append(f"  ❌ **Disk**: {disk_percent:.1f}% used ({disk_free_gb:.1f} GB free)")
+            elif disk_percent > 80:
+                results.append(f"  ⚠️ **Disk**: {disk_percent:.1f}% used ({disk_free_gb:.1f} GB free)")
+            else:
+                results.append(f"  ✅ **Disk**: {disk_percent:.1f}% used ({disk_free_gb:.1f} GB free)")
+            
+            # Memory check
+            mem = psutil.virtual_memory()
+            if mem.percent > 90:
+                results.append(f"  ❌ **Memory**: {mem.percent:.1f}% used")
+            elif mem.percent > 80:
+                results.append(f"  ⚠️ **Memory**: {mem.percent:.1f}% used")
+            else:
+                results.append(f"  ✅ **Memory**: {mem.percent:.1f}% used")
+            
+            # GPU check (if available)
+            try:
+                gpu_result = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=utilization.gpu,memory.used,memory.total", "--format=csv,noheader,nounits"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if gpu_result.returncode == 0:
+                    lines = gpu_result.stdout.strip().split("\n")
+                    for i, line in enumerate(lines):
+                        parts = line.split(",")
+                        if len(parts) >= 3:
+                            util = float(parts[0].strip())
+                            mem_used = float(parts[1].strip())
+                            mem_total = float(parts[2].strip())
+                            mem_pct = (mem_used / mem_total) * 100
+                            results.append(f"  ✅ **GPU {i}**: {util:.0f}% util, {mem_pct:.0f}% mem")
+            except Exception:
+                results.append(f"  ❓ **GPU**: not available")
+            
+            # SLURM check
+            try:
+                slurm_result = subprocess.run(
+                    ["squeue", "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if slurm_result.returncode == 0:
+                    results.append(f"  ✅ **SLURM**: available")
+                else:
+                    results.append(f"  ❌ **SLURM**: error")
+            except Exception:
+                results.append(f"  ❓ **SLURM**: not available")
+            
+            message = f"""🏥 **System Health Check**
+
+**Components:**
+{chr(10).join(results)}
+"""
+            
+            return ToolResult(
+                success=True,
+                tool_name="check_system_health",
+                data={"components": results},
+                message=message
+            )
+            
+    except Exception as e:
+        logger.exception("check_system_health failed")
+        return ToolResult(
+            success=False,
+            tool_name="check_system_health",
+            error=str(e),
+            message=f"❌ Health check error: {e}"
+        )

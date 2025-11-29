@@ -39,6 +39,7 @@ class ToolName(Enum):
     GET_JOB_STATUS = "get_job_status"
     GET_LOGS = "get_logs"
     CANCEL_JOB = "cancel_job"
+    CHECK_SYSTEM_HEALTH = "check_system_health"
     
     # Monitoring
     MONITOR_JOBS = "monitor_jobs"
