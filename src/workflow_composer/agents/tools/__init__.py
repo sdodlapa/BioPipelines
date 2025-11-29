@@ -70,6 +70,7 @@ from .execution import (
     CHECK_SYSTEM_HEALTH_PATTERNS,
     RESTART_VLLM_PATTERNS,
     RESUBMIT_JOB_PATTERNS,
+    WATCH_JOB_PATTERNS,
     submit_job_impl,
     get_job_status_impl,
     get_logs_impl,
@@ -77,6 +78,7 @@ from .execution import (
     check_system_health_impl,
     restart_vllm_impl,
     resubmit_job_impl,
+    watch_job_impl,
 )
 
 from .diagnostics import (
@@ -129,6 +131,7 @@ ALL_TOOL_PATTERNS = [
     # Execution - more specific patterns first
     (ToolName.RESTART_VLLM, RESTART_VLLM_PATTERNS),
     (ToolName.RESUBMIT_JOB, RESUBMIT_JOB_PATTERNS),
+    (ToolName.WATCH_JOB, WATCH_JOB_PATTERNS),
     (ToolName.SUBMIT_JOB, SUBMIT_JOB_PATTERNS),
     (ToolName.GET_JOB_STATUS, GET_JOB_STATUS_PATTERNS),
     (ToolName.GET_LOGS, GET_LOGS_PATTERNS),
@@ -213,6 +216,7 @@ class AgentTools:
             "check_system_health": lambda **kw: check_system_health_impl(**kw),
             "restart_vllm": lambda **kw: restart_vllm_impl(**kw),
             "resubmit_job": lambda **kw: resubmit_job_impl(**kw),
+            "watch_job": lambda **kw: watch_job_impl(**kw),
             
             # Diagnostics
             "diagnose_error": lambda **kw: diagnose_error_impl(**kw),
@@ -459,6 +463,19 @@ class AgentTools:
                         "job_id": {"type": "string", "description": "Original SLURM job ID to resubmit"},
                         "script_path": {"type": "string", "description": "Path to submission script (auto-detected if job_id provided)"},
                         "modify_resources": {"type": "object", "description": "Resource modifications (e.g., {\"mem\": \"32G\", \"time\": \"4:00:00\"})"},
+                    },
+                    "required": []
+                }
+            },
+            {
+                "name": "watch_job",
+                "description": "Get detailed SLURM job information including metadata, times, and optional logs. More comprehensive than get_job_status.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "job_id": {"type": "string", "description": "SLURM job ID to monitor"},
+                        "include_logs": {"type": "boolean", "description": "Include recent log output for failed jobs"},
+                        "tail_lines": {"type": "integer", "description": "Number of log lines to include (default: 50)"},
                     },
                     "required": []
                 }

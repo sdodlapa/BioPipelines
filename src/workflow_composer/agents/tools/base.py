@@ -42,6 +42,7 @@ class ToolName(Enum):
     CHECK_SYSTEM_HEALTH = "check_system_health"
     RESTART_VLLM = "restart_vllm"
     RESUBMIT_JOB = "resubmit_job"
+    WATCH_JOB = "watch_job"
     
     # Monitoring
     MONITOR_JOBS = "monitor_jobs"
