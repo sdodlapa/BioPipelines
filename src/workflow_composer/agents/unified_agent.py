@@ -69,24 +69,18 @@ from .tools import get_agent_tools, AgentTools, ToolResult, ToolName
 # Autonomous components (lazy loaded)
 from .autonomous import HealthChecker, RecoveryManager, JobMonitor
 
+# Unified classification (Phase 1 refactoring)
+from .classification import TaskType, classify_task as _classify_task_impl
+
 logger = logging.getLogger(__name__)
 
 
 # =============================================================================
-# Types
+# Types (TaskType imported from classification.py)
 # =============================================================================
 
-class TaskType(Enum):
-    """Classification of user queries."""
-    WORKFLOW = "workflow"          # Generate/manage workflows
-    DIAGNOSIS = "diagnosis"        # Error diagnosis and recovery
-    DATA = "data"                  # Data discovery and management
-    JOB = "job"                    # Job submission and monitoring
-    ANALYSIS = "analysis"          # Result analysis
-    EDUCATION = "education"        # Explain concepts
-    CODING = "coding"              # Generate code
-    SYSTEM = "system"              # System health, vLLM restart
-    GENERAL = "general"            # General questions
+# TaskType is now imported from classification.py for single source of truth
+# Re-exported here for backward compatibility
 
 
 class ResponseType(Enum):
@@ -158,10 +152,11 @@ class AgentResponse:
 
 
 # =============================================================================
-# Task Classification
+# Task Classification (delegated to classification.py)
 # =============================================================================
 
-# Keywords for task classification
+# TASK_KEYWORDS kept for backward compatibility - tests may reference it
+# The actual classification logic is now in classification.py
 TASK_KEYWORDS = {
     TaskType.WORKFLOW: [
         "workflow", "pipeline", "generate", "create workflow", "run pipeline",
@@ -204,33 +199,16 @@ def classify_task(query: str) -> TaskType:
     """
     Classify a user query into a task type.
     
+    This function now delegates to classification.py for the actual logic,
+    providing a single source of truth while maintaining backward compatibility.
+    
     Args:
         query: User's natural language query
         
     Returns:
         TaskType enum value
     """
-    query_lower = query.lower()
-    
-    # Priority keywords that override other classifications
-    # Education keywords should take priority when asking "what is X"
-    priority_education_patterns = ["explain", "what is", "how does", "understand", "learn"]
-    for pattern in priority_education_patterns:
-        if pattern in query_lower:
-            return TaskType.EDUCATION
-    
-    # Count keyword matches for each type
-    scores = {}
-    for task_type, keywords in TASK_KEYWORDS.items():
-        score = sum(1 for kw in keywords if kw in query_lower)
-        if score > 0:
-            scores[task_type] = score
-            
-    if not scores:
-        return TaskType.GENERAL
-        
-    # Return type with highest score
-    return max(scores.items(), key=lambda x: x[1])[0]
+    return _classify_task_impl(query)
 
 
 # =============================================================================

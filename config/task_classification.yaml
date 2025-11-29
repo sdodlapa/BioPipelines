@@ -1,0 +1,153 @@
+# Task Classification Configuration
+# =================================
+# Single source of truth for classifying user queries into task types.
+# Used by agents/classification.py
+
+task_types:
+  # Education has highest priority - "what is X" should always explain
+  education:
+    keywords:
+      - explain
+      - help
+      - tutorial
+      - understand
+      - learn
+      - concept
+      - definition
+    patterns:
+      - "what.is"
+      - "how.does"
+      - "tell.me.about"
+    priority: 1  # Highest priority
+
+  # Diagnosis/debugging
+  diagnosis:
+    keywords:
+      - error
+      - fail
+      - diagnose
+      - debug
+      - fix
+      - recover
+      - crash
+      - problem
+      - issue
+      - wrong
+      - broken
+    patterns:
+      - "not.work"
+      - "why.did"
+      - "job.fail"
+      - "troubleshoot"
+    priority: 1
+
+  # Workflow generation
+  workflow:
+    keywords:
+      - workflow
+      - pipeline
+      - generate
+      - nextflow
+      - snakemake
+    patterns:
+      - "create.workflow"
+      - "create.*pipeline"
+      - "rna-?seq"
+      - "chip-?seq"
+      - "atac-?seq"
+      - "wgs"
+      - "variant.call"
+      - "alignment"
+    priority: 2
+
+  # Data discovery and management
+  data:
+    keywords:
+      - scan
+      - find
+      - search
+      - data
+      - download
+      - dataset
+      - fastq
+      - bam
+      - vcf
+      - reference
+      - genome
+      - index
+      - files
+      - samples
+    patterns:
+      - "tcga"
+      - "geo"
+      - "sra"
+      - "encode"
+    priority: 2
+
+  # Job management
+  job:
+    keywords:
+      - job
+      - submit
+      - status
+      - running
+      - queue
+      - slurm
+      - cancel
+      - resubmit
+      - watch
+      - monitor
+      - pending
+    patterns:
+      - "job.status"
+      - "check.queue"
+    priority: 2
+
+  # Analysis and results
+  analysis:
+    keywords:
+      - analyze
+      - results
+      - compare
+      - visualize
+      - plot
+      - statistics
+      - quality
+      - metrics
+      - report
+    patterns:
+      - "analyze.results"
+      - "quality.control"
+    priority: 3
+
+  # System management
+  system:
+    keywords:
+      - system
+      - vllm
+      - restart
+      - server
+      - service
+      - gpu
+      - memory
+      - disk
+    patterns:
+      - "system.health"
+      - "health.check"
+      - "restart.vllm"
+    priority: 2
+
+  # Code generation
+  coding:
+    keywords:
+      - code
+      - script
+      - function
+      - implement
+      - python
+      - bash
+    patterns:
+      - "write.code"
+      - "nextflow.config"
+      - "snakemake.rule"
+    priority: 3
