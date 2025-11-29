@@ -2,12 +2,19 @@
 Agent Orchestrator for BioPipelines
 =====================================
 
-Lightweight orchestration layer that coordinates specialized agents:
-- Router: Intent detection and tool routing
-- CodingAgent: Error diagnosis and code fixes
-- AgentTools: Data discovery and workflow execution
+NOTE: This module is maintained for backward compatibility.
+For new code, prefer using UnifiedAgent directly:
 
-NO external frameworks required - just uses our existing components.
+    from workflow_composer.agents import UnifiedAgent
+    agent = UnifiedAgent()
+    response = await agent.process_query("scan /data for files")
+
+The AgentOrchestrator provides additional functionality like:
+- Streaming responses
+- Job-specific diagnosis
+- Multi-step workflow handling
+
+These features will be migrated to UnifiedAgent in a future release.
 
 Architecture:
     User Query → Orchestrator
@@ -24,11 +31,22 @@ Architecture:
 
 import os
 import logging
+import warnings
 from typing import Dict, Any, Optional, List, AsyncGenerator, Union
 from dataclasses import dataclass
 from enum import Enum
 
 logger = logging.getLogger(__name__)
+
+
+def _emit_deprecation_warning():
+    """Emit deprecation warning for direct orchestrator usage."""
+    warnings.warn(
+        "AgentOrchestrator is deprecated for simple queries. "
+        "Use UnifiedAgent instead: from workflow_composer.agents import UnifiedAgent",
+        DeprecationWarning,
+        stacklevel=3
+    )
 
 
 class AgentType(Enum):

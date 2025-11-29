@@ -1,17 +1,25 @@
 """
-Agent Integration Module
-========================
+Agent Integration Module (Legacy)
+==================================
 
-Bridges the new LLM-based AgentRouter with the existing AgentTools system.
-Provides a unified interface for the chat handler to use.
+NOTE: This module is maintained for backward compatibility.
+For new code, prefer using UnifiedAgent directly:
 
-Usage:
+    from workflow_composer.agents import UnifiedAgent
+    agent = UnifiedAgent()
+    response = await agent.process_query("scan /data for files")
+
+The AgentBridge provided a simpler interface before UnifiedAgent was created.
+It bridges LLM-based AgentRouter with the AgentTools system.
+
+Legacy Usage:
     agent = AgentBridge(app_state)
     result = await agent.process_message(message, context)
 """
 
 import asyncio
 import logging
+import warnings
 from typing import Dict, Any, Optional
 
 from workflow_composer.agents.tools import AgentTools, ToolResult, ToolName
@@ -25,9 +33,21 @@ from workflow_composer.agents.router import (
 logger = logging.getLogger(__name__)
 
 
+def _emit_deprecation_warning():
+    """Emit deprecation warning for AgentBridge usage."""
+    warnings.warn(
+        "AgentBridge is deprecated. Use UnifiedAgent instead: "
+        "from workflow_composer.agents import UnifiedAgent",
+        DeprecationWarning,
+        stacklevel=3
+    )
+
+
 class AgentBridge:
     """
     Bridges LLM routing with tool execution.
+    
+    DEPRECATED: Use UnifiedAgent instead for new code.
     
     The bridge:
     1. Uses AgentRouter to determine intent via LLM
