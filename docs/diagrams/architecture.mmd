@@ -6,7 +6,10 @@ graph TB
         WebUI["Web UI<br/>(Gradio)"]
         CLI["Command Line"]
         API["Python API"]
-        Facade["BioPipelines<br/>Facade"]
+    end
+
+    subgraph FacadeLayer["Unified Entry Point"]
+        Facade["BioPipelines Facade<br/>━━━━━━━━━━━━━━━━━━━<br/>chat() | submit() | status()<br/>generate_workflow() | diagnose()"]
     end
 
     subgraph Agent["Agent Layer"]
@@ -69,17 +72,20 @@ graph TB
     WF --> NF
     EX --> SLURM
     
+    Infra -.-> Facade
     Infra -.-> UA
     Infra -.-> Tools
     Infra -.-> LLM
 
-    classDef facade fill:#4CAF50,stroke:#2E7D32,color:white
+    classDef ui fill:#E3F2FD,stroke:#1565C0,color:#1565C0
+    classDef facade fill:#4CAF50,stroke:#2E7D32,color:white,stroke-width:3px
     classDef agent fill:#2196F3,stroke:#1565C0,color:white
     classDef tool fill:#FF9800,stroke:#EF6C00,color:white
     classDef infra fill:#9C27B0,stroke:#6A1B9A,color:white
     classDef llm fill:#00BCD4,stroke:#00838F,color:white
     classDef external fill:#607D8B,stroke:#37474F,color:white
 
+    class WebUI,CLI,API ui
     class Facade facade
     class UA,QR,TS,AC agent
     class DD,WF,EX,DG,ED tool
