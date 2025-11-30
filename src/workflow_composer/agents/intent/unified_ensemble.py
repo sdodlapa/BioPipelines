@@ -45,6 +45,14 @@ from typing import Dict, List, Optional, Any, Tuple
 from enum import Enum
 import time
 
+# Import Phase 1 components
+try:
+    from .negation_handler import NegationHandler, NegationResult, NegationType
+    NEGATION_AVAILABLE = True
+except ImportError:
+    NEGATION_AVAILABLE = False
+    NegationResult = None
+
 logger = logging.getLogger(__name__)
 
 
@@ -99,6 +107,11 @@ class EnsembleParseResult:
     original_query: str = ""
     normalized_query: str = ""
     
+    # Negation handling (Phase 1 improvement)
+    negation_result: Optional[Any] = None  # NegationResult when available
+    excluded_terms: List[str] = field(default_factory=list)
+    preferred_terms: List[str] = field(default_factory=list)
+    
     # Clarification
     needs_clarification: bool = False
     clarification_prompt: Optional[str] = None
@@ -121,6 +134,8 @@ class EnsembleParseResult:
             "agreement_level": self.agreement_level,
             "needs_clarification": self.needs_clarification,
             "latency_ms": self.total_latency_ms,
+            "excluded_terms": self.excluded_terms,
+            "preferred_terms": self.preferred_terms,
         }
 
 
@@ -159,6 +174,7 @@ class UnifiedEnsembleParser:
         llm_client=None,
         enable_rag: bool = True,
         enable_llm_fallback: bool = True,
+        enable_negation_handling: bool = True,
     ):
         """
         Initialize the ensemble parser.
@@ -168,11 +184,13 @@ class UnifiedEnsembleParser:
             llm_client: LLM client for generation fallback
             enable_rag: Enable RAG-based history learning
             enable_llm_fallback: Enable LLM for complex queries
+            enable_negation_handling: Enable negation detection (Phase 1)
         """
         self.weights = weights or self.DEFAULT_WEIGHTS.copy()
         self.llm_client = llm_client
         self.enable_rag = enable_rag
         self.enable_llm_fallback = enable_llm_fallback
+        self.enable_negation_handling = enable_negation_handling
         
         # Normalize weights
         total_weight = sum(self.weights.values())
@@ -183,9 +201,21 @@ class UnifiedEnsembleParser:
         self._semantic_classifier = None
         self._ner = None
         self._rag_orchestrator = None
+        self._negation_handler = None
         
         logger.info("UnifiedEnsembleParser initialized")
         logger.info(f"  Weights: {self.weights}")
+        logger.info(f"  Negation handling: {enable_negation_handling and NEGATION_AVAILABLE}")
+    
+    @property
+    def negation_handler(self):
+        """Lazy load negation handler."""
+        if self._negation_handler is None and NEGATION_AVAILABLE:
+            try:
+                self._negation_handler = NegationHandler()
+            except Exception as e:
+                logger.warning(f"Failed to load negation handler: {e}")
+        return self._negation_handler
     
     @property
     def pattern_parser(self):
@@ -261,6 +291,24 @@ class UnifiedEnsembleParser:
                 clarification_prompt="Please enter a query.",
             )
         
+        # Phase 1: Negation detection (preprocess before parsing)
+        negation_result = None
+        excluded_terms = []
+        preferred_terms = []
+        
+        if self.enable_negation_handling and self.negation_handler:
+            try:
+                negation_result = self.negation_handler.detect(query)
+                if negation_result.has_negation:
+                    excluded_terms = negation_result.negated_terms
+                    preferred_terms = negation_result.preferred_terms
+                    logger.debug(
+                        f"Negation detected: type={negation_result.negation_type.value}, "
+                        f"excluded={excluded_terms}, preferred={preferred_terms}"
+                    )
+            except Exception as e:
+                logger.warning(f"Negation detection failed: {e}")
+        
         # Normalize query
         normalized = self._normalize_query(query)
         
@@ -302,6 +350,17 @@ class UnifiedEnsembleParser:
                 # Recombine with LLM vote
                 result = self._combine_votes(votes, query, normalized)
         
+        # Apply negation to filter entities (Phase 1 improvement)
+        if negation_result and negation_result.has_negation and self.negation_handler:
+            # Filter out negated entities from slots
+            filtered_slots = self.negation_handler.apply_to_entities(
+                result.slots, negation_result
+            )
+            result.slots = filtered_slots
+            result.negation_result = negation_result
+            result.excluded_terms = excluded_terms
+            result.preferred_terms = preferred_terms
+        
         # Calculate total latency
         result.total_latency_ms = (time.time() - start_time) * 1000
         result.original_query = query
@@ -315,12 +374,17 @@ class UnifiedEnsembleParser:
                 query, result.entities, result.alternatives
             )
         
+        # Log with negation info if detected
+        negation_info = ""
+        if excluded_terms:
+            negation_info = f", excluded={excluded_terms}"
+        
         logger.info(
             f"Ensemble parse: intent={result.intent}, "
             f"confidence={result.confidence:.2f}, "
             f"method={result.winning_method.value}, "
             f"agreement={result.agreement_level:.2f}, "
-            f"latency={result.total_latency_ms:.0f}ms"
+            f"latency={result.total_latency_ms:.0f}ms{negation_info}"
         )
         
         return result

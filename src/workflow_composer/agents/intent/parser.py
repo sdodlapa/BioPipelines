@@ -264,6 +264,9 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # =========================================================================
     # DATABASE SEARCH
     # =========================================================================
+    # "Search ENCODE for X" pattern (database name first)
+    (r"(?:search|query|browse)\s+(?:encode|geo|sra|tcga|gdc)\s+(?:for|database\s+for)\s+(.+)",
+     IntentType.DATA_SEARCH, {"query": 1}),
     (r"(?:search|query|find|look)\s+(?:for\s+)?(.+?)\s+(?:in|on|from)\s+(?:encode|geo|sra|tcga|gdc|databases?)",
      IntentType.DATA_SEARCH, {"query": 1}),
     (r"(?:search|query|find)\s+(?:public\s+)?(?:databases?|online)\s+for\s+(.+)",
@@ -276,6 +279,10 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.DATA_SEARCH, {"query": 1, "source": "tcga"}),
     (r"(.+?)\s+(?:cancer|tumor)\s+(?:data|methylation|expression)",
      IntentType.DATA_SEARCH, {"cancer_type": 1}),
+    
+    # Download with exclusions
+    (r"(?:download|get|fetch)\s+(?:all\s+)?(?:samples?|data|datasets?)\s+(?:except|without|excluding|but\s+not)\s+(.+)",
+     IntentType.DATA_DOWNLOAD, {"excluded": 1}),
     
     # Download
     (r"(?:download|get|fetch)\s+(?:dataset\s+)?(GSE\d+|ENCSR[A-Z0-9]+|TCGA-[A-Z]+)",
@@ -299,6 +306,32 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.WORKFLOW_CREATE, {"workflow_type": 1}),
     (r"(?:i\s+want\s+to|i\s+need\s+to|let's|can\s+you)\s+(?:run|do|perform)\s+(?:a\s+)?(.+?)\s+(?:analysis|workflow|pipeline)",
      IntentType.WORKFLOW_CREATE, {"workflow_type": 1}),
+    
+    # Tool preference (implies workflow context)
+    (r"(?:use|prefer|choose)\s+(\w+(?:[_-]\w+)?)\s*(?:\w+)?\s*(?:instead\s+of|over|rather\s+than)\s+(\w+(?:[_-]\w+)?)",
+     IntentType.WORKFLOW_CREATE, {"preferred_tool": 1, "avoided_tool": 2}),
+    (r"i\s+prefer\s+(\w+(?:[_-]\w+)?)\s*(?:\w+)?\s*(?:over|to)\s+(\w+(?:[_-]\w+)?)",
+     IntentType.WORKFLOW_CREATE, {"preferred_tool": 1, "avoided_tool": 2}),
+    (r"(?:don't|do\s+not)\s+use\s+(\w+(?:[_-]\w+)?)\s*,?\s*(?:use|prefer)\s+(\w+(?:[_-]\w+)?)",
+     IntentType.WORKFLOW_CREATE, {"avoided_tool": 1, "preferred_tool": 2}),
+    
+    # Workflow creation with exclusions (no/without/except)
+    (r"(.+?)\s+(?:workflow|pipeline|analysis)\s+(?:without|excluding|but\s+(?:not|no))\s+(\w+)",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": 1, "excluded": 2}),
+    (r"(?:variant\s+calling|peak\s+calling|alignment)\s+(?:without|not)\s+(?:using\s+)?(\w+)",
+     IntentType.WORKFLOW_CREATE, {"excluded_tool": 1}),
+    
+    # Analyze with organism preference/exclusion
+    (r"(?:analyze|process)\s+(\w+)\s+data\s*,?\s*(?:not|exclude|skip)\s+(\w+)",
+     IntentType.WORKFLOW_CREATE, {"organism": 1, "excluded_organism": 2}),
+    
+    # Run/create with exclusion patterns
+    (r"(?:run|perform|do)\s+(.+?)\s+(?:exclude|excluding|without)\s+(.+)",
+     IntentType.WORKFLOW_CREATE, {"analysis_type": 1, "excluded": 2}),
+    
+    # Peak calling with tool preferences
+    (r"(?:create\s+)?peak\s+calling\s+(?:avoid|without|skip)\s+(\w+)\s+(?:use|with)\s+(\w+)",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": "peak_calling", "avoided_tool": 1, "preferred_tool": 2}),
     
     # Job submission
     (r"(?:run|execute|submit|start)\s+(?:the\s+)?(?:workflow|pipeline|job|analysis)",

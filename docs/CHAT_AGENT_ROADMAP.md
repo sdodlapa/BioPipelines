@@ -144,148 +144,383 @@ Build a self-improving, multi-model chat agent that:
 ## 2. Phase 1: Foundation Improvements
 
 **Timeline**: Weeks 1-4  
-**Goal**: Achieve 95%+ pass rate with immediate, low-risk enhancements
+**Goal**: Achieve 93-94% pass rate with immediate, low-risk enhancements
 
-### 2.1 Confidence-Based Clarification System
+> **REVISED (Nov 30, 2025)**: Based on analysis of professional chat agents (ChatGPT, Claude, 
+> GitHub Copilot), we replaced the Clarification System with a "Smart Defaults + Transparency" 
+> approach. Professional agents rarely ask clarifying questions - they proceed with reasonable 
+> assumptions and state them explicitly, letting users course-correct naturally.
 
-**Priority**: CRITICAL  
-**Estimated Improvement**: +2-3% pass rate  
-**Effort**: 3-5 days
+### 2.1 Smart Defaults + Transparency System (REPLACES Clarification)
 
-#### 2.1.1 Problem Statement
-Currently, the system makes deterministic decisions regardless of confidence level. Low-confidence parses often result in incorrect tool invocations.
+**Priority**: HIGH  
+**Estimated Improvement**: Better UX, no accuracy loss  
+**Effort**: 2-3 days
+
+#### 2.1.1 Design Philosophy
+
+**Why NOT to ask clarifying questions:**
+- Damages user experience (feels like interrogation)
+- Adds friction to simple tasks
+- Professional agents (ChatGPT, Claude, Copilot) almost never ask
+- Users can naturally course-correct in follow-up messages
+
+**Better approach:**
+1. Make reasonable assumptions based on context
+2. State assumptions explicitly in response
+3. Offer alternatives if relevant
+4. Let user iterate naturally
 
 #### 2.1.2 Implementation
 
-**File**: `src/workflow_composer/agents/clarification/__init__.py` (NEW)
+**File**: `src/workflow_composer/agents/defaults/__init__.py` (NEW)
 
 ```python
 """
-Confidence-based clarification system for ambiguous queries.
+Smart Defaults + Transparency system.
+Instead of asking clarifying questions, assume intelligently and explain.
 """
-from dataclasses import dataclass
-from enum import Enum
-from typing import List, Optional, Dict, Any
+from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple, Any
 
-class ConfidenceLevel(Enum):
-    HIGH = "high"      # > 0.85 - proceed
-    MEDIUM = "medium"  # 0.60 - 0.85 - soft clarification
-    LOW = "low"        # 0.40 - 0.60 - strong clarification
-    UNKNOWN = "unknown"  # < 0.40 - admit uncertainty
 
 @dataclass
-class ClarificationRequest:
-    """Request for user clarification."""
-    query: str
-    confidence: float
-    level: ConfidenceLevel
-    suggested_intents: List[str]
-    clarifying_question: str
-    slot_requests: Dict[str, str]  # slot -> question
+class DefaultConfig:
+    """Configuration for smart defaults."""
+    # Default organisms by frequency in bioinformatics
+    default_organism: str = "human"
+    organism_aliases: Dict[str, str] = field(default_factory=lambda: {
+        "homo sapiens": "human", "hs": "human", "hg38": "human", "grch38": "human",
+        "mus musculus": "mouse", "mm": "mouse", "mm10": "mouse",
+        "drosophila": "fly", "dm6": "fly",
+        "c. elegans": "worm", "ce11": "worm",
+        "danio rerio": "zebrafish", "danrer11": "zebrafish",
+        "saccharomyces": "yeast", "s. cerevisiae": "yeast",
+    })
+    
+    # Default analysis types per workflow
+    workflow_defaults: Dict[str, str] = field(default_factory=lambda: {
+        "rna-seq": "differential_expression",
+        "chip-seq": "peak_calling", 
+        "atac-seq": "peak_calling",
+        "dna-seq": "variant_calling",
+        "wgs": "variant_calling",
+        "wes": "variant_calling",
+        "methylation": "differential_methylation",
+        "scrna-seq": "clustering",
+        "hic": "contact_matrix",
+    })
+    
+    # Genome versions
+    genome_versions: Dict[str, str] = field(default_factory=lambda: {
+        "human": "GRCh38", "mouse": "mm10", "fly": "dm6",
+        "worm": "ce11", "zebrafish": "danRer11", "yeast": "sacCer3",
+    })
 
-@dataclass 
-class ClarificationConfig:
-    """Configuration for clarification thresholds."""
-    high_threshold: float = 0.85
-    medium_threshold: float = 0.60
-    low_threshold: float = 0.40
-    max_clarifications_per_turn: int = 2
-    enable_soft_clarification: bool = True
+
+@dataclass
+class ResolvedDefaults:
+    """Result of smart default resolution."""
+    filled_params: Dict[str, Any]
+    assumptions: List[str]
+    explanation: str
 ```
 
-**File**: `src/workflow_composer/agents/clarification/clarifier.py` (NEW)
+**File**: `src/workflow_composer/agents/defaults/resolver.py` (NEW)
 
 ```python
 """
-Clarification engine that generates context-aware follow-up questions.
+Smart default resolver - fills missing parameters with intelligent defaults.
 """
-from typing import List, Dict, Any, Optional
-from . import ClarificationRequest, ClarificationConfig, ConfidenceLevel
-from ..intent.ensemble import EnsembleParseResult
+from typing import Dict, Any, Optional, Tuple, List
+from . import DefaultConfig, ResolvedDefaults
 
-class ClarificationEngine:
-    """Generates clarifying questions based on parse confidence."""
+
+class SmartDefaultResolver:
+    """
+    Instead of asking clarifying questions, assume intelligently and explain.
     
-    def __init__(self, config: Optional[ClarificationConfig] = None):
-        self.config = config or ClarificationConfig()
-        self._intent_questions = self._load_intent_questions()
-        self._slot_questions = self._load_slot_questions()
+    Philosophy: Professional chat agents (ChatGPT, Claude, Copilot) rarely ask
+    clarifying questions. They proceed with reasonable assumptions and let 
+    users course-correct naturally.
+    """
     
-    def should_clarify(self, result: EnsembleParseResult) -> bool:
-        """Determine if clarification is needed."""
-        level = self._get_confidence_level(result.confidence)
-        return level in (ConfidenceLevel.MEDIUM, ConfidenceLevel.LOW, 
-                         ConfidenceLevel.UNKNOWN)
+    def __init__(self, config: Optional[DefaultConfig] = None):
+        self.config = config or DefaultConfig()
     
-    def generate_clarification(
-        self, query: str, result: EnsembleParseResult,
+    def resolve(
+        self, 
+        parsed_result: Dict[str, Any],
         context: Optional[Dict[str, Any]] = None
-    ) -> ClarificationRequest:
-        """Generate a clarification request for ambiguous query."""
-        level = self._get_confidence_level(result.confidence)
-        suggested_intents = self._get_suggested_intents(result)
-        question = self._generate_question(level, result, suggested_intents)
-        slot_requests = self._get_missing_slot_questions(result)
+    ) -> ResolvedDefaults:
+        """
+        Fill missing parameters with smart defaults.
         
-        return ClarificationRequest(
-            query=query, confidence=result.confidence, level=level,
-            suggested_intents=suggested_intents, clarifying_question=question,
-            slot_requests=slot_requests
+        Returns filled params and human-readable explanation of assumptions.
+        """
+        filled = dict(parsed_result)
+        assumptions = []
+        
+        # Resolve organism
+        if not filled.get("organism"):
+            filled["organism"] = self.config.default_organism
+            assumptions.append(f"assuming {self.config.default_organism} (most common)")
+        else:
+            # Normalize organism aliases
+            org = filled["organism"].lower()
+            if org in self.config.organism_aliases:
+                filled["organism"] = self.config.organism_aliases[org]
+        
+        # Resolve analysis type based on workflow
+        workflow = filled.get("workflow_type", "").lower()
+        if workflow and not filled.get("analysis_type"):
+            if workflow in self.config.workflow_defaults:
+                default_analysis = self.config.workflow_defaults[workflow]
+                filled["analysis_type"] = default_analysis
+                assumptions.append(f"using {default_analysis} (standard for {workflow})")
+        
+        # Resolve genome version
+        organism = filled.get("organism", "human")
+        if organism in self.config.genome_versions and not filled.get("genome_version"):
+            filled["genome_version"] = self.config.genome_versions[organism]
+            assumptions.append(f"genome {self.config.genome_versions[organism]}")
+        
+        # Build explanation
+        explanation = ""
+        if assumptions:
+            explanation = f"Note: {', '.join(assumptions)}. Let me know if you need different settings."
+        
+        return ResolvedDefaults(
+            filled_params=filled,
+            assumptions=assumptions,
+            explanation=explanation
         )
     
-    def _get_confidence_level(self, confidence: float) -> ConfidenceLevel:
-        if confidence >= self.config.high_threshold:
-            return ConfidenceLevel.HIGH
-        elif confidence >= self.config.medium_threshold:
-            return ConfidenceLevel.MEDIUM
-        elif confidence >= self.config.low_threshold:
-            return ConfidenceLevel.LOW
-        return ConfidenceLevel.UNKNOWN
+    def should_offer_alternatives(self, parsed_result: Dict[str, Any]) -> bool:
+        """
+        Check if we should offer alternatives (not ask, just mention).
+        Only when there are 2+ equally valid interpretations.
+        """
+        # Example: multiple datasets found matching criteria
+        if parsed_result.get("ambiguous_matches"):
+            return True
+        return False
     
-    def _load_intent_questions(self) -> Dict[str, str]:
-        return {
-            "workflow_generation": "Create a bioinformatics workflow",
-            "data_discovery": "Search for datasets in GEO/ENCODE/SRA",
-            "job_submit": "Submit a job to the cluster",
-            "job_status": "Check the status of running jobs",
-            "reference_download": "Download a reference genome",
-            "education": "Learn about bioinformatics concepts",
-        }
-    
-    def _load_slot_questions(self) -> Dict[str, str]:
-        return {
-            "organism": "Which organism (e.g., human, mouse)?",
-            "assay_type": "What type of assay (e.g., RNA-seq, ChIP-seq)?",
-            "dataset_id": "Specific dataset ID (e.g., GSE12345)?",
-        }
+    def format_alternatives(self, alternatives: List[str]) -> str:
+        """Format alternatives as suggestions, not questions."""
+        if len(alternatives) <= 3:
+            alt_str = ", ".join(alternatives[:-1]) + f" or {alternatives[-1]}"
+        else:
+            alt_str = f"{alternatives[0]}, {alternatives[1]}, or {len(alternatives)-2} others"
+        return f"Other options available: {alt_str}"
 ```
 
 **Integration Point**: `src/workflow_composer/agents/unified_agent.py`
 
 ```python
 # Add to UnifiedAgent.process_message()
-from .clarification import ClarificationEngine, ClarificationConfig
+from .defaults import SmartDefaultResolver, DefaultConfig
 
 class UnifiedAgent:
     def __init__(self, ...):
-        self.clarifier = ClarificationEngine(ClarificationConfig())
+        self.default_resolver = SmartDefaultResolver(DefaultConfig())
     
     async def process_message(self, message: str, ...) -> AgentResponse:
         result = self._parser.parse(message)
         
-        # Check if clarification needed
-        if self.clarifier.should_clarify(result):
-            clarification = self.clarifier.generate_clarification(message, result)
-            return AgentResponse(
-                response=clarification.clarifying_question,
-                needs_clarification=True,
-                clarification_data=clarification,
-                confidence=result.confidence
-            )
-        # Proceed with tool execution...
+        # Fill in smart defaults (don't ask, assume and explain)
+        resolved = self.default_resolver.resolve(result.to_dict())
+        
+        # Execute with filled parameters
+        tool_result = await self.execute_tool(resolved.filled_params)
+        
+        # Include assumptions in response
+        response_text = tool_result.message
+        if resolved.explanation:
+            response_text = f"{resolved.explanation}\n\n{response_text}"
+        
+        return AgentResponse(response=response_text, ...)
 ```
 
-### 2.2 Real Production Query Integration
+### 2.2 Negation and Comparative Handling
+
+**Priority**: CRITICAL (moved up from 2.4)  
+**Estimated Improvement**: +2-3% pass rate  
+**Effort**: 2-3 days
+
+> **Why Critical**: Our evaluation showed negation patterns have the highest failure rate.
+> Queries like "RNA-seq but not mouse" or "alignment without BWA" frequently fail.
+
+#### 2.2.1 Problem Statement
+The parser doesn't recognize negation patterns, leading to incorrect entity extraction.
+Example failures:
+- "analyze human data, not mouse" → incorrectly includes mouse
+- "use STAR aligner, not HISAT2" → may select HISAT2
+- "all samples except controls" → includes controls
+
+#### 2.2.2 Implementation
+
+**File**: `src/workflow_composer/agents/intent/negation_handler.py` (NEW)
+
+```python
+"""Handler for negation and comparative linguistic patterns."""
+import re
+from typing import Dict, List, Optional, Set, Tuple
+from dataclasses import dataclass, field
+
+
+@dataclass
+class NegationResult:
+    """Result of negation detection."""
+    has_negation: bool
+    negation_type: str  # 'exclusion', 'preference', 'correction', 'none'
+    negated_terms: List[str] = field(default_factory=list)
+    preferred_terms: List[str] = field(default_factory=list)
+    original_query: str = ""
+    transformed_query: str = ""
+
+
+class NegationHandler:
+    """
+    Detects and handles negation patterns in queries.
+    
+    Patterns handled:
+    1. Exclusion: "not X", "without X", "except X", "excluding X"
+    2. Preference: "X instead of Y", "X rather than Y", "prefer X over Y"
+    3. Correction: "not X but Y", "Y not X"
+    4. Don't want: "don't use X", "avoid X", "skip X"
+    """
+    
+    # Compiled regex patterns for efficiency
+    PATTERNS = {
+        # Exclusion patterns
+        "exclusion": [
+            re.compile(r'\b(?:not|no|without|except|excluding|exclude)\s+(\w+(?:[-_]\w+)*)', re.I),
+            re.compile(r'\b(\w+(?:[-_]\w+)*)\s+excluded?\b', re.I),
+        ],
+        # Preference patterns  
+        "preference": [
+            re.compile(r'\b(\w+(?:[-_]\w+)*)\s+(?:instead of|rather than|over)\s+(\w+(?:[-_]\w+)*)', re.I),
+            re.compile(r'\bprefer\s+(\w+(?:[-_]\w+)*)\s+(?:to|over)\s+(\w+(?:[-_]\w+)*)', re.I),
+            re.compile(r'\buse\s+(\w+(?:[-_]\w+)*)\s+not\s+(\w+(?:[-_]\w+)*)', re.I),
+        ],
+        # Correction patterns
+        "correction": [
+            re.compile(r'\bnot\s+(\w+(?:[-_]\w+)*)\s*[,;]?\s*(?:but|use|want)\s+(\w+(?:[-_]\w+)*)', re.I),
+            re.compile(r'\b(\w+(?:[-_]\w+)*)\s*[,;]?\s*not\s+(\w+(?:[-_]\w+)*)\b', re.I),
+        ],
+        # Avoidance patterns
+        "avoidance": [
+            re.compile(r"\b(?:don'?t|do not|avoid|skip)\s+(?:use\s+)?(\w+(?:[-_]\w+)*)", re.I),
+            re.compile(r'\b(\w+(?:[-_]\w+)*)\s+(?:is\s+)?(?:not\s+)?(?:wanted|needed|required)\b', re.I),
+        ],
+    }
+    
+    # Bioinformatics-specific terms to watch for
+    BIO_TERMS = {
+        "organisms": {"human", "mouse", "rat", "fly", "worm", "zebrafish", "yeast"},
+        "aligners": {"bwa", "bowtie", "bowtie2", "star", "hisat2", "minimap2", "salmon"},
+        "callers": {"gatk", "freebayes", "deepvariant", "mutect2", "varscan"},
+        "assemblers": {"spades", "megahit", "trinity", "canu", "flye"},
+    }
+    
+    def detect(self, query: str) -> NegationResult:
+        """Detect negation patterns in query."""
+        negated_terms: Set[str] = set()
+        preferred_terms: Set[str] = set()
+        negation_type = "none"
+        
+        # Check each pattern type
+        for pattern_type, patterns in self.PATTERNS.items():
+            for pattern in patterns:
+                matches = pattern.findall(query)
+                for match in matches:
+                    if isinstance(match, tuple):
+                        # Preference/correction: first is preferred, second is negated
+                        if pattern_type in ("preference", "correction"):
+                            preferred_terms.add(match[0].lower())
+                            negated_terms.add(match[1].lower())
+                        else:
+                            negated_terms.add(match[0].lower())
+                            if len(match) > 1:
+                                negated_terms.add(match[1].lower())
+                    else:
+                        negated_terms.add(match.lower())
+                    
+                    if negation_type == "none":
+                        negation_type = pattern_type
+        
+        # Filter to bioinformatics-relevant terms
+        all_bio_terms = set()
+        for category_terms in self.BIO_TERMS.values():
+            all_bio_terms.update(category_terms)
+        
+        # Keep both bio terms and any term that looks technical
+        def is_relevant(term: str) -> bool:
+            return term in all_bio_terms or len(term) > 2
+        
+        negated_terms = {t for t in negated_terms if is_relevant(t)}
+        preferred_terms = {t for t in preferred_terms if is_relevant(t)}
+        
+        has_negation = len(negated_terms) > 0
+        
+        # Transform query to add explicit markers
+        transformed = self._transform_query(query, negated_terms, preferred_terms)
+        
+        return NegationResult(
+            has_negation=has_negation,
+            negation_type=negation_type if has_negation else "none",
+            negated_terms=list(negated_terms),
+            preferred_terms=list(preferred_terms),
+            original_query=query,
+            transformed_query=transformed
+        )
+    
+    def _transform_query(
+        self, 
+        query: str, 
+        negated: Set[str], 
+        preferred: Set[str]
+    ) -> str:
+        """Add explicit markers for downstream processing."""
+        markers = []
+        if negated:
+            markers.append(f"[EXCLUDE: {', '.join(sorted(negated))}]")
+        if preferred:
+            markers.append(f"[PREFER: {', '.join(sorted(preferred))}]")
+        
+        if markers:
+            return f"{query} {' '.join(markers)}"
+        return query
+    
+    def apply_to_entities(
+        self, 
+        entities: Dict[str, str], 
+        negation_result: NegationResult
+    ) -> Dict[str, str]:
+        """Remove negated entities and apply preferences."""
+        if not negation_result.has_negation:
+            return entities
+        
+        filtered = {}
+        for key, value in entities.items():
+            value_lower = value.lower() if isinstance(value, str) else str(value).lower()
+            
+            # Skip if value is negated
+            if value_lower in negation_result.negated_terms:
+                continue
+            
+            # Replace with preferred if available
+            if value_lower in negation_result.negated_terms:
+                if negation_result.preferred_terms:
+                    value = negation_result.preferred_terms[0]
+            
+            filtered[key] = value
+        
+        return filtered
+```
+
+### 2.3 Real Production Query Integration
 
 **Priority**: HIGH  
 **Estimated Improvement**: +1-2% pass rate  
@@ -446,71 +681,16 @@ class ActiveLearner:
         ...
 ```
 
-### 2.4 Negation and Comparative Handling
+### 2.5 Phase 1 Summary
 
-**Priority**: HIGH  
-**Estimated Improvement**: +1-2% pass rate  
-**Effort**: 2-3 days
+| Component | Priority | Est. Improvement | Effort |
+|-----------|----------|------------------|--------|
+| **Negation Handling** | CRITICAL | +2-3% | 2-3 days |
+| **Smart Defaults** | HIGH | Better UX | 2-3 days |
+| **Production Query Logging** | HIGH | +1-2% | 2-3 days |
+| **Active Learning** | HIGH | Continuous | 5-7 days |
 
-#### 2.4.1 Implementation
-
-**File**: `src/workflow_composer/agents/intent/negation_handler.py` (NEW)
-
-```python
-"""Handler for negation and comparative linguistic patterns."""
-import re
-from typing import List, Dict, Optional
-from dataclasses import dataclass
-
-@dataclass
-class NegationResult:
-    has_negation: bool
-    negated_terms: List[str]
-    preserved_terms: List[str]
-    negation_type: str  # 'exclusion', 'preference', 'correction'
-
-class NegationHandler:
-    """Detects and handles negation patterns in queries."""
-    
-    NEGATION_PATTERNS = [
-        (r"(?:not|no|without|except)\s+(\w+[-\w]*)", "exclusion"),
-        (r"(?:don't|do not)\s+(?:want|need|use)\s+(\w+[-\w]*)", "preference"),
-        (r"(?:not)\s+(\w+[-\w]*)[,\s]+(?:but|instead)\s+(\w+[-\w]*)", "correction"),
-    ]
-    
-    def detect_negation(self, query: str) -> NegationResult:
-        """Detect negation patterns in query."""
-        query_lower = query.lower()
-        negated_terms = []
-        preserved_terms = []
-        negation_type = None
-        
-        for pattern, neg_type in self.NEGATION_PATTERNS:
-            matches = re.findall(pattern, query_lower)
-            if matches:
-                negation_type = neg_type
-                for match in matches:
-                    if isinstance(match, tuple):
-                        negated_terms.append(match[0])
-                        preserved_terms.append(match[1])
-                    else:
-                        negated_terms.append(match)
-        
-        return NegationResult(
-            has_negation=len(negated_terms) > 0,
-            negated_terms=list(set(negated_terms)),
-            preserved_terms=list(set(preserved_terms)),
-            negation_type=negation_type or ""
-        )
-    
-    def transform_query(self, query: str, result: NegationResult) -> str:
-        """Add explicit markers for downstream processing."""
-        if not result.has_negation:
-            return query
-        
-        negation_marker = f"[EXCLUDE: {', '.join(result.negated_terms)}]"
-        return f"{query} {negation_marker}"
-```
+**Expected Result**: 91.4% → **93-94%** pass rate
 
 ---
 
