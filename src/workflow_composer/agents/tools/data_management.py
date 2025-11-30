@@ -18,6 +18,210 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# SLURM Job Submission Helper
+# =============================================================================
+
+def _submit_download_job(
+    dataset_id: str,
+    source: str,
+    output_dir: Path,
+    download_commands: list,
+) -> ToolResult:
+    """
+    Submit a single dataset download as a SLURM job (non-blocking).
+    
+    Args:
+        dataset_id: Dataset identifier
+        source: Data source (GEO, ENCODE, TCGA)
+        output_dir: Output directory
+        download_commands: List of shell commands for downloading
+        
+    Returns:
+        ToolResult with job submission status
+    """
+    from datetime import datetime
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    job_dir = output_dir.parent / "download_jobs"
+    job_dir.mkdir(parents=True, exist_ok=True)
+    
+    script_path = job_dir / f"{dataset_id}_{timestamp}.sh"
+    log_path = job_dir / f"{dataset_id}_{timestamp}.log"
+    
+    # Build SLURM script
+    script_lines = [
+        "#!/bin/bash",
+        f"#SBATCH --job-name=dl_{dataset_id}",
+        "#SBATCH --partition=cpuspot",
+        "#SBATCH --time=2:00:00",
+        "#SBATCH --cpus-per-task=2",
+        "#SBATCH --mem=4G",
+        f"#SBATCH --output={log_path}",
+        f"#SBATCH --error={log_path}",
+        "",
+        f"# Single Dataset Download - {source}",
+        f"# Dataset: {dataset_id}",
+        f"# Generated: {datetime.now().isoformat()}",
+        "",
+        f"mkdir -p {output_dir}",
+        f"cd {output_dir}",
+        "",
+        "echo '=== Download Started ==='",
+        f"echo 'Dataset: {dataset_id}'",
+        f"echo 'Source: {source}'",
+        "",
+    ]
+    
+    script_lines.extend(download_commands)
+    
+    script_lines.extend([
+        "",
+        "echo '=== Download Complete ==='",
+        f"echo 'Output: {output_dir}'",
+        "ls -la",
+    ])
+    
+    script_path.write_text("\n".join(script_lines))
+    script_path.chmod(0o755)
+    
+    # Submit via sbatch
+    if shutil.which("sbatch"):
+        try:
+            result = subprocess.run(
+                ["sbatch", str(script_path)],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and "Submitted batch job" in result.stdout:
+                job_id = result.stdout.strip().split()[-1]
+                
+                url_map = {
+                    "GEO": f"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={dataset_id}",
+                    "ENCODE": f"https://www.encodeproject.org/experiments/{dataset_id}",
+                    "TCGA": f"https://portal.gdc.cancer.gov/files/{dataset_id}",
+                }
+                
+                message = f"""🚀 **Download Job Submitted**
+
+| Property | Value |
+|----------|-------|
+| **Dataset** | [{dataset_id}]({url_map.get(source, '')}) |
+| **Source** | {source} |
+| **Job ID** | `{job_id}` |
+| **Output** | `{output_dir}` |
+| **Log** | `{log_path}` |
+
+**Track Progress:**
+- Check status: `job status` or `squeue -j {job_id}`
+- View log: `cat {log_path}`
+- Cancel: `scancel {job_id}`
+
+The job panel on the right will update automatically. ➡️
+"""
+                return ToolResult(
+                    success=True,
+                    tool_name="download_dataset",
+                    data={
+                        "id": dataset_id, 
+                        "source": source, 
+                        "job_id": job_id,
+                        "output": str(output_dir),
+                        "log": str(log_path),
+                        "status": "submitted"
+                    },
+                    message=message
+                )
+        except Exception as e:
+            logger.warning(f"sbatch submission failed: {e}")
+    
+    # sbatch not available - return script for manual submission
+    message = f"""📋 **Download Script Ready**
+
+| Property | Value |
+|----------|-------|
+| **Dataset** | {dataset_id} |
+| **Source** | {source} |
+| **Script** | `{script_path}` |
+| **Output** | `{output_dir}` |
+
+**To submit manually:**
+```bash
+sbatch {script_path}
+```
+
+Or run directly (blocking):
+```bash
+bash {script_path}
+```
+"""
+    return ToolResult(
+        success=True,
+        tool_name="download_dataset",
+        data={"id": dataset_id, "source": source, "script": str(script_path), "status": "script_ready"},
+        message=message
+    )
+
+
+def _is_uuid(s: str) -> bool:
+    """Check if string is a valid UUID (for TCGA file IDs)."""
+    import re
+    uuid_pattern = r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    return bool(re.match(uuid_pattern, s.lower()))
+
+
+def _download_tcga_file(file_uuid: str, output_dir: str, execute: bool) -> ToolResult:
+    """Download a single TCGA/GDC file by UUID - submits as SLURM job."""
+    url = f"https://portal.gdc.cancer.gov/files/{file_uuid}"
+    
+    if not output_dir:
+        output_dir = Path.cwd() / "data" / "raw" / "tcga" / file_uuid[:8]
+    output_dir = Path(output_dir)
+    
+    if execute:
+        download_commands = [
+            f"echo 'Downloading TCGA file: {file_uuid}'",
+            "",
+            "# Check for gdc-client",
+            "if command -v gdc-client &> /dev/null; then",
+            f"    gdc-client download {file_uuid} -d .",
+            "else",
+            "    echo 'gdc-client not found, using API...'",
+            f"    curl -o {file_uuid}.tar.gz 'https://api.gdc.cancer.gov/data/{file_uuid}'",
+            f"    tar -xzf {file_uuid}.tar.gz 2>/dev/null || true",
+            "fi",
+            "",
+            "echo 'Files downloaded:'",
+            "ls -lh",
+        ]
+        
+        return _submit_download_job(file_uuid[:8], "TCGA", output_dir, download_commands)
+    
+    # Non-execute mode: return instructions
+    output_dir.mkdir(parents=True, exist_ok=True)
+    message = f"""📥 **Download TCGA File**
+
+| Property | Value |
+|----------|-------|
+| **File UUID** | `{file_uuid}` |
+| **Portal** | [{file_uuid[:8]}...]({url}) |
+| **Output** | `{output_dir}` |
+
+**Download Commands:**
+```bash
+cd {output_dir}
+gdc-client download {file_uuid}
+```
+"""
+    return ToolResult(
+        success=True,
+        tool_name="download_dataset",
+        data={"id": file_uuid, "source": "TCGA/GDC", "output": str(output_dir)},
+        message=message
+    )
+
+
+# =============================================================================
 # DOWNLOAD_DATASET
 # =============================================================================
 
@@ -80,6 +284,9 @@ def download_dataset_impl(
         return _download_encode(dataset_id, output_dir, execute)
     elif dataset_id.startswith("TCGA"):
         return _download_tcga(dataset_id, output_dir, data_type, execute)
+    elif _is_uuid(dataset_id):
+        # TCGA/GDC file UUID (e.g., 86540fdf-0676-4b45-bfbc-37beb15a6fd5)
+        return _download_tcga_file(dataset_id.lower(), output_dir, execute)
     else:
         return ToolResult(
             success=False,
@@ -90,47 +297,35 @@ def download_dataset_impl(
 
 
 def _download_geo(dataset_id: str, output_dir: str, execute: bool) -> ToolResult:
-    """Download from GEO using prefetch or wget."""
+    """Download from GEO - submits as SLURM job (non-blocking)."""
     url = f"https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc={dataset_id}"
     
     if not output_dir:
         output_dir = Path.cwd() / "data" / "raw" / dataset_id
     output_dir = Path(output_dir)
+    
+    if execute:
+        # Build download commands for SLURM script
+        download_commands = [
+            f"echo 'Downloading {dataset_id} from GEO...'",
+            "",
+            "# Try prefetch first (SRA Toolkit)",
+            "if command -v prefetch &> /dev/null; then",
+            f"    prefetch {dataset_id} -O . 2>&1",
+            f"    fasterq-dump {dataset_id} -O . 2>&1 || true",
+            "else",
+            "    echo 'prefetch not available, using wget...'",
+            f"    wget -r -np -nd 'ftp://ftp.ncbi.nlm.nih.gov/geo/series/{dataset_id[:6]}nnn/{dataset_id}/suppl/' 2>&1",
+            "fi",
+            "",
+            "echo 'Files downloaded:'",
+            "ls -lh",
+        ]
+        
+        return _submit_download_job(dataset_id, "GEO", output_dir, download_commands)
+    
+    # Non-execute mode: return instructions
     output_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Check for prefetch (SRA toolkit)
-    has_prefetch = shutil.which("prefetch") is not None
-    
-    if execute and has_prefetch:
-        try:
-            result = subprocess.run(
-                ["prefetch", dataset_id, "-O", str(output_dir)],
-                capture_output=True,
-                text=True,
-                timeout=600,
-            )
-            if result.returncode == 0:
-                message = f"""✅ **Download Complete**
-
-| Property | Value |
-|----------|-------|
-| **Dataset** | [{dataset_id}]({url}) |
-| **Source** | GEO/SRA |
-| **Output** | `{output_dir}` |
-| **Status** | Downloaded successfully |
-
-Run `scan data` to verify the downloaded files.
-"""
-                return ToolResult(
-                    success=True,
-                    tool_name="download_dataset",
-                    data={"id": dataset_id, "source": "GEO", "output": str(output_dir), "status": "completed"},
-                    message=message
-                )
-        except subprocess.TimeoutExpired:
-            pass
-        except Exception as e:
-            logger.warning(f"prefetch failed: {e}")
     
     # Fallback to instructions
     message = f"""📥 **Download Dataset: {dataset_id}**
@@ -162,88 +357,42 @@ wget -r -np -nd -P {output_dir} \\
 
 
 def _download_encode(dataset_id: str, output_dir: str, execute: bool) -> ToolResult:
-    """Download from ENCODE - actually executes the download."""
+    """Download from ENCODE - submits as SLURM job (non-blocking)."""
     url = f"https://www.encodeproject.org/experiments/{dataset_id}"
     
     if not output_dir:
         output_dir = Path.cwd() / "data" / "raw" / dataset_id
     output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
     
     if execute:
-        try:
-            import requests
-            
-            # Get file metadata from ENCODE API
-            api_url = f"{url}/?format=json"
-            response = requests.get(api_url, timeout=30)
-            response.raise_for_status()
-            exp_data = response.json()
-            
-            # Get downloadable files (prefer processed data)
-            files = exp_data.get("files", [])
-            download_urls = []
-            for f in files:
-                if f.get("status") == "released":
-                    href = f.get("href")
-                    if href:
-                        # Prefer bed, bigBed, bigWig, bam, or fastq
-                        file_format = f.get("file_format", "")
-                        if file_format in ["bed", "bigBed", "bigWig", "bam", "fastq"]:
-                            download_urls.append((f"https://www.encodeproject.org{href}", f.get("accession", "unknown")))
-            
-            if not download_urls:
-                # Fallback: get all released files
-                for f in files:
-                    if f.get("status") == "released" and f.get("href"):
-                        download_urls.append((f"https://www.encodeproject.org{f['href']}", f.get("accession", "unknown")))
-            
-            downloaded = []
-            failed = []
-            
-            for file_url, file_acc in download_urls[:10]:  # Limit to 10 files
-                try:
-                    file_name = file_url.split("/")[-1]
-                    file_path = output_dir / file_name
-                    
-                    logger.info(f"Downloading {file_name}...")
-                    file_response = requests.get(file_url, stream=True, timeout=300)
-                    file_response.raise_for_status()
-                    
-                    with open(file_path, "wb") as f:
-                        for chunk in file_response.iter_content(chunk_size=8192):
-                            f.write(chunk)
-                    
-                    downloaded.append(file_name)
-                except Exception as e:
-                    failed.append(f"{file_acc}: {str(e)}")
-                    logger.warning(f"Failed to download {file_acc}: {e}")
-            
-            if downloaded:
-                message = f"""✅ **Download Complete: {dataset_id}**
-
-| Property | Value |
-|----------|-------|
-| **Dataset** | [{dataset_id}]({url}) |
-| **Source** | ENCODE |
-| **Output** | `{output_dir}` |
-| **Files Downloaded** | {len(downloaded)} |
-| **Files** | {', '.join(downloaded[:5])}{'...' if len(downloaded) > 5 else ''} |
-
-{'⚠️ Some files failed: ' + ', '.join(failed[:3]) if failed else ''}
-
-Run `scan data in {output_dir}` to verify.
-"""
-                return ToolResult(
-                    success=True,
-                    tool_name="download_dataset",
-                    data={"id": dataset_id, "source": "ENCODE", "output": str(output_dir), 
-                          "status": "completed", "files": downloaded},
-                    message=message
-                )
-                
-        except Exception as e:
-            logger.warning(f"ENCODE download failed: {e}, falling back to instructions")
+        # Build download commands for SLURM script
+        download_commands = [
+            f"echo 'Downloading {dataset_id} from ENCODE...'",
+            "",
+            "# Get file URLs from ENCODE API",
+            f"curl -s '{url}/?format=json' | jq -r '.files[] | select(.status==\"released\") | .href' > files.txt",
+            "",
+            "echo 'Files to download:'",
+            "cat files.txt | wc -l",
+            "",
+            "# Download each file",
+            "while read -r href; do",
+            "    if [ -n \"$href\" ]; then",
+            "        filename=$(basename \"$href\")",
+            "        echo \"Downloading $filename...\"",
+            "        curl -O -L \"https://www.encodeproject.org${href}\" 2>&1",
+            "    fi",
+            "done < files.txt",
+            "",
+            "rm -f files.txt",
+            "echo 'Files downloaded:'",
+            "ls -lh",
+        ]
+        
+        return _submit_download_job(dataset_id, "ENCODE", output_dir, download_commands)
+    
+    # Non-execute mode: return instructions
+    output_dir.mkdir(parents=True, exist_ok=True)
     
     # Fallback to instructions
     message = f"""📥 **Download Dataset: {dataset_id}**
