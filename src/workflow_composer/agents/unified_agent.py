@@ -72,8 +72,15 @@ from .autonomous import HealthChecker, RecoveryManager, JobMonitor
 # Unified classification (Phase 1 refactoring)
 from .classification import TaskType, classify_task as _classify_task_impl
 
-# Intent parsing (hybrid parser integration)
-from .intent import HybridQueryParser, QueryParseResult, ConversationContext, DialogueManager
+# Intent parsing (ensemble parser integration)
+from .intent import (
+    HybridQueryParser, 
+    QueryParseResult, 
+    ConversationContext, 
+    DialogueManager,
+    UnifiedEnsembleParser,
+    EnsembleParseResult,
+)
 
 # Observability - distributed tracing
 from workflow_composer.infrastructure.observability import get_tracer, traced, get_metrics
@@ -401,8 +408,11 @@ class UnifiedAgent:
         # RAG orchestrator for tool selection and argument optimization
         self._rag_orchestrator: Optional[RAGOrchestrator] = None
         
-        # Hybrid intent parser (lazy loaded)
+        # Hybrid intent parser (legacy, for fallback)
         self._query_parser: Optional[HybridQueryParser] = None
+        
+        # Unified ensemble parser (new, multi-method)
+        self._ensemble_parser: Optional[UnifiedEnsembleParser] = None
         
         # Conversation context for multi-turn memory
         self._context: Optional[ConversationContext] = None
@@ -446,7 +456,7 @@ class UnifiedAgent:
         
     @property
     def query_parser(self) -> HybridQueryParser:
-        """Get or initialize the hybrid query parser."""
+        """Get or initialize the hybrid query parser (legacy fallback)."""
         if self._query_parser is None:
             try:
                 self._query_parser = HybridQueryParser()
@@ -455,6 +465,23 @@ class UnifiedAgent:
                 logger.warning(f"Failed to initialize HybridQueryParser: {e}")
                 self._query_parser = None
         return self._query_parser
+    
+    @property
+    def ensemble_parser(self) -> Optional[UnifiedEnsembleParser]:
+        """
+        Get or initialize the unified ensemble parser.
+        
+        Uses multiple parsing methods (rule, semantic, NER, LLM, RAG)
+        with weighted voting for robust intent detection.
+        """
+        if self._ensemble_parser is None:
+            try:
+                self._ensemble_parser = UnifiedEnsembleParser()
+                logger.info("UnifiedEnsembleParser initialized")
+            except Exception as e:
+                logger.warning(f"Failed to initialize UnifiedEnsembleParser: {e}")
+                self._ensemble_parser = None
+        return self._ensemble_parser
     
     @property
     def context(self) -> ConversationContext:
@@ -712,7 +739,9 @@ class UnifiedAgent:
         Process a user query asynchronously.
         
         This is the main entry point for the agent.
-        Uses hybrid intent parsing (semantic + pattern + NER) for robust detection.
+        Uses unified ensemble parsing (rule + semantic + NER + LLM + RAG)
+        with weighted voting for robust detection.
+        Falls back to hybrid parser if ensemble unavailable.
         Maintains conversation context across turns.
         Fully instrumented with distributed tracing.
         
@@ -745,34 +774,86 @@ class UnifiedAgent:
             span.add_event("task_classified", {"task_type": task_type.value})
             logger.info(f"Task classified as: {task_type.value}")
             
-            # Try hybrid intent parsing first (semantic + pattern + NER)
+            # Try unified ensemble parsing first (multi-method with voting)
             detected_tool = None
             detected_args = []
-            hybrid_params = None  # Params from hybrid parser (preferred)
+            hybrid_params = None  # Params from parser (preferred)
             parse_result: Optional[QueryParseResult] = None
+            ensemble_result: Optional[EnsembleParseResult] = None
             extracted_entities = []  # For context tracking
+            agreement_score = 0.0  # Track method agreement
             
-            if self.query_parser:
+            # Use ensemble parser (preferred) or fall back to hybrid
+            if self.ensemble_parser:
+                try:
+                    with tracer.start_span("ensemble_parse") as parse_span:
+                        ensemble_result = self.ensemble_parser.parse(query)
+                        parse_span.add_tag("intent", ensemble_result.intent)
+                        parse_span.add_tag("confidence", ensemble_result.confidence)
+                        parse_span.add_tag("agreement", ensemble_result.agreement_level)
+                        parse_span.add_tag("methods_used", len(ensemble_result.votes))
+                    
+                    agreement_score = ensemble_result.agreement_level
+                    logger.info(
+                        f"EnsembleParser: intent={ensemble_result.intent}, "
+                        f"confidence={ensemble_result.confidence:.2f}, "
+                        f"agreement={ensemble_result.agreement_level:.2f}, "
+                        f"methods={len(ensemble_result.votes)}"
+                    )
+                    
+                    # Extract entities from ensemble
+                    extracted_entities = ensemble_result.entities if ensemble_result.entities else []
+                    
+                    # Check if we need clarification (low agreement or confidence)
+                    if ensemble_result.confidence < 0.5 and ensemble_result.agreement_level < 0.6:
+                        # Methods disagree - ask for clarification
+                        conflicting_intents = set(v.intent for v in ensemble_result.votes)
+                        if len(conflicting_intents) > 1:
+                            return AgentResponse(
+                                success=True,
+                                message=self._build_clarification_request(query, ensemble_result),
+                                response_type=ResponseType.QUESTION,
+                                task_type=task_type,
+                                data={"possible_intents": list(conflicting_intents)},
+                            )
+                    
+                    # Map intent to tool if confidence is reasonable
+                    if ensemble_result.confidence >= 0.35 and ensemble_result.intent in INTENT_TO_TOOL:
+                        detected_tool = INTENT_TO_TOOL[ensemble_result.intent]
+                        
+                        # Build params from ensemble slots
+                        hybrid_params = self._build_params_from_ensemble_result(ensemble_result, query)
+                        detected_args = list(hybrid_params.values()) if hybrid_params else []
+                        logger.info(f"Mapped intent '{ensemble_result.intent}' to tool: {detected_tool}, params: {hybrid_params}")
+                    
+                    # Handle context-aware intents
+                    if ensemble_result.intent in ("CONTEXT_RECALL", "CONTEXT_METADATA"):
+                        return await self._handle_context_query(ensemble_result.intent, query, task_type)
+                        
+                except Exception as e:
+                    span.add_event("ensemble_fallback", {"error": str(e)})
+                    logger.warning(f"EnsembleParser failed, falling back to HybridParser: {e}")
+            
+            # Fallback to legacy hybrid parser if ensemble didn't work
+            if not detected_tool and self.query_parser:
                 try:
                     with tracer.start_span("hybrid_parse") as parse_span:
                         parse_result = self.query_parser.parse(query)
                         parse_span.add_tag("intent", parse_result.intent)
                         parse_span.add_tag("confidence", parse_result.intent_confidence)
-                    logger.info(f"HybridParser: intent={parse_result.intent}, confidence={parse_result.intent_confidence:.2f}")
+                    logger.info(f"HybridParser fallback: intent={parse_result.intent}, confidence={parse_result.intent_confidence:.2f}")
                     
                     # Extract entities for context
                     extracted_entities = parse_result.entities if parse_result.entities else []
                     
-                    # Map intent to tool if confidence is reasonable (0.35 threshold allows semantic matching)
+                    # Map intent to tool
                     if parse_result.intent_confidence >= 0.35 and parse_result.intent in INTENT_TO_TOOL:
                         detected_tool = INTENT_TO_TOOL[parse_result.intent]
-                        
-                        # Build clean params from slots and entities
                         hybrid_params = self._build_params_from_parse_result(parse_result, query)
                         detected_args = list(hybrid_params.values()) if hybrid_params else []
                         logger.info(f"Mapped intent '{parse_result.intent}' to tool: {detected_tool}, params: {hybrid_params}")
                     
-                    # Handle context-aware intents specially
+                    # Handle context-aware intents
                     if parse_result.intent in ("CONTEXT_RECALL", "CONTEXT_METADATA"):
                         return await self._handle_context_query(parse_result.intent, query, task_type)
                         
@@ -1017,6 +1098,116 @@ class UnifiedAgent:
             params = dict(slots)
         
         return params
+    
+    def _build_params_from_ensemble_result(
+        self,
+        ensemble_result: EnsembleParseResult,
+        original_query: str
+    ) -> Dict[str, Any]:
+        """
+        Build tool parameters from ensemble parse result.
+        
+        Similar to _build_params_from_parse_result but uses the unified ensemble format.
+        """
+        params = {}
+        slots = ensemble_result.slots
+        entities = ensemble_result.entities
+        intent = ensemble_result.intent
+        
+        # For data search, build query from entities if available
+        if intent == "DATA_SEARCH":
+            if entities:
+                # Build a clean query from entities - deduplicate!
+                seen_terms = set()
+                query_parts = []
+                for entity in entities:
+                    if hasattr(entity, 'entity_type'):
+                        if entity.entity_type in ("ORGANISM", "TISSUE", "DISEASE", "ASSAY_TYPE"):
+                            term = (getattr(entity, 'canonical', None) or entity.text).lower()
+                            if term not in seen_terms:
+                                seen_terms.add(term)
+                                query_parts.append(getattr(entity, 'canonical', None) or entity.text)
+                    elif isinstance(entity, dict):
+                        if entity.get("type") in ("ORGANISM", "TISSUE", "DISEASE", "ASSAY_TYPE"):
+                            term = (entity.get("canonical") or entity.get("text", "")).lower()
+                            if term not in seen_terms:
+                                seen_terms.add(term)
+                                query_parts.append(entity.get("canonical") or entity.get("text"))
+                if query_parts:
+                    params["query"] = " ".join(query_parts)
+                elif "query" in slots:
+                    params["query"] = slots["query"]
+            elif "query" in slots:
+                params["query"] = slots["query"]
+                
+        elif intent == "DATA_DOWNLOAD":
+            if "dataset_id" in slots:
+                params["dataset_id"] = slots["dataset_id"]
+            else:
+                # Check entities for dataset IDs
+                for entity in entities:
+                    entity_type = entity.entity_type if hasattr(entity, 'entity_type') else entity.get("type")
+                    entity_text = entity.text if hasattr(entity, 'text') else entity.get("text")
+                    if entity_type == "DATASET_ID":
+                        params["dataset_id"] = entity_text
+                        break
+                
+            # Check for "download all"
+            if not params.get("dataset_id"):
+                query_lower = original_query.lower()
+                if any(kw in query_lower for kw in ["all", "everything", "both", "execute", "run"]):
+                    context_ids = self.context.get_state("last_search_ids")
+                    if context_ids:
+                        params["dataset_ids"] = context_ids.copy()
+                        params["download_all"] = True
+                    elif self._last_search_results:
+                        params["dataset_ids"] = self._last_search_results.copy()
+                        params["download_all"] = True
+                        
+        elif intent and intent.startswith("EDUCATION"):
+            if "concept" in slots:
+                params["concept"] = slots["concept"]
+            elif "topic" in slots:
+                params["concept"] = slots["topic"]
+        else:
+            params = dict(slots)
+        
+        return params
+    
+    def _build_clarification_request(
+        self,
+        query: str,
+        ensemble_result: EnsembleParseResult
+    ) -> str:
+        """Build a clarification request when ensemble methods disagree."""
+        conflicting_intents = {}
+        for vote in ensemble_result.votes:
+            if vote.intent not in conflicting_intents:
+                conflicting_intents[vote.intent] = []
+            conflicting_intents[vote.intent].append(vote.method)
+        
+        # Map intents to user-friendly descriptions
+        intent_descriptions = {
+            "DATA_SEARCH": "search for datasets",
+            "DATA_DOWNLOAD": "download a dataset",
+            "DATA_SCAN": "scan local files",
+            "DATA_DESCRIBE": "describe files",
+            "WORKFLOW_CREATE": "create a workflow",
+            "JOB_SUBMIT": "submit a job",
+            "JOB_STATUS": "check job status",
+            "EDUCATION_EXPLAIN": "explain a concept",
+        }
+        
+        options = []
+        for i, (intent, methods) in enumerate(conflicting_intents.items(), 1):
+            desc = intent_descriptions.get(intent, intent.lower().replace("_", " "))
+            options.append(f"{i}. **{desc}**")
+        
+        message = f"I'm not entirely sure what you'd like to do. Did you mean to:\n\n"
+        message += "\n".join(options)
+        message += "\n\nPlease clarify or rephrase your request."
+        
+        return message
     
     def _store_search_results(self, result: ToolResult) -> None:
         """Store dataset IDs from search results in conversation context."""
