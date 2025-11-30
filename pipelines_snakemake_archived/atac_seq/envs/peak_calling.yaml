@@ -1,7 +1,0 @@
-name: peak_calling
-channels:
-  - conda-forge
-  - bioconda
-dependencies:
-  - macs2=2.2.7.1
-  - homer=4.11

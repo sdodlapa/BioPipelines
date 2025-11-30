@@ -112,3 +112,6 @@ work/
 nextflow-pipelines/docs/nf-core-rnaseq-reference/
 pipelines/*/.java/
 .secrets/
+
+# Archived Snakemake pipelines (legacy)
+pipelines_snakemake_archived/
