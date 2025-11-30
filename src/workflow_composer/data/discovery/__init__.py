@@ -95,6 +95,7 @@ from .orchestrator import (
     search_encode,
     search_geo,
     search_references,
+    ENHANCED_ADAPTERS_AVAILABLE,
 )
 
 from .adapters import (
@@ -103,6 +104,7 @@ from .adapters import (
     GEOAdapter,
     GDCAdapter,
     EnsemblAdapter,
+    EnhancedENCODEAdapter,
     get_adapter,
     list_available_sources,
     
@@ -116,6 +118,17 @@ from .adapters import (
     get_mouse_gtf_url,
 )
 
+# Rich metadata models
+from .rich_models import (
+    RichDatasetInfo,
+    ReplicateInfo,
+    QualityMetrics,
+    FileInfo,
+    RichSearchResults,
+    DataQuality,
+    ExperimentCondition,
+)
+
 from .parallel import (
     ParallelSearchOrchestrator,
     FederatedSearchResult,
@@ -125,6 +138,7 @@ from .parallel import (
 __all__ = [
     # Main orchestrator
     "DataDiscovery",
+    "ENHANCED_ADAPTERS_AVAILABLE",
     
     # Query parsing
     "QueryParser",
@@ -156,6 +170,16 @@ __all__ = [
     "ParallelSearchOrchestrator",
     "FederatedSearchResult",
     "parallel_search",
+    
+    # Enhanced adapters & rich models
+    "EnhancedENCODEAdapter",
+    "RichDatasetInfo",
+    "ReplicateInfo",
+    "QualityMetrics",
+    "FileInfo",
+    "RichSearchResults",
+    "DataQuality",
+    "ExperimentCondition",
     
     # Convenience functions
     "quick_search",

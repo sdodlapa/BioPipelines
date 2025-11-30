@@ -44,6 +44,13 @@ from .adapters import (
     get_adapter, list_available_sources
 )
 
+# Rich metadata support (optional)
+try:
+    from .adapters.encode_enhanced import EnhancedENCODEAdapter
+    ENHANCED_ADAPTERS_AVAILABLE = True
+except ImportError:
+    ENHANCED_ADAPTERS_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -60,7 +67,8 @@ class DataDiscovery:
         llm_client=None,
         enable_caching: bool = True,
         max_workers: int = 4,
-        timeout: int = 30
+        timeout: int = 30,
+        use_enhanced: bool = False
     ):
         """
         Initialize the data discovery system.
@@ -70,24 +78,37 @@ class DataDiscovery:
             enable_caching: Enable result caching
             max_workers: Max parallel searches
             timeout: Request timeout in seconds
+            use_enhanced: Use enhanced adapters for rich metadata (slower but more complete)
         """
         self.llm_client = llm_client
         self.enable_caching = enable_caching
         self.max_workers = max_workers
         self.timeout = timeout
+        self.use_enhanced = use_enhanced and ENHANCED_ADAPTERS_AVAILABLE
         
         # Initialize query parser
         self.query_parser = QueryParser(llm_client)
         
-        # Initialize adapters
-        self.adapters: Dict[DataSource, BaseAdapter] = {
-            DataSource.ENCODE: ENCODEAdapter(enable_caching, timeout),
-            DataSource.GEO: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
-            DataSource.SRA: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
-            DataSource.GDC: GDCAdapter(timeout=timeout),
-            DataSource.TCGA: GDCAdapter(timeout=timeout),  # Alias for GDC
-            DataSource.ENSEMBL: EnsemblAdapter(enable_caching, timeout),
-        }
+        # Initialize adapters (choose enhanced if requested and available)
+        if self.use_enhanced:
+            logger.info("Using enhanced adapters for rich metadata")
+            self.adapters: Dict[DataSource, BaseAdapter] = {
+                DataSource.ENCODE: EnhancedENCODEAdapter(cache_enabled=enable_caching, timeout=timeout),
+                DataSource.GEO: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
+                DataSource.SRA: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
+                DataSource.GDC: GDCAdapter(timeout=timeout),
+                DataSource.TCGA: GDCAdapter(timeout=timeout),
+                DataSource.ENSEMBL: EnsemblAdapter(enable_caching, timeout),
+            }
+        else:
+            self.adapters: Dict[DataSource, BaseAdapter] = {
+                DataSource.ENCODE: ENCODEAdapter(enable_caching, timeout),
+                DataSource.GEO: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
+                DataSource.SRA: GEOAdapter(cache_enabled=enable_caching, timeout=timeout),
+                DataSource.GDC: GDCAdapter(timeout=timeout),
+                DataSource.TCGA: GDCAdapter(timeout=timeout),  # Alias for GDC
+                DataSource.ENSEMBL: EnsemblAdapter(enable_caching, timeout),
+            }
         
         # Download queue
         self._download_queue: List[DownloadJob] = []
