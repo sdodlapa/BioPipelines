@@ -680,6 +680,20 @@ Respond with JSON: {{"intent": "INTENT_NAME", "confidence": 0.0-1.0, "reason": "
         intent_scores: Dict[str, float] = {}
         intent_sources: Dict[str, List[ParsingMethod]] = {}
         
+        # Special handling: if rule_pattern has very high confidence (>0.90),
+        # trust it strongly for job/data operations where patterns are precise
+        rule_pattern_vote = next(
+            (v for v in votes if v.method == ParsingMethod.RULE_PATTERN and v.confidence >= 0.90),
+            None
+        )
+        if rule_pattern_vote and rule_pattern_vote.intent in (
+            'JOB_SUBMIT', 'JOB_STATUS', 'JOB_LIST', 'JOB_CANCEL', 'JOB_LOGS',
+            'DATA_DOWNLOAD', 'DATA_SEARCH', 'DATA_SCAN',
+        ):
+            # Give rule_pattern a significant boost for these precise operations
+            intent_scores[rule_pattern_vote.intent] = rule_pattern_vote.confidence * 1.5
+            intent_sources[rule_pattern_vote.intent] = [ParsingMethod.RULE_PATTERN]
+        
         for vote in votes:
             if vote.confidence > 0.1:  # Ignore very low confidence votes
                 score = vote.weighted_score

@@ -264,6 +264,15 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # =========================================================================
     # DATABASE SEARCH
     # =========================================================================
+    # Generic "Search for X" - should match before more specific patterns
+    (r"(?:search|find|look)\s+for\s+(.+?)\s+data",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    (r"(?:search|find|look)\s+for\s+(.+?)$",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    # "Find X ChIP-seq data" style
+    (r"(?:find|search\s+for|look\s+for)\s+(.+?)\s+(?:ChIP-seq|RNA-seq|ATAC-seq|Hi-C|methylation|metagenomics)(?:\s+data)?",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    
     # "Search ENCODE for X" pattern (database name first)
     (r"(?:search|query|browse)\s+(?:encode|geo|sra|tcga|gdc)\s+(?:for|database\s+for)\s+(.+)",
      IntentType.DATA_SEARCH, {"query": 1}),
@@ -333,7 +342,11 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"(?:create\s+)?peak\s+calling\s+(?:avoid|without|skip)\s+(\w+)\s+(?:use|with)\s+(\w+)",
      IntentType.WORKFLOW_CREATE, {"workflow_type": "peak_calling", "avoided_tool": 1, "preferred_tool": 2}),
     
-    # Job submission
+    # Job submission - "submit my X workflow" means run existing workflow
+    (r"(?:please\s+)?submit\s+(?:my\s+)?(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:workflow|pipeline)",
+     IntentType.JOB_SUBMIT, {"workflow_type": 1}),
+    (r"(?:can\s+you\s+)?(?:run|execute)\s+(?:the\s+)?(?:pipeline|workflow)\s+(?:in|at|from)\s+([/~][^\s]+)",
+     IntentType.JOB_SUBMIT, {"path": 1}),
     (r"(?:run|execute|submit|start)\s+(?:the\s+)?(?:workflow|pipeline|job|analysis)",
      IntentType.JOB_SUBMIT, {}),
     (r"submit\s+(?:the\s+)?workflow\s+(?:in|at|from)\s+([/~][^\s]+)",
@@ -363,6 +376,26 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.JOB_LOGS, {"job_id": 1}),
     (r"(?:what\s+happened|what\s+went\s+wrong|show\s+me\s+(?:the\s+)?(?:error|output))",
      IntentType.JOB_LOGS, {}),
+    (r"what(?:'s|\s+is)\s+(?:the\s+)?output\s+(?:of|for)\s+(?:job\s+)?(\d+)",
+     IntentType.JOB_LOGS, {"job_id": 1}),
+    
+    # Job List (must come before more generic patterns)
+    (r"list\s+(?:all\s+)?(?:my\s+)?(?:running\s+)?jobs",
+     IntentType.JOB_LIST, {}),
+    (r"(?:show|display|get)\s+(?:all\s+)?(?:my\s+)?(?:running\s+)?jobs",
+     IntentType.JOB_LIST, {}),
+    (r"what\s+jobs\s+are\s+(?:running|active|pending|queued)",
+     IntentType.JOB_LIST, {}),
+    (r"what(?:'s|\s+is)\s+(?:currently\s+)?running",
+     IntentType.JOB_LIST, {}),
+    (r"(?:i\s+want\s+to\s+)?(?:see|view|check)\s+(?:my\s+)?(?:running\s+)?jobs",
+     IntentType.JOB_LIST, {}),
+    (r"(?:please\s+)?list\s+all\s+jobs",
+     IntentType.JOB_LIST, {}),
+    (r"(?:i\s+want\s+to\s+)?(?:list|see|check)\s+(?:all\s+)?jobs",
+     IntentType.JOB_LIST, {}),
+    (r"what\s+(?:all\s+)?jobs",
+     IntentType.JOB_LIST, {}),
     
     # Cancel
     (r"(?:cancel|stop|kill|abort)\s+(?:the\s+)?(?:job|run|analysis)(?:\s+(\d+))?",
