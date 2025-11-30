@@ -410,8 +410,11 @@ class UnifiedEnsembleParser:
             # Infer intent from entities
             intent, confidence = self._infer_intent_from_entities(query, entities)
             
+            # Even if we can't infer intent, return a low-confidence vote 
+            # to contribute entities to the final result
             if not intent:
-                return None
+                intent = "META_UNKNOWN"
+                confidence = 0.1  # Low confidence, just for entity contribution
             
             return MethodVote(
                 method=ParsingMethod.NER_ENTITY,
@@ -533,8 +536,29 @@ Respond with JSON: {{"intent": "INTENT_NAME", "confidence": 0.0-1.0, "reason": "
         if "DATASET_ID" in entity_types:
             if any(w in query_lower for w in ["download", "get", "fetch", "retrieve"]):
                 return "DATA_DOWNLOAD", 0.9
-            if any(w in query_lower for w in ["details", "info", "about", "show"]):
-                return "DATA_SEARCH", 0.8
+            if any(w in query_lower for w in ["details", "info", "about", "show", "describe"]):
+                return "DATA_DESCRIBE", 0.85
+        
+        # Path-based signals - DATA_SCAN
+        if "PATH" in entity_types:
+            if any(w in query_lower for w in ["scan", "check", "list", "what files", "inventory"]):
+                return "DATA_SCAN", 0.85
+            if any(w in query_lower for w in ["submit", "run", "execute"]):
+                return "JOB_SUBMIT", 0.85
+        
+        # File format signals
+        if "FILE_FORMAT" in entity_types:
+            if any(w in query_lower for w in ["scan", "find", "list", "look for"]):
+                return "DATA_SCAN", 0.75
+        
+        # Job ID signals
+        if "JOB_ID" in entity_types:
+            if any(w in query_lower for w in ["status", "check", "how is"]):
+                return "JOB_STATUS", 0.9
+            if any(w in query_lower for w in ["cancel", "stop", "kill"]):
+                return "JOB_CANCEL", 0.9
+            if any(w in query_lower for w in ["log", "output", "error"]):
+                return "JOB_LOGS", 0.85
         
         # Workflow creation signals
         if "ASSAY_TYPE" in entity_types:
@@ -565,6 +589,12 @@ Respond with JSON: {{"intent": "INTENT_NAME", "confidence": 0.0-1.0, "reason": "
                 slots.setdefault("disease", getattr(e, 'canonical', e.text))
             elif e.entity_type == "DATASET_ID":
                 slots.setdefault("dataset_id", e.text)
+            elif e.entity_type == "PATH":
+                slots.setdefault("path", e.text)
+            elif e.entity_type == "JOB_ID":
+                slots.setdefault("job_id", e.text)
+            elif e.entity_type == "FILE_FORMAT":
+                slots.setdefault("file_format", getattr(e, 'canonical', e.text))
         return slots
     
     def _combine_votes(

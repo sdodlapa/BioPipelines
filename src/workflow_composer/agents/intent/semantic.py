@@ -59,6 +59,35 @@ INTENT_EXAMPLES = {
         "find samples on disk",
         "discover local datasets",
         "inventory my data",
+        # More explicit scan patterns
+        "scan /data/raw for FASTQ files",
+        "scan the directory for files",
+        "scan folder for data",
+        "scan disk for samples",
+        "check what files exist locally",
+        "list files in /data",
+        "show files in this folder",
+        "what's in my data directory",
+        "check local storage",
+        "explore the data folder",
+        # Path-based patterns - Critical for fixing misclassification
+        "show me what's in /data",
+        "what's in ~/experiments",
+        "show me what's in the folder",
+        "check /home/data for files",
+        "look in /mnt/storage",
+        "what files are in /projects",
+        "check /data/samples for data",
+        "show what's in /data/raw",
+        "list /data/sequencing",
+        "explore ~/data",
+        "browse /data/results",
+        "check the /data folder",
+        # Show me what's in patterns
+        "show me what is in",
+        "can you show me what's in",
+        "show what's in",
+        "SHOW ME WHAT'S IN",  # uppercase variation
     ],
     "DATA_SEARCH": [
         "search for RNA-seq data",
@@ -76,6 +105,15 @@ INTENT_EXAMPLES = {
         "cancer methylation data",  # Entity-only query
         "I need transcriptome data",  # Informal
         "looking for sequencing data",  # Informal
+        # Context switching / negation
+        "cancel that and search instead",
+        "actually, cancel that and search instead",
+        "find something else",
+        "I don't want that, find something else",
+        "search for something different",
+        "skip the download, just search",
+        "create a search for mouse data",  # Tricky: "create a search" means search
+        "find something else instead",
     ],
     "DATA_DOWNLOAD": [
         "download GSE12345",
@@ -99,9 +137,26 @@ INTENT_EXAMPLES = {
         "get all the datasets",  # Batch download
         "download all results",  # Batch download
     ],
+    "DATA_DESCRIBE": [
+        "show details for this dataset",
+        "describe this data",
+        "what's in this dataset",
+        "get dataset details",
+        "show metadata",
+        "describe the files",
+        "show details for ENCSR000ABC",
+        "get info about GSE12345",
+        "what samples are in this dataset",
+        "show file information",
+        "describe the experiment",
+        "what are the details",
+        "show me more information",
+        "inspect this dataset",
+    ],
     
     # Workflow Operations
     "WORKFLOW_CREATE": [
+        # Explicit creation commands
         "create an RNA-seq workflow",
         "generate a ChIP-seq pipeline",
         "build an analysis workflow",
@@ -112,6 +167,40 @@ INTENT_EXAMPLES = {
         "set up ATAC-seq analysis",
         "build a metagenomics workflow",
         "create Hi-C processing pipeline",
+        # Run/execute patterns -> should be workflow creation
+        "run RNA-seq analysis",
+        "run chipseq analysis on my data",
+        "run variant calling analysis",
+        "run methylation analysis",
+        "run metagenomics analysis",
+        "execute RNA-seq pipeline",
+        "I want to run RNA-seq analysis",
+        "please run ChIP-seq analysis",
+        # Set up patterns
+        "set up variant calling for my samples",
+        "set up RNA-seq pipeline",
+        "set up differential expression analysis",
+        # Set up with organisms (common pattern)
+        "set up variant calling for mouse",
+        "set up variant calling for human",
+        "set up variant calling for rattus norvegicus",
+        "set up variant calling for danio rerio",
+        "set up variant calling for mus musculus",
+        "set up analysis for zebrafish",
+        "set up pipeline for yeast",
+        "set up workflow for e. coli",
+        # Analysis patterns
+        "analyze my RNA-seq data",
+        "analyze these ChIP-seq samples",
+        "perform differential expression analysis",
+        "I need to analyze my sequencing data",
+        "process my RNA-seq samples",
+        "process my data through the pipeline",
+        # Pipeline patterns  
+        "create a pipeline for",
+        "I need a pipeline for",
+        "can you create a workflow",
+        "help me set up analysis",
     ],
     "WORKFLOW_VISUALIZE": [
         "show the workflow diagram",
@@ -148,6 +237,12 @@ INTENT_EXAMPLES = {
         "status of my runs",
         "how long until it's done",
         "monitor job progress",
+        # Context switching - prioritize status over other actions
+        "forget the workflow, just show status",
+        "skip that and show me the status",
+        "never mind, just check the status",
+        "just show status",
+        "only show status",
     ],
     "JOB_LOGS": [
         "show the logs",
@@ -173,6 +268,17 @@ INTENT_EXAMPLES = {
         "figure out what happened",
         "explain the error",
         "what caused this failure",
+        # Job-specific error diagnosis
+        "why did job 12345 fail",
+        "debug job 67890",
+        "diagnose error in job",
+        "job failed, what went wrong",
+        "what caused job to fail",
+        "help me fix job error",
+        "troubleshoot failed job",
+        "analyze job failure",
+        "why is my job failing",
+        "investigate job failure",
     ],
     
     # Analysis & Results
@@ -196,6 +302,17 @@ INTENT_EXAMPLES = {
         "verify reference data",
         "is GRCh38 downloaded",
         "check reference availability",
+        # More examples
+        "do I have the hg38 reference",
+        "do I have hg38 reference genome",
+        "is hg38 available",
+        "check if hg38 is downloaded",
+        "is the reference genome ready",
+        "verify genome index exists",
+        "do I have the mm10 reference",
+        "check for GRCm39 genome",
+        "is the STAR index built",
+        "do we have bowtie2 index",
     ],
     "REFERENCE_DOWNLOAD": [
         "download human genome",
@@ -216,6 +333,24 @@ INTENT_EXAMPLES = {
         "what is a p-value",
         "describe the workflow steps",
         "what is peak calling",
+        # How does X work patterns
+        "how does ATAC-seq work",
+        "how does ChIP-seq work",
+        "how does RNA-seq work",
+        "how does alignment work",
+        "how does peak calling work",
+        "how do read aligners work",
+        "how does differential expression work",
+        "how does normalization work",
+        # Educational questions
+        "teach me about sequencing",
+        "explain the principle behind ChIP-seq",
+        "what are the steps in RNA-seq analysis",
+        "describe how peak calling algorithms work",
+        "I want to learn about ATAC-seq",
+        "can you explain transcriptomics",
+        "what's the purpose of normalization",
+        "why do we need input controls in ChIP-seq",
     ],
     "EDUCATION_HELP": [
         "help",
@@ -225,6 +360,13 @@ INTENT_EXAMPLES = {
         "how do I use this",
         "what are my options",
         "show me what's possible",
+        # More help patterns
+        "help me understand what this system can do",
+        "what features are available",
+        "show available commands",
+        "I need help",
+        "help me get started",
+        "what can this tool do",
     ],
     
     # Composite
@@ -332,6 +474,7 @@ class BioinformaticsNER:
         # RNA
         "rna-seq": "RNA-seq", "rnaseq": "RNA-seq", "rna seq": "RNA-seq", "transcriptome": "RNA-seq",
         "mrna-seq": "mRNA-seq", "total rna": "total-RNA-seq", "poly-a": "polyA-RNA-seq",
+        "gene expression": "RNA-seq", "differential expression": "RNA-seq",  # Common phrases
         "single-cell rna": "scRNA-seq", "scrna-seq": "scRNA-seq", "scrnaseq": "scRNA-seq",
         "10x genomics": "scRNA-seq", "smart-seq": "scRNA-seq",
         # ChIP
@@ -340,6 +483,7 @@ class BioinformaticsNER:
         # ATAC
         "atac-seq": "ATAC-seq", "atacseq": "ATAC-seq", "atac": "ATAC-seq",
         "dnase-seq": "DNase-seq", "dnase": "DNase-seq", "faire-seq": "FAIRE-seq",
+        "chromatin accessibility": "ATAC-seq", "open chromatin": "ATAC-seq",  # Common phrases
         # Methylation
         "methylation": "Bisulfite-seq", "bisulfite": "Bisulfite-seq", "wgbs": "WGBS",
         "rrbs": "RRBS", "methylome": "Bisulfite-seq", "dna methylation": "Bisulfite-seq",
@@ -348,9 +492,11 @@ class BioinformaticsNER:
         "chromatin conformation": "Hi-C", "chromosome conformation": "Hi-C",
         # DNA-seq
         "wgs": "WGS", "whole genome": "WGS", "exome": "WES", "wes": "WES",
+        "genome sequencing": "WGS", "whole genome sequencing": "WGS",  # Common phrases
         "targeted sequencing": "targeted-seq", "amplicon": "amplicon-seq",
-        # Other
+        # CLIP/RIP - RNA binding
         "clip-seq": "CLIP-seq", "rip-seq": "RIP-seq", "metagenomics": "metagenomics",
+        "rna binding": "CLIP-seq", "rna-binding": "CLIP-seq",  # Common phrases
         "16s": "16S-rRNA", "microbiome": "metagenomics",
     }
     
@@ -410,8 +556,8 @@ class BioinformaticsNER:
     DATASET_ID_PATTERNS = [
         (r'\bGSE\d{4,8}\b', 'GEO'),           # GEO series
         (r'\bGSM\d{4,8}\b', 'GEO'),           # GEO sample
-        (r'\bENCSR[A-Z0-9]{6}\b', 'ENCODE'),  # ENCODE experiment
-        (r'\bENCFF[A-Z0-9]{6}\b', 'ENCODE'),  # ENCODE file
+        (r'\bENCSR[A-Z0-9]{6,10}\b', 'ENCODE'),  # ENCODE experiment (flexible length)
+        (r'\bENCFF[A-Z0-9]{6,10}\b', 'ENCODE'),  # ENCODE file (flexible length)
         (r'\bTCGA-[A-Z]{2,4}\b', 'TCGA'),     # TCGA project
         (r'\bSRR\d{6,10}\b', 'SRA'),          # SRA run
         (r'\bSRP\d{5,8}\b', 'SRA'),           # SRA project
@@ -533,6 +679,34 @@ class BioinformaticsNER:
                                 canonical=lookup[phrase],
                                 start=start, end=end
                             ))
+        
+        # Extract file paths (Unix and Windows)
+        path_pattern = r'(?:\/[\w\-\.]+)+|(?:[A-Za-z]:\\[\w\-\.\\]+)'
+        for match in re.finditer(path_pattern, text):
+            entities.append(BioEntity(
+                text=match.group(),
+                entity_type="PATH",
+                canonical=match.group(),
+                start=match.start(),
+                end=match.end()
+            ))
+        
+        # Extract job IDs (e.g., "job 12345", "job_id=abc123")
+        job_patterns = [
+            r'job[_\s]+(?:id[_\s]*=?\s*)?(\w+)',
+            r'job\s+(\d+)',
+            r'(?:submit|status|cancel|logs?)\s+(?:for\s+)?(?:job\s+)?(\d+)',
+        ]
+        for pattern in job_patterns:
+            for match in re.finditer(pattern, text_lower):
+                job_id = match.group(1) if match.lastindex else match.group()
+                entities.append(BioEntity(
+                    text=job_id,
+                    entity_type="JOB_ID",
+                    canonical=job_id,
+                    start=match.start(),
+                    end=match.end()
+                ))
         
         # Remove duplicates (keep highest confidence)
         seen = set()

@@ -235,9 +235,24 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.COMPOSITE_GENERATE_THEN_RUN, {"workflow_type": 1}),
     
     # =========================================================================
+    # EDUCATION - must come before workflow creation to catch "how does X work"
+    # =========================================================================
+    (r"how\s+does\s+(.+?)\s+work(?:\??|$)",
+     IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    (r"how\s+do(?:es)?\s+(.+?)\s+(?:algorithms?|methods?)\s+work",
+     IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    (r"(?:i\s+want\s+to|help\s+me)\s+(?:learn|understand)\s+(?:about\s+)?(.+)",
+     IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    
+    # =========================================================================
     # DATA SCANNING - local filesystem
     # =========================================================================
     (r"(?:scan|find|look\s+for|discover|list|show)\s+(?:the\s+)?(?:local\s+)?(?:data|files?|samples?|fastq)(?:\s+(?:in|at|from|under)\s+(.+))?", 
+     IntentType.DATA_SCAN, {"path": 1}),
+    # Explicit path patterns for scan
+    (r"scan\s+([/~][^\s]+)\s+(?:for\s+)?(?:data|files?|samples?|fastq)?",
+     IntentType.DATA_SCAN, {"path": 1}),
+    (r"scan\s+(?:for\s+)?(?:data|files?|samples?|fastq)\s+(?:in|at|from|under)\s+([/~][^\s]+)",
      IntentType.DATA_SCAN, {"path": 1}),
     (r"what\s+(?:data|files?|samples?)\s+(?:do\s+)?(?:i\s+have|we\s+have|is\s+available|exist)(?:\s+(?:in|at)\s+(.+))?",
      IntentType.DATA_SCAN, {"path": 1}),
@@ -288,7 +303,11 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # Job submission
     (r"(?:run|execute|submit|start)\s+(?:the\s+)?(?:workflow|pipeline|job|analysis)",
      IntentType.JOB_SUBMIT, {}),
+    (r"submit\s+(?:the\s+)?workflow\s+(?:in|at|from)\s+([/~][^\s]+)",
+     IntentType.JOB_SUBMIT, {"path": 1}),
     (r"(?:send|submit)\s+(?:it|this)\s+to\s+(?:slurm|cluster|hpc)",
+     IntentType.JOB_SUBMIT, {}),
+    (r"(?:now\s+)?submit\s+it",
      IntentType.JOB_SUBMIT, {}),
     
     # Job status
@@ -297,6 +316,13 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"(?:is\s+(?:the\s+)?job|are\s+(?:the\s+)?jobs?)\s+(?:still\s+)?(?:running|done|finished|complete)",
      IntentType.JOB_STATUS, {}),
     (r"(?:how\s+is|what's\s+happening\s+with)\s+(?:the\s+)?(?:job|analysis|run)",
+     IntentType.JOB_STATUS, {}),
+    # "what's the status of job X" must come before education patterns
+    (r"what(?:'s|\s+is)\s+(?:the\s+)?status\s+(?:of|for)\s+(?:job\s+)?(\d+)",
+     IntentType.JOB_STATUS, {"job_id": 1}),
+    (r"(?:check|show|get)\s+(?:on\s+)?(?:job\s+)?(\d+)",
+     IntentType.JOB_STATUS, {"job_id": 1}),
+    (r"(?:check|see|look)\s+(?:on\s+)?(?:it|the\s+job)",
      IntentType.JOB_STATUS, {}),
     
     # Logs
