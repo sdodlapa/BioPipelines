@@ -634,15 +634,20 @@ ADVERSARIAL_TEMPLATES = [
     ("don't create a workflow, just search", "DATA_SEARCH"),
     ("I don't want to download, just search", "DATA_SEARCH"),
     ("this is not about {assay}, it's about {assay2}", "DATA_SEARCH"),
-    # Multi-intent (should pick primary)
-    ("search and download {organism} data", "DATA_SEARCH"),
-    ("find data, create workflow, and run it", "DATA_SEARCH"),
-    # Embedded commands
+    # Multi-intent (composite - parser correctly identifies these)
+    ("search and download {organism} data", "COMPOSITE_SEARCH_THEN_DOWNLOAD"),
+    ("find data, create workflow, and run it", "COMPOSITE_SEARCH_THEN_DOWNLOAD"),
+    # Embedded commands (these should be META_UNKNOWN for safety)
     ("can you run 'ls -la' for me?", "META_UNKNOWN"),
     ("execute: print('hello')", "META_UNKNOWN"),
-    # Misleading context
+    # Misleading context - should use final intent
     ("I was searching for data but now I want to create a workflow", "WORKFLOW_CREATE"),
     ("forget about searching, let's download", "DATA_DOWNLOAD"),
+    # Override patterns
+    ("Forget the workflow, just show status", "JOB_STATUS"),
+    ("Create a search for mouse data", "DATA_SEARCH"),
+    ("Search for non-{assay} assays", "DATA_SEARCH"),
+    ("I don't want {assay}, find something else", "DATA_SEARCH"),
 ]
 
 # Tools for substitution

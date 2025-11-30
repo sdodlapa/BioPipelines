@@ -93,12 +93,13 @@ class IntentType(Enum):
     
     # Meta/Conversational
     META_CONFIRM = auto()        # User confirmation (yes/no)
-    META_CANCEL = auto()         # Cancel current operation
-    META_CLARIFY = auto()        # User clarifying previous statement
-    META_UNDO = auto()           # Undo last action
-    META_GREETING = auto()       # Hello/greeting
-    META_THANKS = auto()         # Thank you
-    META_UNKNOWN = auto()        # Cannot determine intent
+    META_CANCEL = auto()          # Cancel current operation
+    META_CLARIFY = auto()         # User clarifying previous statement
+    META_CORRECT = auto()         # User correcting previous statement ("actually X not Y")
+    META_UNDO = auto()            # Undo last action
+    META_GREETING = auto()        # Hello/greeting
+    META_THANKS = auto()          # Thank you
+    META_UNKNOWN = auto()         # Cannot determine intent
     
     # Context-Aware Intents
     CONTEXT_RECALL = auto()      # Recall/reference previous results
@@ -283,6 +284,14 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"(?:are\s+there|is\s+there)\s+(?:any\s+)?(.+?)\s+(?:datasets?|data)\s+(?:available\s+)?(?:online|in\s+(?:encode|geo|tcga))?",
      IntentType.DATA_SEARCH, {"query": 1}),
     
+    # Search with exclusions - "skip X samples", "no X data", etc.
+    (r"(?:skip|exclude|avoid|ignore)\s+(.+?)\s+(?:samples?|data)",
+     IntentType.DATA_SEARCH, {"excluded": 1}),
+    (r"(?:find|search|look\s+for)\s+(.+?)\s+data\s+(?:without|excluding|not|except)\s+(.+)",
+     IntentType.DATA_SEARCH, {"query": 1, "excluded": 2}),
+    (r"no\s+(.+?)\s+(?:data|samples?)",
+     IntentType.DATA_SEARCH, {"excluded": 1}),
+    
     # TCGA-specific search
     (r"(?:search|find|look\s+for)\s+(?:tcga|cancer)\s+(.+)",
      IntentType.DATA_SEARCH, {"query": 1, "source": "tcga"}),
@@ -323,6 +332,12 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.WORKFLOW_CREATE, {"preferred_tool": 1, "avoided_tool": 2}),
     (r"(?:don't|do\s+not)\s+use\s+(\w+(?:[_-]\w+)?)\s*,?\s*(?:use|prefer)\s+(\w+(?:[_-]\w+)?)",
      IntentType.WORKFLOW_CREATE, {"avoided_tool": 1, "preferred_tool": 2}),
+    # "I'd rather use X" / "I would prefer X"
+    (r"i'?d\s+(?:rather|prefer\s+to)\s+use\s+(\w+(?:[_-]\w+)?)",
+     IntentType.WORKFLOW_CREATE, {"preferred_tool": 1}),
+    # "tool_A not tool_B" - standalone tool preference without context words
+    (r"^(\w+(?:[_-]\w+)?)\s+not\s+(\w+(?:[_-]\w+)?)\s*$",
+     IntentType.WORKFLOW_CREATE, {"preferred_tool": 1, "avoided_tool": 2}),
     
     # Workflow creation with exclusions (no/without/except)
     (r"(.+?)\s+(?:workflow|pipeline|analysis)\s+(?:without|excluding|but\s+(?:not|no))\s+(\w+)",
@@ -415,6 +430,48 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"(?:what\s+do\s+(?:the\s+)?results?\s+(?:mean|show)|summarize\s+(?:the\s+)?results?)",
      IntentType.ANALYSIS_INTERPRET, {}),
     
+    # =========================================================================
+    # ADVERSARIAL PATTERNS - disambiguate tricky queries
+    # =========================================================================
+    # "download instructions for X" / "download information about X" - wants documentation
+    (r"download\s+(?:the\s+)?(?:instructions?|information|info|details?|docs?)\s+(?:for|on|about)\s+(.+)",
+     IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    # "this is not about X, it's about Y" - clarification, wants search for Y
+    (r"(?:this\s+is\s+not|it'?s?\s+not)\s+about\s+\S+[,;]?\s+(?:it'?s?|this\s+is)\s+about\s+(.+)",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    # "I don't want X, find something else" - search with exclusion
+    (r"i\s+don'?t\s+want\s+(.+?)[,;]?\s+(?:find|search|show)\s+(?:something\s+else|alternatives?|others?)",
+     IntentType.DATA_SEARCH, {"excluded": 1}),
+    # "Create a search for X" - the word "create" is misleading, it's a search
+    (r"(?:create|make|start)\s+a\s+search\s+(?:for|of)\s+(.+)",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    # "Search for a way to X" - wants tutorial/explanation, not data search
+    (r"search\s+for\s+(?:a\s+)?(?:way|method|approach)\s+to\s+(.+)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    # "find help about X" / "get help on X" - wants education
+    (r"(?:find|get|need)\s+help\s+(?:about|on|with)\s+(.+)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    # "Forget X, just Y" - override with second intent
+    (r"forget\s+(?:about\s+)?(?:the\s+)?(?:\w+)[,;]?\s+(?:just\s+)?(?:show|check|get)\s+(?:the\s+)?status",
+     IntentType.JOB_STATUS, {}),
+    (r"forget\s+(?:about\s+)?(?:the\s+)?(?:\w+)[,;]?\s+(?:just\s+)?(?:list|show)\s+(?:the\s+)?jobs",
+     IntentType.JOB_LIST, {}),
+    # "explain how to search for data" - tutorial, not search
+    (r"explain\s+(?:how\s+to|me\s+how\s+to)\s+(?:search|find|look)\s+(?:for\s+)?(?:data|datasets?|samples?)",
+     IntentType.EDUCATION_TUTORIAL, {"topic": "data_search"}),
+    
+    # =========================================================================
+    # AMBIGUOUS/VAGUE PATTERNS - should trigger clarification
+    # =========================================================================
+    # Single word queries that are too vague
+    (r"^(?:data|analysis|samples?|files?|help|workflow|pipeline)$",
+     IntentType.META_UNKNOWN, {"needs_clarification": True}),
+    # Very vague statements
+    (r"^(?:i\s+have|i'?ve?\s+got)\s+(?:some|a\s+few)?\s*(?:data|files?|samples?)$",
+     IntentType.META_UNKNOWN, {"needs_clarification": True}),
+    (r"^process\s+(?:my|the)?\s*(?:data|files?|samples?)$",
+     IntentType.META_UNKNOWN, {"needs_clarification": True}),
+    
     # Education
     (r"(?:what\s+is|what's|explain|describe|tell\s+me\s+about)\s+(.+?)(?:\?|$)",
      IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
@@ -436,6 +493,27 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.META_THANKS, {}),
     (r"(?:undo|go\s+back|revert)\s+(?:that|last|previous)",
      IntentType.META_UNDO, {}),
+    
+    # =========================================================================
+    # META_CORRECT - User correcting previous statement (MUST be explicit corrections)
+    # These patterns require context words like "actually", "wait", "meant", etc.
+    # Simple "X not Y" should NOT trigger META_CORRECT - those are preferences
+    # =========================================================================
+    # "actually X not Y" / "actually, X not Y" (explicit correction marker)
+    (r"^(?:actually|wait)[,]?\s+(?:i\s+meant\s+)?(\w+(?:[_\-]\w+)?)\s+not\s+(\w+(?:[_\-]\w+)?)\s*$",
+     IntentType.META_CORRECT, {"correct_to": 1, "incorrect": 2}),
+    # "wait, I meant X not Y" / "I meant X not Y"
+    (r"(?:wait[,]?\s+)?i\s+meant\s+(\w+(?:[_\-]\w+)?)\s+not\s+(\w+(?:[_\-]\w+)?)",
+     IntentType.META_CORRECT, {"correct_to": 1, "incorrect": 2}),
+    # "no, use X instead" / "no use X" (short correction response)
+    (r"^no[,]?\s+use\s+(\w+(?:[_\-]\w+)?)\s*(?:instead)?\s*$",
+     IntentType.META_CORRECT, {"correct_to": 1}),
+    # "change to X" / "switch to X" (short command)
+    (r"^(?:change|switch)\s+to\s+(\w+(?:[_\-]\w+)?)\s*$",
+     IntentType.META_CORRECT, {"correct_to": 1}),
+    # "I meant X" (without negation, standalone)
+    (r"^i\s+meant\s+(\w+(?:[_\-]\w+)?)\s*$",
+     IntentType.META_CORRECT, {"correct_to": 1}),
 ]
 
 
