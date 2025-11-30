@@ -7,6 +7,7 @@ Enhanced natural language understanding for the BioPipelines agent.
 Components:
 - IntentParser: Pattern-based intent detection with entity extraction
 - HybridQueryParser: Production-grade hybrid parser (pattern + semantic + NER)
+- UnifiedEnsembleParser: Multi-method ensemble with weighted voting
 - SemanticIntentClassifier: FAISS-based semantic similarity classification
 - BioinformaticsNER: Domain-specific named entity recognition
 - ConversationContext: Semantic memory and coreference resolution
@@ -15,36 +16,34 @@ Components:
 
 Architecture:
     ┌─────────────────────────────────────────────────────────────┐
-    │                    HybridQueryParser                         │
-    │  ┌──────────────┬───────────────────┬───────────────────┐   │
-    │  │ Pattern      │ Semantic          │ NER               │   │
-    │  │ Matching     │ Similarity        │ (BioinfoNER)      │   │
-    │  │ (regex)      │ (FAISS/cosine)    │                   │   │
-    │  └──────────────┴───────────────────┴───────────────────┘   │
-    │                         ↓                                    │
-    │              Confidence-Weighted Fusion                      │
-    │                         ↓                                    │
-    │              Intent + Entities + Slots                       │
+    │                 UnifiedEnsembleParser                       │
+    │  ┌──────────┬──────────┬──────────┬──────────┬──────────┐  │
+    │  │ Rule     │ Semantic │ NER      │ LLM      │ RAG      │  │
+    │  │ Patterns │ FAISS    │ BioBERT  │ Fallback │ History  │  │
+    │  │ (0.25)   │ (0.30)   │ (0.20)   │ (0.15)   │ (0.10)   │  │
+    │  └──────────┴──────────┴──────────┴──────────┴──────────┘  │
+    │                          ↓                                  │
+    │              Confidence-Weighted Fusion                     │
+    │              + Agreement Boosting                           │
+    │                          ↓                                  │
+    │               Final Intent + Confidence                     │
     └─────────────────────────────────────────────────────────────┘
 
 Usage:
-    # Simple usage
-    from workflow_composer.agents.intent import HybridQueryParser
+    # Production usage (recommended)
+    from workflow_composer.agents.intent import UnifiedEnsembleParser
     
-    parser = HybridQueryParser()
+    parser = UnifiedEnsembleParser()
     result = parser.parse("search for human brain RNA-seq data")
     print(result.intent)      # "DATA_SEARCH"
-    print(result.entities)    # [ORGANISM:Homo sapiens, TISSUE:brain, ASSAY_TYPE:RNA-seq]
-    print(result.slots)       # {"organism": "Homo sapiens", "tissue": "brain", ...}
+    print(result.confidence)  # 0.92
+    print(result.agreement_level)  # 0.80 (4/5 methods agreed)
     
     # With chat integration
     from workflow_composer.agents.intent import ChatIntegration
     
     intent_system = ChatIntegration()
     result = intent_system.process_message(message, session_id)
-    
-    if result.should_execute_tool:
-        tool_result = call_tool(result.tool_name, result.tool_args)
 """
 
 from .parser import IntentParser, IntentType, IntentResult, Entity, EntityType
@@ -76,12 +75,26 @@ from .learning import (
     LLMIntentClassifier,
     FineTuningExporter,
 )
+from .unified_ensemble import (
+    UnifiedEnsembleParser,
+    EnsembleParseResult,
+    MethodVote,
+    ParsingMethod,
+    create_ensemble_parser,
+)
 
 __all__ = [
     # High-level (recommended)
+    "UnifiedEnsembleParser",  # NEW: Multi-method ensemble parser
     "HybridQueryParser",      # Production-grade hybrid parser
     "LearningHybridParser",   # With active learning & feedback
     "ChatIntegration",        # Chat handler integration
+    
+    # Ensemble components
+    "EnsembleParseResult",
+    "MethodVote",
+    "ParsingMethod",
+    "create_ensemble_parser",
     
     # Learning components
     "QueryLogger",

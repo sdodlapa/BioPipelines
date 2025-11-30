@@ -37,6 +37,7 @@ Usage:
 
 from .base import BaseAdapter
 from .encode import ENCODEAdapter, search_encode
+from .encode_enhanced import EnhancedENCODEAdapter, search_encode_rich
 from .geo import GEOAdapter, search_geo
 from .gdc import GDCAdapter, search_gdc
 from .ensembl import (
@@ -53,12 +54,14 @@ __all__ = [
     
     # Adapters
     "ENCODEAdapter",
+    "EnhancedENCODEAdapter",  # Rich metadata version
     "GEOAdapter",
     "GDCAdapter",
     "EnsemblAdapter",
     
     # Convenience functions
     "search_encode",
+    "search_encode_rich",  # Rich metadata search
     "search_geo",
     "search_gdc",
     "get_human_genome_url",
