@@ -9,7 +9,8 @@ from __future__ import annotations
 
 import time
 import logging
-from typing import Optional, Dict, Any, List, Union
+import asyncio
+from typing import Optional, Dict, Any, List, Union, Iterator, AsyncIterator
 from dataclasses import dataclass
 
 from .base import BaseProvider, Message, ProviderResponse, ProviderError
@@ -415,6 +416,260 @@ class ProviderRouter:
         """Async version of chat()."""
         import asyncio
         return await asyncio.to_thread(self.chat, messages, **kwargs)
+    
+    def stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        preferred_provider: Optional[str] = None,
+        fallback: bool = True,
+        **kwargs
+    ) -> Iterator[str]:
+        """
+        Stream a completion using the best available provider.
+        
+        Args:
+            prompt: User prompt
+            system_prompt: Optional system instructions
+            preferred_provider: Prefer this provider if available
+            fallback: Whether to try other providers on failure
+            **kwargs: Additional parameters
+            
+        Yields:
+            String chunks as they arrive
+        """
+        providers = self._get_ordered_providers()
+        
+        if preferred_provider:
+            providers = sorted(
+                providers,
+                key=lambda p: 0 if p.id == preferred_provider else 1
+            )
+        
+        errors = []
+        
+        for config in providers:
+            try:
+                provider = self._get_provider_instance(config)
+                
+                if not provider.supports_streaming:
+                    # Fallback to non-streaming
+                    response = provider.complete(prompt, system_prompt, **kwargs)
+                    yield response.content
+                    return
+                
+                logger.info(f"Streaming from {config.id}")
+                for chunk in provider.stream(prompt, system_prompt, **kwargs):
+                    yield chunk
+                
+                # Success
+                self._failure_counts[config.id] = 0
+                return
+                
+            except Exception as e:
+                error_msg = f"{config.id}: {str(e)}"
+                errors.append(error_msg)
+                logger.warning(f"Stream failed: {error_msg}")
+                
+                if self._is_rate_limit_error(e):
+                    self._mark_rate_limited(config.id, str(e)[:100])
+                
+                if not fallback:
+                    break
+        
+        # All failed
+        raise ProviderError(
+            provider="router",
+            message=f"All providers failed streaming. Errors: {'; '.join(errors[-3:])}",
+            retriable=False,
+        )
+    
+    def chat_stream(
+        self,
+        messages: List[Union[Message, Dict]],
+        preferred_provider: Optional[str] = None,
+        fallback: bool = True,
+        **kwargs
+    ) -> Iterator[str]:
+        """
+        Stream a chat response using the best available provider.
+        
+        Args:
+            messages: List of Message objects or dicts
+            preferred_provider: Prefer this provider if available
+            fallback: Whether to try other providers on failure
+            **kwargs: Additional parameters
+            
+        Yields:
+            String chunks as they arrive
+        """
+        providers = self._get_ordered_providers()
+        
+        if preferred_provider:
+            providers = sorted(
+                providers,
+                key=lambda p: 0 if p.id == preferred_provider else 1
+            )
+        
+        # Normalize messages
+        normalized = []
+        for msg in messages:
+            if isinstance(msg, Message):
+                normalized.append(msg)
+            elif isinstance(msg, dict):
+                normalized.append(Message.from_dict(msg))
+            else:
+                raise ValueError(f"Invalid message type: {type(msg)}")
+        
+        errors = []
+        
+        for config in providers:
+            try:
+                provider = self._get_provider_instance(config)
+                
+                if not provider.supports_streaming:
+                    response = provider.chat(normalized, **kwargs)
+                    yield response.content
+                    return
+                
+                logger.info(f"Streaming chat from {config.id}")
+                for chunk in provider.chat_stream(normalized, **kwargs):
+                    yield chunk
+                
+                self._failure_counts[config.id] = 0
+                return
+                
+            except Exception as e:
+                errors.append(f"{config.id}: {e}")
+                
+                if self._is_rate_limit_error(e):
+                    self._mark_rate_limited(config.id, str(e)[:100])
+                
+                if not fallback:
+                    break
+        
+        raise ProviderError(
+            provider="router",
+            message=f"All providers failed streaming. Errors: {'; '.join(errors[-3:])}",
+            retriable=False,
+        )
+    
+    async def stream_async(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        preferred_provider: Optional[str] = None,
+        fallback: bool = True,
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """
+        Async stream a completion using the best available provider.
+        
+        Yields:
+            String chunks as they arrive
+        """
+        providers = self._get_ordered_providers()
+        
+        if preferred_provider:
+            providers = sorted(
+                providers,
+                key=lambda p: 0 if p.id == preferred_provider else 1
+            )
+        
+        errors = []
+        
+        for config in providers:
+            try:
+                provider = self._get_provider_instance(config)
+                
+                if not provider.supports_streaming:
+                    response = await provider.complete_async(prompt, system_prompt, **kwargs)
+                    yield response.content
+                    return
+                
+                logger.info(f"Async streaming from {config.id}")
+                async for chunk in provider.stream_async(prompt, system_prompt, **kwargs):
+                    yield chunk
+                
+                self._failure_counts[config.id] = 0
+                return
+                
+            except Exception as e:
+                errors.append(f"{config.id}: {e}")
+                
+                if self._is_rate_limit_error(e):
+                    self._mark_rate_limited(config.id, str(e)[:100])
+                
+                if not fallback:
+                    break
+        
+        raise ProviderError(
+            provider="router",
+            message=f"All providers failed async streaming. Errors: {'; '.join(errors[-3:])}",
+            retriable=False,
+        )
+    
+    async def chat_stream_async(
+        self,
+        messages: List[Union[Message, Dict]],
+        preferred_provider: Optional[str] = None,
+        fallback: bool = True,
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """
+        Async stream a chat response using the best available provider.
+        
+        Yields:
+            String chunks as they arrive
+        """
+        providers = self._get_ordered_providers()
+        
+        if preferred_provider:
+            providers = sorted(
+                providers,
+                key=lambda p: 0 if p.id == preferred_provider else 1
+            )
+        
+        # Normalize messages
+        normalized = []
+        for msg in messages:
+            if isinstance(msg, Message):
+                normalized.append(msg)
+            elif isinstance(msg, dict):
+                normalized.append(Message.from_dict(msg))
+        
+        errors = []
+        
+        for config in providers:
+            try:
+                provider = self._get_provider_instance(config)
+                
+                if not provider.supports_streaming:
+                    response = await provider.chat_async(normalized, **kwargs)
+                    yield response.content
+                    return
+                
+                logger.info(f"Async streaming chat from {config.id}")
+                async for chunk in provider.chat_stream_async(normalized, **kwargs):
+                    yield chunk
+                
+                self._failure_counts[config.id] = 0
+                return
+                
+            except Exception as e:
+                errors.append(f"{config.id}: {e}")
+                
+                if self._is_rate_limit_error(e):
+                    self._mark_rate_limited(config.id, str(e)[:100])
+                
+                if not fallback:
+                    break
+        
+        raise ProviderError(
+            provider="router",
+            message=f"All providers failed async streaming. Errors: {'; '.join(errors[-3:])}",
+            retriable=False,
+        )
     
     def get_status(self) -> Dict[str, Any]:
         """Get current router status including rate-limited providers."""

@@ -9,7 +9,8 @@ Excellent for coding and reasoning tasks.
 import os
 import time
 import logging
-from typing import Optional, List, Dict, Any
+import asyncio
+from typing import Optional, List, Dict, Any, Iterator, AsyncIterator
 
 from .base import BaseProvider, Message, ProviderResponse, ProviderError, Role
 
@@ -192,3 +193,117 @@ class GeminiProvider(BaseProvider):
                 })
         
         return contents
+    
+    def stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> Iterator[str]:
+        """Stream completion token by token using Gemini's streaming API."""
+        messages = self._build_messages(prompt, system_prompt)
+        yield from self.chat_stream(messages, **kwargs)
+    
+    def chat_stream(
+        self,
+        messages: List[Message],
+        **kwargs
+    ) -> Iterator[str]:
+        """Stream chat response token by token using Gemini's streaming API."""
+        if not self.api_key:
+            raise ProviderError(
+                self.name,
+                "GOOGLE_API_KEY not set",
+                retriable=False,
+            )
+        
+        import requests
+        
+        messages = self._normalize_messages(messages)
+        
+        model = kwargs.get("model", self.model)
+        model_path = self.MODEL_PATHS.get(model, f"models/{model}")
+        
+        contents = self._convert_messages(messages)
+        
+        payload = {
+            "contents": contents,
+            "generationConfig": {
+                "maxOutputTokens": kwargs.get("max_tokens", self.max_tokens),
+                "temperature": kwargs.get("temperature", self.temperature),
+            },
+        }
+        
+        # Use streamGenerateContent endpoint
+        url = f"{self.base_url}/{model_path}:streamGenerateContent"
+        
+        try:
+            response = requests.post(
+                url,
+                params={"key": self.api_key, "alt": "sse"},
+                json=payload,
+                headers={"Content-Type": "application/json"},
+                timeout=120,
+                stream=True,
+            )
+            
+            if response.status_code != 200:
+                raise ProviderError(
+                    self.name,
+                    f"API error: {response.status_code} - {response.text[:200]}",
+                    retriable=response.status_code >= 500,
+                    status_code=response.status_code,
+                )
+            
+            # Parse SSE stream
+            import json
+            
+            for line in response.iter_lines():
+                if line:
+                    line = line.decode('utf-8')
+                    if line.startswith('data: '):
+                        try:
+                            data = json.loads(line[6:])
+                            if 'candidates' in data:
+                                for candidate in data['candidates']:
+                                    if 'content' in candidate:
+                                        for part in candidate['content'].get('parts', []):
+                                            if 'text' in part:
+                                                yield part['text']
+                        except json.JSONDecodeError:
+                            continue
+                            
+        except requests.exceptions.RequestException as e:
+            raise ProviderError(
+                self.name,
+                f"Stream request failed: {e}",
+                retriable=True,
+            )
+    
+    async def stream_async(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """Async stream completion using Gemini's streaming API."""
+        messages = self._build_messages(prompt, system_prompt)
+        async for chunk in self.chat_stream_async(messages, **kwargs):
+            yield chunk
+    
+    async def chat_stream_async(
+        self,
+        messages: List[Message],
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """Async stream chat response using Gemini's streaming API."""
+        # Use sync streaming in thread for now
+        # TODO: Use aiohttp for true async
+        loop = asyncio.get_event_loop()
+        
+        def get_chunks():
+            return list(self.chat_stream(messages, **kwargs))
+        
+        chunks = await loop.run_in_executor(None, get_chunks)
+        for chunk in chunks:
+            yield chunk

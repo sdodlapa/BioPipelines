@@ -47,7 +47,7 @@ Advanced Usage:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Union, Iterator, TYPE_CHECKING
 import logging
 
 logger = logging.getLogger(__name__)
@@ -398,6 +398,46 @@ class BioPipelines:
             tools_used=result.tools_used if hasattr(result, "tools_used") else [],
             suggestions=result.suggestions if hasattr(result, "suggestions") else [],
         )
+    
+    def chat_stream(
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+    ) -> Iterator[str]:
+        """
+        Streaming chat interface for real-time responses.
+        
+        Yields response chunks as they arrive from the LLM.
+        
+        Args:
+            message: User's message
+            history: Optional conversation history
+            
+        Yields:
+            String chunks of the assistant's response
+            
+        Example:
+            for chunk in bp.chat_stream("Explain RNA-seq"):
+                print(chunk, end="", flush=True)
+        """
+        try:
+            # Try to use provider router streaming
+            from .providers import get_router
+            router = get_router()
+            
+            # Build system prompt for the agent context
+            system_prompt = """You are BioPipelines, an AI assistant for bioinformatics workflow generation.
+You help users create, manage, and run bioinformatics pipelines.
+Be helpful, concise, and technically accurate."""
+            
+            # Stream from the router
+            yield from router.stream(message, system_prompt=system_prompt)
+            
+        except Exception as e:
+            # Fallback to non-streaming
+            logger.warning(f"Streaming failed, falling back: {e}")
+            response = self.chat(message, history)
+            yield response.message
     
     def parse_intent(self, description: str) -> "ParsedIntent":
         """

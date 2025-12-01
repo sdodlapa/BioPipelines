@@ -22,7 +22,8 @@ API Key: https://cloud.cerebras.ai/
 import os
 import time
 import logging
-from typing import Optional, List, Dict, Any
+import asyncio
+from typing import Optional, List, Dict, Any, Iterator, AsyncIterator
 
 from .base import BaseProvider, Message, ProviderResponse, ProviderError, Role
 
@@ -204,3 +205,80 @@ class CerebrasProvider(BaseProvider):
             "daily_requests": 100,
             "daily_tokens": 100_000,
         })
+    
+    def stream(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> Iterator[str]:
+        """Stream completion token by token."""
+        messages = self._build_messages(prompt, system_prompt)
+        yield from self.chat_stream(messages, **kwargs)
+    
+    def chat_stream(
+        self,
+        messages: List[Message],
+        **kwargs
+    ) -> Iterator[str]:
+        """Stream chat response token by token using OpenAI streaming."""
+        if not self.api_key:
+            raise ProviderError(
+                self.name,
+                "CEREBRAS_API_KEY not set. Get one at https://cloud.cerebras.ai/",
+                retriable=False,
+            )
+        
+        messages = self._normalize_messages(messages)
+        openai_messages = [msg.to_dict() for msg in messages]
+        model = kwargs.pop("model", self.model)
+        
+        try:
+            stream = self.client.chat.completions.create(
+                model=model,
+                messages=openai_messages,
+                temperature=kwargs.get("temperature", self.temperature),
+                max_tokens=kwargs.get("max_tokens", self.max_tokens),
+                stream=True,
+                **{k: v for k, v in kwargs.items() 
+                   if k not in ["temperature", "max_tokens", "stream"]},
+            )
+            
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+                    
+        except Exception as e:
+            error_str = str(e).lower()
+            is_rate_limit = "429" in str(e) or "rate" in error_str
+            raise ProviderError(
+                self.name,
+                f"Stream error: {e}",
+                retriable=is_rate_limit,
+            )
+    
+    async def stream_async(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """Async stream completion."""
+        messages = self._build_messages(prompt, system_prompt)
+        async for chunk in self.chat_stream_async(messages, **kwargs):
+            yield chunk
+    
+    async def chat_stream_async(
+        self,
+        messages: List[Message],
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """Async stream chat response."""
+        loop = asyncio.get_event_loop()
+        
+        def get_chunks():
+            return list(self.chat_stream(messages, **kwargs))
+        
+        chunks = await loop.run_in_executor(None, get_chunks)
+        for chunk in chunks:
+            yield chunk

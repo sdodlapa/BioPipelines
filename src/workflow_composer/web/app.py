@@ -60,14 +60,14 @@ except Exception as e:
 
 def chat_response(message: str, history: List[Dict]) -> Generator[List[Dict], None, None]:
     """
-    Generate chat response using the BioPipelines facade.
+    Generate chat response using the BioPipelines facade with streaming.
     
     Args:
         message: User's input message
         history: Chat history as list of dicts with "role" and "content"
     
     Yields:
-        Updated history with assistant response
+        Updated history with assistant response (progressively)
     """
     if not message.strip():
         yield history
@@ -80,18 +80,29 @@ def chat_response(message: str, history: List[Dict]) -> Generator[List[Dict], No
         ]
         return
     
-    # Use the facade's chat method
+    # Add user message to history first
+    new_history = history + [
+        {"role": "user", "content": message},
+        {"role": "assistant", "content": ""}
+    ]
+    
+    # Try streaming if available
     try:
-        response = bp.chat(message, history=history)
-        yield history + [
-            {"role": "user", "content": message},
-            {"role": "assistant", "content": response.message}
-        ]
+        if hasattr(bp, 'chat_stream'):
+            # Use streaming chat
+            full_response = ""
+            for chunk in bp.chat_stream(message, history=history):
+                full_response += chunk
+                new_history[-1]["content"] = full_response
+                yield new_history
+        else:
+            # Fallback to non-streaming
+            response = bp.chat(message, history=history)
+            new_history[-1]["content"] = response.message
+            yield new_history
     except Exception as e:
-        yield history + [
-            {"role": "user", "content": message},
-            {"role": "assistant", "content": f"❌ Error: {e}"}
-        ]
+        new_history[-1]["content"] = f"❌ Error: {e}"
+        yield new_history
 
 
 # ============================================================================

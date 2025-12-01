@@ -8,10 +8,11 @@ Combines the best features from llm/base.py and models/providers/base.py.
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import List, Dict, Any, Optional, Iterator, Union
+from typing import List, Dict, Any, Optional, Iterator, Union, AsyncIterator
 from enum import Enum
 import logging
 import time
+import asyncio
 
 logger = logging.getLogger(__name__)
 
@@ -277,6 +278,43 @@ class BaseProvider(ABC):
         """
         response = self.chat(messages, **kwargs)
         yield response.content
+    
+    async def stream_async(
+        self,
+        prompt: str,
+        system_prompt: Optional[str] = None,
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """
+        Async stream a completion token by token.
+        
+        Default implementation wraps sync stream.
+        Override for true async streaming support.
+        
+        Yields:
+            String chunks as they arrive
+        """
+        for chunk in self.stream(prompt, system_prompt, **kwargs):
+            yield chunk
+            await asyncio.sleep(0)  # Yield control
+    
+    async def chat_stream_async(
+        self,
+        messages: List[Message],
+        **kwargs
+    ) -> AsyncIterator[str]:
+        """
+        Async stream a chat response token by token.
+        
+        Default implementation wraps sync stream.
+        Override for true async streaming support.
+        
+        Yields:
+            String chunks as they arrive
+        """
+        for chunk in self.chat_stream(messages, **kwargs):
+            yield chunk
+            await asyncio.sleep(0)  # Yield control
     
     @abstractmethod
     def is_available(self) -> bool:
