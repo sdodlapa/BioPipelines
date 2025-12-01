@@ -434,12 +434,12 @@ class UnifiedIntentParser:
         Determine if the arbiter should be invoked.
         
         We use a tiered approach:
-        1. High confidence pattern (>= 0.85): Trust it, UNLESS there are competing alternatives
-        2. Medium confidence (0.6 - 0.85): Check for complexity indicators
-        3. Low confidence (< 0.6): Use LLM for disambiguation
-        4. Complexity indicators: Always use LLM for negation, ambiguity
-        5. Competing alternatives: If multiple patterns matched with similar confidence
-           from different categories, use LLM to disambiguate
+        1. Always check for cross-parser disagreement first (pattern vs semantic)
+        2. Check for competing pattern alternatives from different categories
+        3. High confidence pattern (>= 0.85): Trust ONLY if no disagreement
+        4. Medium confidence (0.6 - 0.85): Check for complexity indicators
+        5. Low confidence (< 0.6): Use LLM for disambiguation
+        6. Complexity indicators: Always use LLM for negation, ambiguity
         """
         if not self.arbiter:
             return False
@@ -451,8 +451,42 @@ class UnifiedIntentParser:
         intent = pattern_result.primary_intent.name
         query_lower = query.lower()
         
-        # Check for competing high-confidence alternatives from different categories
-        # This catches cases like DATA_SCAN vs EDUCATION_EXPLAIN both matching
+        # =====================================================================
+        # CRITICAL: Check semantic disagreement BEFORE high-confidence short-circuit
+        # This ensures we don't blindly trust pattern matching when semantic
+        # analysis suggests a different intent
+        # =====================================================================
+        if semantic_result:
+            semantic_intent, semantic_conf = semantic_result
+            # Normalize intent names for comparison
+            pattern_normalized = intent.replace("_", "").lower()
+            semantic_normalized = semantic_intent.replace("_", "").lower()
+            
+            # Check if different intents from different categories
+            if pattern_normalized != semantic_normalized and semantic_conf > 0.5:
+                pattern_category = self._get_intent_category(intent)
+                semantic_category = self._get_intent_category(semantic_intent)
+                
+                # If from different categories, definitely invoke arbiter
+                if pattern_category != semantic_category:
+                    logger.debug(
+                        f"Cross-parser disagreement (different categories): "
+                        f"pattern={intent}({confidence:.2f}, {pattern_category}), "
+                        f"semantic={semantic_intent}({semantic_conf:.2f}, {semantic_category})"
+                    )
+                    return True
+                
+                # Same category but different intent - invoke if confidence gap is small
+                if semantic_conf > confidence - 0.2:
+                    logger.debug(
+                        f"Cross-parser disagreement (same category): "
+                        f"pattern={intent}({confidence:.2f}), "
+                        f"semantic={semantic_intent}({semantic_conf:.2f})"
+                    )
+                    return True
+        
+        # Check for competing high-confidence alternatives from pattern parser
+        # This catches cases where multiple patterns matched similarly
         if pattern_result.alternatives:
             for alt_intent, alt_conf in pattern_result.alternatives:
                 # If alternative is close in confidence (within 0.15) and from different category
@@ -468,7 +502,7 @@ class UnifiedIntentParser:
                         )
                         return True
         
-        # Tier 1: High confidence pattern matching - trust it
+        # Tier 1: High confidence pattern matching - trust it IF no disagreement detected above
         if confidence >= 0.85:
             # Exception: always check negation even with high confidence
             negation_words = ["not", "don't", "doesn't", "no ", "never", "forget", "ignore", "skip"]
@@ -476,20 +510,6 @@ class UnifiedIntentParser:
                 logger.debug(f"High confidence but negation detected: {confidence:.2f}")
                 return True
             return False
-        
-        # Tier 2: Check for disagreement with semantic classifier
-        if semantic_result:
-            semantic_intent, semantic_conf = semantic_result
-            # Normalize intent names for comparison
-            pattern_normalized = intent.replace("_", "").lower()
-            semantic_normalized = semantic_intent.replace("_", "").lower()
-            
-            if pattern_normalized != semantic_normalized and semantic_conf > 0.5:
-                logger.debug(
-                    f"Disagreement: pattern={intent}({confidence:.2f}), "
-                    f"semantic={semantic_intent}({semantic_conf:.2f})"
-                )
-                return True
         
         # Tier 3: Low confidence - need LLM help
         if confidence < 0.6:
