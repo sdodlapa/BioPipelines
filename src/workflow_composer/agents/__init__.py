@@ -210,6 +210,24 @@ from .tool_memory import (
     get_rag_selector,
 )
 
+# Multi-Agent Specialists (Phase 2.4)
+from .specialists import (
+    SupervisorAgent,
+    PlannerAgent,
+    CodeGenAgent,
+    ValidatorAgent,
+    DocAgent,
+    QCAgent,
+    WorkflowPlan,
+    WorkflowStep,
+    WorkflowState,
+    WorkflowResult as SpecialistWorkflowResult,
+    AgentRole,
+    ValidationResult as SpecialistValidationResult,
+    QCMetric,
+    QCReport,
+)
+
 __all__ = [
     # === PRIMARY: Unified Agent (Recommended Entry Point) ===
     "UnifiedAgent",
@@ -346,4 +364,19 @@ __all__ = [
     "ToolBoost",
     "get_tool_memory",
     "get_rag_selector",
+    # Multi-Agent Specialists (Phase 2.4)
+    "SupervisorAgent",
+    "PlannerAgent",
+    "CodeGenAgent",
+    "ValidatorAgent",
+    "DocAgent",
+    "QCAgent",
+    "WorkflowPlan",
+    "WorkflowStep",
+    "WorkflowState",
+    "SpecialistWorkflowResult",
+    "AgentRole",
+    "SpecialistValidationResult",
+    "QCMetric",
+    "QCReport",
 ]

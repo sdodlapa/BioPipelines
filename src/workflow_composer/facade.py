@@ -187,6 +187,7 @@ class BioPipelines:
         self._orchestrator = None
         self._cost_tracker = None
         self._session_manager = None
+        self._supervisor = None  # Multi-agent supervisor
         self._initialized = False
         
         logger.info(f"BioPipelines initialized (llm={llm_provider or 'default'})")
@@ -279,6 +280,86 @@ class BioPipelines:
             from .agents.memory import SessionManager
             self._session_manager = SessionManager()
         return self._session_manager
+    
+    @property
+    def supervisor(self) -> "SupervisorAgent":
+        """
+        Access the multi-agent supervisor for advanced workflow generation.
+        
+        The supervisor coordinates specialist agents:
+        - PlannerAgent: Designs workflow architecture
+        - CodeGenAgent: Generates Nextflow DSL2 code
+        - ValidatorAgent: Reviews and validates code
+        - DocAgent: Generates documentation
+        - QCAgent: Quality control validation
+        
+        Example:
+            # Full async workflow generation with multi-agent coordination
+            result = await bp.supervisor.execute("RNA-seq differential expression")
+            print(result.code)  # Generated main.nf
+            print(result.documentation)  # Generated README.md
+            
+            # Streaming progress updates
+            async for update in bp.supervisor.execute_streaming("ChIP-seq analysis"):
+                print(f"{update['phase']}: {update['status']}")
+                
+            # Synchronous (template-based) generation
+            result = bp.supervisor.execute_sync("variant calling pipeline")
+        """
+        if self._supervisor is None:
+            from .agents.specialists import SupervisorAgent
+            # Try to get router for LLM operations
+            try:
+                router = self.orchestrator
+            except Exception:
+                router = None
+            self._supervisor = SupervisorAgent(router=router)
+        return self._supervisor
+    
+    async def generate_with_agents(
+        self,
+        description: str,
+        output_dir: Optional[str] = None,
+    ) -> "SpecialistWorkflowResult":
+        """
+        Generate a workflow using multi-agent coordination.
+        
+        This is the advanced workflow generation method that uses:
+        - PlannerAgent to design the workflow architecture
+        - CodeGenAgent to generate Nextflow DSL2 code
+        - ValidatorAgent to review with fix loops
+        - DocAgent to create documentation
+        
+        Args:
+            description: Natural language description of the workflow
+            output_dir: Directory to save generated files
+            
+        Returns:
+            WorkflowResult with code, config, and documentation
+            
+        Example:
+            result = await bp.generate_with_agents(
+                "RNA-seq differential expression for human",
+                output_dir="workflows/rnaseq"
+            )
+            if result.success:
+                print(f"Generated {len(result.code.split(chr(10)))} lines of Nextflow code")
+        """
+        return await self.supervisor.execute(description, output_dir)
+    
+    def generate_with_agents_sync(
+        self,
+        description: str,
+        output_dir: Optional[str] = None,
+    ) -> "SpecialistWorkflowResult":
+        """
+        Synchronous version of generate_with_agents using templates.
+        
+        Example:
+            result = bp.generate_with_agents_sync("ChIP-seq peak calling")
+            print(result.code)
+        """
+        return self.supervisor.execute_sync(description, output_dir)
     
     def health_check(self) -> Dict[str, Any]:
         """
