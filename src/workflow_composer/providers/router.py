@@ -34,32 +34,35 @@ class RouteResult:
 
 class ProviderRouter:
     """
-    Routes requests to the best available provider with fallback.
+    Routes requests to the best available provider with cascading fallback.
+    
+    Strategy: Cascade (not wait-and-retry)
+    -----------------------------------------
+    When a provider hits rate limits or fails, we immediately cascade to the
+    next provider in priority order. This is faster and simpler than waiting
+    for rate limit reset.
     
     Features:
         - Automatic provider selection based on priority
-        - Fallback to next provider on failure
-        - Failure tracking to deprioritize flaky providers
-        - Configurable retry behavior
+        - Instant cascade to next provider on failure (no waiting)
+        - Session-level tracking: rate-limited providers marked inactive
+        - Providers reactivate on next session (app restart)
     
     Example:
         router = ProviderRouter()
         
-        # Simple completion with auto-fallback
+        # Auto-cascades through: GitHub Models → Gemini → OpenAI
         response = router.complete("Explain RNA-seq")
         
-        # Force specific provider
-        response = router.complete("...", preferred_provider="gemini")
-        
-        # Disable fallback
-        response = router.complete("...", fallback=False)
+        # Check which providers are active this session
+        print(router.get_status())
     """
     
     def __init__(
         self,
         registry: Optional[ProviderRegistry] = None,
         skip_providers: Optional[List[str]] = None,
-        max_retries: int = 2,
+        max_retries: int = 1,  # Reduced: cascade fast, don't retry same provider
     ):
         """
         Initialize the router.
@@ -67,29 +70,75 @@ class ProviderRouter:
         Args:
             registry: Provider registry (uses global if not provided)
             skip_providers: Provider IDs to skip
-            max_retries: Max retries per provider before moving on
+            max_retries: Max retries per provider (1 = no retries, cascade immediately)
         """
         self.registry = registry or get_registry()
         self.skip_providers = set(skip_providers or [])
         self.max_retries = max_retries
         
-        # Track failures to deprioritize flaky providers
+        # Session state: track provider status
         self._failure_counts: Dict[str, int] = {}
         self._provider_cache: Dict[str, BaseProvider] = {}
+        
+        # Rate limit tracking: providers marked inactive for this session
+        self._rate_limited: Dict[str, bool] = {}  # provider_id -> is_rate_limited
+        self._inactive_reason: Dict[str, str] = {}  # provider_id -> reason
     
     def _get_ordered_providers(self) -> List[ProviderConfig]:
-        """Get providers in priority order, accounting for failures."""
+        """Get active providers in priority order, skipping rate-limited ones."""
         providers = self.registry.list_providers(configured_only=True)
         
-        # Filter out skipped providers
-        providers = [p for p in providers if p.id not in self.skip_providers]
+        # Filter out skipped and rate-limited providers
+        active_providers = []
+        for p in providers:
+            if p.id in self.skip_providers:
+                continue
+            if self._rate_limited.get(p.id, False):
+                logger.debug(f"Skipping rate-limited provider: {p.id}")
+                continue
+            active_providers.append(p)
         
         # Sort by (failure_count, priority)
         def sort_key(p: ProviderConfig) -> tuple:
             failures = self._failure_counts.get(p.id, 0)
-            return (failures > 3, p.priority)  # Heavily deprioritize >3 failures
+            return (failures > 3, p.priority)
         
-        return sorted(providers, key=sort_key)
+        return sorted(active_providers, key=sort_key)
+    
+    def _is_rate_limit_error(self, error: Exception) -> bool:
+        """Check if error is a rate limit (429) error."""
+        error_str = str(error).lower()
+        if "429" in error_str:
+            return True
+        if "rate limit" in error_str:
+            return True
+        if "quota" in error_str:
+            return True
+        if "too many requests" in error_str:
+            return True
+        if isinstance(error, ProviderError) and error.status_code == 429:
+            return True
+        return False
+    
+    def _mark_rate_limited(self, provider_id: str, reason: str):
+        """Mark a provider as rate-limited for this session."""
+        self._rate_limited[provider_id] = True
+        self._inactive_reason[provider_id] = reason
+        logger.warning(f"Provider {provider_id} marked inactive (rate-limited): {reason}")
+    
+    def reset_provider(self, provider_id: str):
+        """Manually reset a provider's rate-limit status."""
+        self._rate_limited[provider_id] = False
+        self._inactive_reason.pop(provider_id, None)
+        self._failure_counts[provider_id] = 0
+        logger.info(f"Provider {provider_id} reset to active")
+    
+    def reset_all_providers(self):
+        """Reset all providers to active status."""
+        self._rate_limited.clear()
+        self._inactive_reason.clear()
+        self._failure_counts.clear()
+        logger.info("All providers reset to active")
     
     def _get_provider_instance(self, config: ProviderConfig) -> BaseProvider:
         """Get or create provider instance."""
@@ -107,6 +156,12 @@ class ProviderRouter:
         if config.id == "lightning":
             from .lightning import LightningProvider
             return LightningProvider(
+                model=config.default_model,
+                api_key=config.get_api_key(),
+            )
+        elif config.id == "github_models":
+            from .github_models import GitHubModelsProvider
+            return GitHubModelsProvider(
                 model=config.default_model,
                 api_key=config.get_api_key(),
             )
@@ -215,11 +270,16 @@ class ProviderRouter:
                     errors.append(error_msg)
                     logger.warning(f"Provider failed: {error_msg}")
                     
+                    # Check for rate limit - mark inactive and cascade immediately
+                    if self._is_rate_limit_error(e):
+                        self._mark_rate_limited(config.id, str(e)[:100])
+                        break  # Don't retry, cascade to next provider
+                    
                     # Track failure
                     self._failure_counts[config.id] = \
                         self._failure_counts.get(config.id, 0) + 1
                     
-                    # Non-retriable errors
+                    # Non-retriable errors - cascade immediately
                     if isinstance(e, ProviderError) and not e.retriable:
                         break
             
@@ -296,6 +356,12 @@ class ProviderRouter:
                     
                 except Exception as e:
                     errors.append(f"{config.id}: {e}")
+                    
+                    # Check for rate limit - mark inactive and cascade immediately
+                    if self._is_rate_limit_error(e):
+                        self._mark_rate_limited(config.id, str(e)[:100])
+                        break  # Cascade to next provider
+                    
                     self._failure_counts[config.id] = \
                         self._failure_counts.get(config.id, 0) + 1
                     
@@ -333,30 +399,75 @@ class ProviderRouter:
         return await asyncio.to_thread(self.chat, messages, **kwargs)
     
     def get_status(self) -> Dict[str, Any]:
-        """Get current router status."""
-        providers = self._get_ordered_providers()
+        """Get current router status including rate-limited providers."""
+        all_providers = self.registry.list_providers(configured_only=True)
         
         status = []
-        for config in providers:
+        for config in all_providers:
+            if config.id in self.skip_providers:
+                continue
+                
             try:
                 provider = self._get_provider_instance(config)
                 available = provider.is_available()
             except Exception:
                 available = False
             
+            is_rate_limited = self._rate_limited.get(config.id, False)
+            
             status.append({
                 "id": config.id,
                 "name": config.name,
                 "priority": config.priority,
                 "available": available,
+                "active": available and not is_rate_limited,
+                "rate_limited": is_rate_limited,
+                "rate_limit_reason": self._inactive_reason.get(config.id, ""),
                 "failures": self._failure_counts.get(config.id, 0),
                 "free_tier": config.free_tier,
             })
         
+        active_count = sum(1 for s in status if s["active"])
+        rate_limited_count = sum(1 for s in status if s["rate_limited"])
+        
         return {
             "providers": status,
-            "active_providers": sum(1 for s in status if s["available"]),
+            "active_providers": active_count,
+            "rate_limited_providers": rate_limited_count,
+            "total_configured": len(status),
         }
+    
+    def print_status(self):
+        """Print formatted status of all providers."""
+        status = self.get_status()
+        
+        print("\n" + "=" * 60)
+        print("PROVIDER CASCADE STATUS")
+        print("=" * 60)
+        
+        for p in status["providers"]:
+            if p["active"]:
+                icon = "✅"
+                state = "ACTIVE"
+            elif p["rate_limited"]:
+                icon = "⏸️"
+                state = "RATE-LIMITED"
+            elif p["available"]:
+                icon = "⚠️"
+                state = "AVAILABLE"
+            else:
+                icon = "❌"
+                state = "UNAVAILABLE"
+            
+            print(f"  {icon} {p['id']:<15} {state:<15} (priority: {p['priority']})")
+            if p["rate_limited"] and p["rate_limit_reason"]:
+                print(f"      └─ {p['rate_limit_reason'][:50]}...")
+        
+        print()
+        print(f"Active: {status['active_providers']}/{status['total_configured']}")
+        if status['rate_limited_providers'] > 0:
+            print(f"Rate-limited: {status['rate_limited_providers']} (will cascade to next)")
+        print("=" * 60 + "\n")
 
 
 # Global router instance

@@ -9,13 +9,14 @@ Features:
 - Intent history for coherent responses
 - Slot filling for incomplete requests
 - Confirmation handling
+- LLM Arbiter integration for intelligent intent parsing
 """
 
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, auto
-from typing import Any, Dict, List, Optional, Callable
+from typing import Any, Dict, List, Optional, Callable, Union
 
 from .parser import IntentParser, IntentResult, IntentType, Entity, EntityType
 from .context import ConversationContext
@@ -211,14 +212,42 @@ class DialogueManager:
     - Task state management
     - Slot filling
     - Response generation coordination
+    - LLM Arbiter for ambiguous intents (optional)
     """
     
     def __init__(
         self, 
         intent_parser: IntentParser = None,
-        context: ConversationContext = None
+        context: ConversationContext = None,
+        use_arbiter: bool = True,
+        use_cascade: bool = True,
     ):
-        self.parser = intent_parser or IntentParser()
+        """
+        Initialize DialogueManager with intent parsing and context.
+        
+        Args:
+            intent_parser: Parser for intent extraction. If None and use_arbiter=True,
+                          creates UnifiedIntentParser with arbiter. Otherwise uses IntentParser.
+            context: Conversation context for state management
+            use_arbiter: Whether to use LLM arbiter for ambiguous intents (default: True)
+            use_cascade: Whether to use cascading provider router for LLM calls (default: True)
+        """
+        self.use_arbiter = use_arbiter
+        self.use_cascade = use_cascade
+        
+        if intent_parser is not None:
+            self.parser = intent_parser
+        elif use_arbiter:
+            try:
+                from .unified_parser import UnifiedIntentParser
+                self.parser = UnifiedIntentParser(use_cascade=use_cascade)
+                logger.info("DialogueManager using UnifiedIntentParser with arbiter")
+            except ImportError:
+                logger.warning("UnifiedIntentParser not available, falling back to IntentParser")
+                self.parser = IntentParser()
+        else:
+            self.parser = IntentParser()
+            
         self.context = context or ConversationContext()
         self.state = ConversationState()
         

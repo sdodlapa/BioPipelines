@@ -8,41 +8,51 @@ Components:
 - IntentParser: Pattern-based intent detection with entity extraction
 - HybridQueryParser: Production-grade hybrid parser (pattern + semantic + NER)
 - UnifiedEnsembleParser: Multi-method ensemble with weighted voting
+- UnifiedIntentParser: Hierarchical parser with LLM arbiter (RECOMMENDED)
 - SemanticIntentClassifier: FAISS-based semantic similarity classification
 - BioinformaticsNER: Domain-specific named entity recognition
 - ConversationContext: Semantic memory and coreference resolution
 - DialogueManager: Conversation flow and multi-turn task tracking
 - ChatIntegration: Integration layer for BioPipelines facade
 
-Architecture:
-    ┌─────────────────────────────────────────────────────────────┐
-    │                 UnifiedEnsembleParser                       │
-    │  ┌──────────┬──────────┬──────────┬──────────┬──────────┐  │
-    │  │ Rule     │ Semantic │ NER      │ LLM      │ RAG      │  │
-    │  │ Patterns │ FAISS    │ BioBERT  │ Fallback │ History  │  │
-    │  │ (0.25)   │ (0.30)   │ (0.20)   │ (0.15)   │ (0.10)   │  │
-    │  └──────────┴──────────┴──────────┴──────────┴──────────┘  │
-    │                          ↓                                  │
-    │              Confidence-Weighted Fusion                     │
-    │              + Agreement Boosting                           │
-    │                          ↓                                  │
-    │               Final Intent + Confidence                     │
-    └─────────────────────────────────────────────────────────────┘
+Architecture (UnifiedIntentParser - Recommended):
+
+    +-------------------------------------------------------------+
+    |              UnifiedIntentParser                             |
+    |  +-------------------------------------------------------+  |
+    |  |               Fast Methods (~15ms)                     |  |
+    |  |  +----------+----------+----------+                    |  |
+    |  |  | Pattern  | Semantic | Entity   |                    |  |
+    |  |  | Matching | FAISS    | Extraction|                   |  |
+    |  |  +----------+----------+----------+                    |  |
+    |  |                     |                                  |  |
+    |  |           Agreement Check (80% pass here)              |  |
+    |  |                     |                                  |  |
+    |  |  +-----------------------------------------+           |  |
+    |  |  | LLM Arbiter (20% - only complex cases)  |           |  |
+    |  |  | - Disagreement detection                 |           |  |
+    |  |  | - Negation handling                      |           |  |
+    |  |  | - Context-aware reasoning                |           |  |
+    |  |  +-----------------------------------------+           |  |
+    |  |                     |                                  |  |
+    |  |          Final Intent + Confidence                     |  |
+    |  +-------------------------------------------------------+  |
+    +-------------------------------------------------------------+
 
 Usage:
-    # Production usage (recommended)
-    from workflow_composer.agents.intent import UnifiedEnsembleParser
+    # Recommended: Use UnifiedIntentParser for best accuracy
+    from workflow_composer.agents.intent import UnifiedIntentParser
     
-    parser = UnifiedEnsembleParser()
+    parser = UnifiedIntentParser()
     result = parser.parse("search for human brain RNA-seq data")
-    print(result.intent)      # "DATA_SEARCH"
-    print(result.confidence)  # 0.92
-    print(result.agreement_level)  # 0.80 (4/5 methods agreed)
+    print(result.final_intent)  # "DATA_SEARCH"
+    print(result.confidence)    # 0.92
+    print(result.method)        # "unanimous" or "llm_arbiter"
     
-    # With chat integration
+    # With chat integration (uses arbiter automatically)
     from workflow_composer.agents.intent import ChatIntegration
     
-    intent_system = ChatIntegration()
+    intent_system = ChatIntegration(use_arbiter=True)
     result = intent_system.process_message(message, session_id)
 """
 
@@ -82,10 +92,28 @@ from .unified_ensemble import (
     ParsingMethod,
     create_ensemble_parser,
 )
+from .arbiter import (
+    IntentArbiter,
+    ArbiterResult,
+    ArbiterStrategy,
+    ParserVote,
+)
+from .unified_parser import (
+    UnifiedIntentParser,
+    UnifiedParseResult,
+    create_unified_parser,
+)
 
 __all__ = [
     # High-level (recommended)
-    "UnifiedEnsembleParser",  # NEW: Multi-method ensemble parser
+    "UnifiedIntentParser",    # RECOMMENDED: Hierarchical parser with LLM arbiter
+    "UnifiedParseResult",     # Result from UnifiedIntentParser
+    "create_unified_parser",  # Factory for UnifiedIntentParser
+    "IntentArbiter",          # LLM arbiter for complex queries
+    "ArbiterResult",          # Result from arbiter
+    "ArbiterStrategy",        # Strategy for LLM invocation
+    "ParserVote",             # Individual parser vote
+    "UnifiedEnsembleParser",  # Multi-method ensemble parser (legacy)
     "HybridQueryParser",      # Production-grade hybrid parser
     "LearningHybridParser",   # With active learning & feedback
     "ChatIntegration",        # Chat handler integration

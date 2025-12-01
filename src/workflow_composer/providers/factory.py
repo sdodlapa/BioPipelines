@@ -17,6 +17,7 @@ from .openai import OpenAIProvider
 from .anthropic import AnthropicProvider
 from .ollama import OllamaProvider
 from .vllm import VLLMProvider
+from .github_models import GitHubModelsProvider
 
 
 # Map of provider IDs to classes
@@ -27,6 +28,8 @@ PROVIDER_CLASSES = {
     "anthropic": AnthropicProvider,
     "ollama": OllamaProvider,
     "vllm": VLLMProvider,
+    "github_models": GitHubModelsProvider,
+    "github": GitHubModelsProvider,  # Alias
 }
 
 

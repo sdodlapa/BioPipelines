@@ -231,6 +231,10 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"(?:search|find)\s+(?:for\s+)?(.+?)\s+(?:and\s+)?(?:then\s+)?(?:download|get)",
      IntentType.COMPOSITE_SEARCH_THEN_DOWNLOAD, {"query": 1}),
     
+    # "find data, create workflow, and run it" - full pipeline flow
+    (r"(?:find|search|get)\s+(?:the\s+)?data[,;]?\s+(?:and\s+)?(?:create|build|make)\s+(?:a\s+)?(?:workflow|pipeline)[,;]?\s+(?:and\s+)?(?:run|execute|submit)\s+it",
+     IntentType.COMPOSITE_GENERATE_THEN_RUN, {}),
+    
     # Generate then run
     (r"(?:create|generate|make)\s+(?:a\s+)?(.+?)\s+(?:workflow|pipeline)\s+(?:and\s+)?(?:then\s+)?(?:run|execute|submit)",
      IntentType.COMPOSITE_GENERATE_THEN_RUN, {"workflow_type": 1}),
@@ -238,12 +242,24 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # =========================================================================
     # EDUCATION - must come before workflow creation to catch "how does X work"
     # =========================================================================
-    (r"how\s+does\s+(.+?)\s+work(?:\??|$)",
+    # "How do/does X work" - both singular and plural subjects
+    (r"how\s+do(?:es)?\s+(.+?)\s+work(?:\??|$)",
      IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
     (r"how\s+do(?:es)?\s+(.+?)\s+(?:algorithms?|methods?)\s+work",
      IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    # "Can you how do X work?" (malformed but should still match)
+    (r"(?:can\s+you\s+)?how\s+do(?:es)?\s+(.+?)\s+work",
+     IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
     (r"(?:i\s+want\s+to|help\s+me)\s+(?:learn|understand)\s+(?:about\s+)?(.+)",
      IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    # "search for a workflow to create" - wants guidance, not data
+    (r"search\s+for\s+(?:a\s+)?(?:workflow|pipeline)\s+to\s+(?:create|build|make|design)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": "workflow_creation"}),
+    # "what does X measure?" / "how does X compare to Y?"
+    (r"what\s+does\s+(.+?)\s+measure(?:\??|$)",
+     IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    (r"how\s+does\s+(.+?)\s+compare\s+to\s+(.+?)(?:\??|$)",
+     IntentType.EDUCATION_EXPLAIN, {"concept1": 1, "concept2": 2}),
     
     # =========================================================================
     # DATA SCANNING - local filesystem
@@ -255,8 +271,23 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.DATA_SCAN, {"path": 1}),
     (r"scan\s+(?:for\s+)?(?:data|files?|samples?|fastq)\s+(?:in|at|from|under)\s+([/~][^\s]+)",
      IntentType.DATA_SCAN, {"path": 1}),
+    # "check ~/path for data" / "please check /path for data"
+    (r"(?:please\s+)?check\s+([/~][^\s]+)\s+for\s+(?:data|files?|samples?)",
+     IntentType.DATA_SCAN, {"path": 1}),
+    # "show me what's in /path" / "what's in /path"
+    (r"(?:show\s+(?:me\s+)?)?what(?:'s|\s+is)\s+in\s+([/~][^\s]+)",
+     IntentType.DATA_SCAN, {"path": 1}),
     (r"what\s+(?:data|files?|samples?)\s+(?:do\s+)?(?:i\s+have|we\s+have|is\s+available|exist)(?:\s+(?:in|at)\s+(.+))?",
      IntentType.DATA_SCAN, {"path": 1}),
+    # "What samples are available locally?"
+    (r"what\s+(?:data|samples?|files?)\s+(?:are|is)\s+available\s+locally",
+     IntentType.DATA_SCAN, {}),
+    # "Inventory my data in /path"
+    (r"inventory\s+(?:my\s+)?(?:data|files?)\s+(?:in|at)\s+([/~][^\s]+)",
+     IntentType.DATA_SCAN, {"path": 1}),
+    # "inventory my sequencing runs" / "inventory my samples"
+    (r"inventory\s+(?:my\s+)?(?:sequencing\s+runs?|samples?|data|reads?)",
+     IntentType.DATA_SCAN, {}),
     # This pattern must NOT match if "if not search" follows
     # Using negative lookahead to exclude composite patterns
     (r"check\s+if\s+(?:we\s+have|there\s+is|there\s+are)\s+(?:any\s+)?(.+?)(?:\s+data|\s+locally)?$(?<!\bsearch\b)(?<!\bonline\b)",
@@ -270,8 +301,28 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.DATA_SEARCH, {"query": 1}),
     (r"(?:search|find|look)\s+for\s+(.+?)$",
      IntentType.DATA_SEARCH, {"query": 1}),
+    # "looking for X in Y" / "I'm looking for X samples"
+    (r"(?:i'?m\s+)?looking\s+for\s+(.+?)\s+(?:in|from)\s+(.+)",
+     IntentType.DATA_SEARCH, {"query": 1, "source": 2}),
+    (r"(?:i'?m\s+)?looking\s+for\s+(.+?)(?:\s+samples?|\s+data)?",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    # "I need X data", "I want X data" patterns
+    (r"(?:i\s+need|i\s+want|need|want)\s+(.+?)\s+(?:data|datasets?)(?:\s+from\s+(.+))?",
+     IntentType.DATA_SEARCH, {"query": 1, "source": 2}),
+    # "Find X datasets from Y" patterns  
+    (r"(?:find|search\s+for|look\s+for|get)\s+(.+?)\s+(?:datasets?|data)(?:\s+from\s+(.+))?",
+     IntentType.DATA_SEARCH, {"query": 1, "source": 2}),
     # "Find X ChIP-seq data" style
     (r"(?:find|search\s+for|look\s+for)\s+(.+?)\s+(?:ChIP-seq|RNA-seq|ATAC-seq|Hi-C|methylation|metagenomics)(?:\s+data)?",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    # "Find publicly available X" 
+    (r"find\s+(?:publicly\s+available|public)\s+(.+)",
+     IntentType.DATA_SEARCH, {"query": 1}),
+    # "Can you search X for Y"
+    (r"(?:can\s+you\s+)?search\s+(\w+)\s+for\s+(.+)",
+     IntentType.DATA_SEARCH, {"database": 1, "query": 2}),
+    # "search ncbi sra for X data" - database in query
+    (r"search\s+(?:ncbi\s+)?(?:sra|geo|encode|tcga|gdc)\s+for\s+(.+?)(?:\s+data)?",
      IntentType.DATA_SEARCH, {"query": 1}),
     
     # "Search ENCODE for X" pattern (database name first)
@@ -283,6 +334,11 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.DATA_SEARCH, {"query": 1}),
     (r"(?:are\s+there|is\s+there)\s+(?:any\s+)?(.+?)\s+(?:datasets?|data)\s+(?:available\s+)?(?:online|in\s+(?:encode|geo|tcga))?",
      IntentType.DATA_SEARCH, {"query": 1}),
+    
+    # Simple search phrases: "organism tissue assay" format (no action words)
+    # These are implicit search queries
+    (r"^([a-z]+(?:\s+[a-z]+)?)\s+(brain|liver|heart|lung|kidney|blood|muscle|skin|bone\s+marrow|thymus|spleen|adipose|fat|pancreas|intestine|colon|ovary|testis|prostate|breast|thyroid|lymph\s+node|peripheral\s+blood)\s+(rnaseq|rna-seq|chipseq|chip-seq|atacseq|atac-seq|hic|hi-c|wgs|wes|rrbs|bisulfite|methylation|gro-seq|groseq|pro-seq|proseq|cut-?n?-?run|cutnrun)$",
+     IntentType.DATA_SEARCH, {"organism": 1, "tissue": 2, "assay": 3}),
     
     # Search with exclusions - "skip X samples", "no X data", etc.
     (r"(?:skip|exclude|avoid|ignore)\s+(.+?)\s+(?:samples?|data)",
@@ -301,12 +357,31 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # Download with exclusions
     (r"(?:download|get|fetch)\s+(?:all\s+)?(?:samples?|data|datasets?)\s+(?:except|without|excluding|but\s+not)\s+(.+)",
      IntentType.DATA_DOWNLOAD, {"excluded": 1}),
+    # "fetch all X samples but not Y"
+    (r"(?:download|get|fetch)\s+(?:all\s+)?(.+?)\s+(?:samples?|files?)(?:\s+(?:but\s+not|except)\s+(.+))?",
+     IntentType.DATA_DOWNLOAD, {"query": 1, "excluded": 2}),
     
     # Download
-    (r"(?:download|get|fetch)\s+(?:dataset\s+)?(GSE\d+|ENCSR[A-Z0-9]+|TCGA-[A-Z]+)",
+    # Dataset IDs from various databases
+    (r"(?:download|get|fetch)\s+(?:dataset\s+)?(GSE\d+|ENCSR[A-Z0-9]+|TCGA-[A-Z]+|PRJNA\d+|E-MTAB-\d+|SRR\d+|SRP\d+|SAMN\d+)",
+     IntentType.DATA_DOWNLOAD, {"dataset_id": 1}),
+    # "I want to fetch/download dataset XYZ"
+    (r"i\s+want\s+to\s+(?:fetch|download|get)\s+(?:the\s+)?(?:dataset\s+)?([A-Za-z0-9\-]+)",
      IntentType.DATA_DOWNLOAD, {"dataset_id": 1}),
     (r"(?:download|get|fetch)\s+(?:this|that|the)\s+(?:dataset|data)",
      IntentType.DATA_DOWNLOAD, {}),
+    # "download reference genome hg38" / "get reference genome"
+    (r"(?:download|get|fetch)\s+(?:the\s+)?(?:reference\s+)?(?:genome|index|annotation)(?:\s+([a-zA-Z0-9_.-]+))?",
+     IntentType.DATA_DOWNLOAD, {"reference": 1}),
+    # "download the X data" (organism/species)
+    (r"(?:download|get|fetch)\s+(?:the\s+)?(.+?)\s+data$",
+     IntentType.DATA_DOWNLOAD, {"query": 1}),
+    # "get the X files"
+    (r"(?:download|get|fetch)\s+(?:the\s+)?(.+?)\s+files",
+     IntentType.DATA_DOWNLOAD, {"query": 1}),
+    # "save the data to ~/path"
+    (r"save\s+(?:the\s+)?(?:data|files?)\s+to\s+([/~][^\s]+)",
+     IntentType.DATA_DOWNLOAD, {"destination": 1}),
     (r"(?:add|queue)\s+(.+?)\s+(?:to\s+)?(?:my\s+)?(?:download|manifest)",
      IntentType.DATA_DOWNLOAD, {"dataset_id": 1}),
     # Download all / execute download commands
@@ -318,12 +393,68 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.DATA_DOWNLOAD, {"download_all": True}),
     (r"download\s+(?:the\s+)?(?:encode|tcga|geo)\s+(?:and\s+)?(?:encode|tcga|geo)?\s*(?:datasets?|data)?",
      IntentType.DATA_DOWNLOAD, {"download_all": True}),
+    # Multi-turn context: "download the first one" / "get the second result"
+    (r"(?:download|get|fetch)\s+(?:the\s+)?(?:first|second|third|last|top)\s+(?:one|result|dataset|sample)?",
+     IntentType.DATA_DOWNLOAD, {"select_index": True}),
+
+    # Multi-turn context: "only from X" / "in TCGA" / "from GSM" - refine search
+    (r"^(?:only\s+)?(?:from|in)\s+(.+)$",
+     IntentType.DATA_SEARCH, {"filter": 1}),
+    (r"^only\s+from\s+(.+)$",
+     IntentType.DATA_SEARCH, {"filter": 1}),
     
+    # Multi-turn context: "show me the logs" - no job ID, assumes context
+    (r"^show\s+(?:me\s+)?(?:the\s+)?logs?$",
+     IntentType.JOB_LOGS, {}),
+
     # Workflow creation
     (r"(?:create|generate|make|build|set\s+up)\s+(?:a\s+)?(?:new\s+)?(.+?)\s+(?:workflow|pipeline|analysis)",
      IntentType.WORKFLOW_CREATE, {"workflow_type": 1}),
+    # "set up X for Y" - setup pattern for organism-specific workflows
+    (r"set\s+up\s+(.+?)\s+(?:for|on)\s+(.+)",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": 1, "organism": 2}),
     (r"(?:i\s+want\s+to|i\s+need\s+to|let's|can\s+you)\s+(?:run|do|perform)\s+(?:a\s+)?(.+?)\s+(?:analysis|workflow|pipeline)",
      IntentType.WORKFLOW_CREATE, {"workflow_type": 1}),
+    # "run X analysis on Y data" - distinguish from DATA_SEARCH
+    (r"(?:i\s+want\s+to\s+)?(?:run|perform|do)\s+(.+?)\s+analysis\s+(?:on|for)\s+(.+?)\s*(?:data)?$",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": 1, "organism": 2}),
+    # "I want to analyze X data" (where X is organism/tissue) - workflow creation
+    (r"i\s+want\s+to\s+analyze\s+(.+?)\s+data\s+(?:with|using)\s+(.+)",
+     IntentType.WORKFLOW_CREATE, {"organism": 1, "analysis_type": 2}),
+    # Simple "X analysis" / "X workflow" patterns for common bioinformatics workflows
+    (r"^(cutnrun|cut\s*n\s*run|cut\s*and\s*run|cutandrun)\s+(?:analysis|workflow|pipeline)?$",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": "cut_and_run"}),
+    (r"^(hi-?c|hic)\s+(?:analysis|workflow|pipeline)?$",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": "hi-c"}),
+    (r"^(atac-?seq|chip-?seq|rna-?seq|wgs|wes|rrbs|bisulfite|methylation|proseq|pro-?seq)\s+(?:analysis|workflow|pipeline)?$",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": 1}),
+    # "I need a X workflow" / "I need X workflow"
+    (r"i\s+need\s+(?:a\s+)?(.+?)\s+(?:workflow|pipeline)",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": 1}),
+    # "X workflow but use Y not Z" / "X workflow with Y"
+    (r"^(.+?)\s+(?:workflow|pipeline)\s+(?:but\s+use|with)\s+(.+?)(?:\s+not\s+(.+))?$",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": 1, "preferred_tool": 2, "avoided_tool": 3}),
+    # "X workflow for Y" / "variant calling workflow for homo sapiens"
+    (r"^(.+?)\s+(?:workflow|pipeline)\s+for\s+(.+)$",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": 1, "organism": 2}),
+    # "first align with X, then do Y" - multi-step workflow description
+    (r"first\s+(?:align|map)\s+with\s+(.+?)[,;]?\s+then\s+(?:do\s+)?(.+)",
+     IntentType.WORKFLOW_CREATE, {"aligner": 1, "analysis_type": 2}),
+    # "single cell analysis for X" 
+    (r"single\s+cell\s+(?:analysis|workflow|pipeline)\s+for\s+(.+)",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": "single_cell", "organism": 1}),
+    # "create workflow: X followed by Y"
+    (r"(?:create\s+)?workflow:\s*(.+?)\s+followed\s+by\s+(.+)",
+     IntentType.WORKFLOW_CREATE, {"step1": 1, "step2": 2}),
+    # "cut&run analysis" (special characters)
+    (r"^cut\s*[&n]\s*run\s+(?:analysis|workflow)?$",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": "cut_and_run"}),
+    # "actually use X instead" - tool swap in workflow context
+    (r"actually\s+use\s+(.+?)\s+instead",
+     IntentType.WORKFLOW_CREATE, {"preferred_tool": 1}),
+    # "add X step" - adding to workflow
+    (r"add\s+(.+?)\s+step",
+     IntentType.WORKFLOW_CREATE, {"add_step": 1}),
     
     # Tool preference (implies workflow context)
     (r"(?:use|prefer|choose)\s+(\w+(?:[_-]\w+)?)\s*(?:\w+)?\s*(?:instead\s+of|over|rather\s+than)\s+(\w+(?:[_-]\w+)?)",
@@ -370,14 +501,30 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.JOB_SUBMIT, {}),
     (r"(?:now\s+)?submit\s+it",
      IntentType.JOB_SUBMIT, {}),
+    # Short forms: "run it", "submit", "execute it", "execute" (in context of workflow)
+    (r"^(?:run\s+it|submit|execute\s+it|execute)$",
+     IntentType.JOB_SUBMIT, {}),
+    # "execute /path/to/workflow"
+    (r"execute\s+([/~][^\s]+)",
+     IntentType.JOB_SUBMIT, {"path": 1}),
     
     # Job status
     (r"(?:what\s+is|check|show|get)\s+(?:the\s+)?(?:job\s+)?status(?:\s+(?:of|for)\s+(?:job\s+)?(\d+))?",
      IntentType.JOB_STATUS, {"job_id": 1}),
     (r"(?:is\s+(?:the\s+)?job|are\s+(?:the\s+)?jobs?)\s+(?:still\s+)?(?:running|done|finished|complete)",
      IntentType.JOB_STATUS, {}),
-    (r"(?:how\s+is|what's\s+happening\s+with)\s+(?:the\s+)?(?:job|analysis|run)",
+    # Short forms: "is it done?", "job status"
+    (r"^(?:is\s+it\s+done|job\s+status|status)(?:\?)?$",
      IntentType.JOB_STATUS, {}),
+    # "is the X analysis done?"
+    (r"is\s+(?:the\s+)?(.+?)\s+(?:analysis\s+)?(?:done|finished|complete)(?:\?)?$",
+     IntentType.JOB_STATUS, {"job_type": 1}),
+    # "how is my job doing?"
+    (r"how\s+is\s+(?:my\s+)?(?:job|analysis)\s+(?:doing|going)(?:\?)?",
+     IntentType.JOB_STATUS, {}),
+    # "what's happening with job X" - extended to capture job ID for better coverage
+    (r"(?:how\s+is|what's\s+happening\s+with)\s+(?:the\s+)?(?:job|analysis|run)(?:\s+(\d+))?",
+     IntentType.JOB_STATUS, {"job_id": 1}),
     # "what's the status of job X" must come before education patterns
     (r"what(?:'s|\s+is)\s+(?:the\s+)?status\s+(?:of|for)\s+(?:job\s+)?(\d+)",
      IntentType.JOB_STATUS, {"job_id": 1}),
@@ -387,17 +534,32 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.JOB_STATUS, {}),
     
     # Logs
+    # "view job 27548 logs" - job ID before logs
+    (r"(?:show|get|view|display|i\s+want\s+to\s+view)\s+(?:the\s+)?job\s+(\d+)\s+logs?",
+     IntentType.JOB_LOGS, {"job_id": 1}),
+    # "get output of 12345" / "show error logs for 12345"
+    (r"(?:get|show)\s+(?:the\s+)?(?:output|error\s+logs?|logs?)\s+(?:of|for)\s+(?:job\s+)?(\d+)",
+     IntentType.JOB_LOGS, {"job_id": 1}),
+    # "get error output for job123" - alphanumeric job IDs
+    (r"(?:get|show)\s+(?:the\s+)?(?:error\s+)?(?:output|logs?)\s+(?:of|for)\s+(?:job)?(\w+)",
+     IntentType.JOB_LOGS, {"job_id": 1}),
     (r"(?:show|get|view|display)\s+(?:the\s+)?(?:job\s+)?logs?(?:\s+(?:for|of)\s+(?:job\s+)?(\d+))?",
      IntentType.JOB_LOGS, {"job_id": 1}),
     (r"(?:what\s+happened|what\s+went\s+wrong|show\s+me\s+(?:the\s+)?(?:error|output))",
      IntentType.JOB_LOGS, {}),
-    (r"what(?:'s|\s+is)\s+(?:the\s+)?output\s+(?:of|for)\s+(?:job\s+)?(\d+)",
+    # "what's the output of job X" - with optional "please" prefix
+    (r"(?:please\s+)?what(?:'s|\s+is)\s+(?:the\s+)?output\s+(?:of|for)\s+(?:job\s+)?(\d+)",
      IntentType.JOB_LOGS, {"job_id": 1}),
     
     # Job List (must come before more generic patterns)
     (r"list\s+(?:all\s+)?(?:my\s+)?(?:running\s+)?jobs",
      IntentType.JOB_LIST, {}),
+    (r"list\s+(?:my\s+)?submitted\s+jobs",
+     IntentType.JOB_LIST, {}),
     (r"(?:show|display|get)\s+(?:all\s+)?(?:my\s+)?(?:running\s+)?jobs",
+     IntentType.JOB_LIST, {}),
+    # "show active jobs" / "Can you show active jobs"
+    (r"(?:can\s+you\s+)?(?:show|display|get|list)\s+(?:the\s+)?(?:active|running|queued|pending)\s+jobs",
      IntentType.JOB_LIST, {}),
     (r"what\s+jobs\s+are\s+(?:running|active|pending|queued)",
      IntentType.JOB_LIST, {}),
@@ -415,6 +577,24 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # Cancel
     (r"(?:cancel|stop|kill|abort)\s+(?:the\s+)?(?:job|run|analysis)(?:\s+(\d+))?",
      IntentType.JOB_CANCEL, {"job_id": 1}),
+    
+    # Watch/Monitor (must come before JOB_STATUS for "monitor" to work)
+    (r"(?:watch|monitor|follow|track)\s+(?:the\s+)?(?:job|run|pipeline|analysis)(?:\s+progress)?(?:\s+(\d+))?",
+     IntentType.JOB_WATCH, {"job_id": 1}),
+    (r"(?:watch|monitor|follow|track)\s+(?:the\s+)?progress(?:\s+(?:of\s+)?(?:job|run)?\s*(\d+))?",
+     IntentType.JOB_WATCH, {"job_id": 1}),
+    (r"(?:keep\s+an?\s+)?eye\s+on\s+(?:the\s+)?(?:job|run|pipeline)(?:\s+(\d+))?",
+     IntentType.JOB_WATCH, {"job_id": 1}),
+    (r"monitor\s+(?:my\s+)?(?:the\s+)?(?:job|run|pipeline|analysis|workflow)",
+     IntentType.JOB_WATCH, {}),
+    
+    # Resubmit/Retry
+    (r"(?:resubmit|retry|rerun|restart)\s+(?:the\s+)?(?:failed\s+)?(?:job|run|analysis)(?:\s+(\d+))?",
+     IntentType.JOB_RESUBMIT, {"job_id": 1}),
+    (r"(?:try\s+)?(?:the\s+)?(?:job|run)(?:\s+(\d+))?\s+again",
+     IntentType.JOB_RESUBMIT, {"job_id": 1}),
+    (r"(?:resubmit|retry|rerun)\s+(?:failed\s+)?(?:job|run)",
+     IntentType.JOB_RESUBMIT, {}),
     
     # Diagnostics
     (r"(?:diagnose|debug|troubleshoot|analyze)\s+(?:this\s+)?(?:error|failure|problem)",
@@ -436,12 +616,29 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # "download instructions for X" / "download information about X" - wants documentation
     (r"download\s+(?:the\s+)?(?:instructions?|information|info|details?|docs?)\s+(?:for|on|about)\s+(.+)",
      IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
+    
+    
     # "this is not about X, it's about Y" - clarification, wants search for Y
-    (r"(?:this\s+is\s+not|it'?s?\s+not)\s+about\s+\S+[,;]?\s+(?:it'?s?|this\s+is)\s+about\s+(.+)",
+    # FIXED: use .+? instead of \S+ to match multi-word phrases like "whole exome"
+    (r"(?:this\s+is\s+not|it'?s?\s+not)\s+about\s+.+?[,;]\s+(?:it'?s?|this\s+is)\s+about\s+(.+)",
      IntentType.DATA_SEARCH, {"query": 1}),
+    
+    # "don't create/download/X, just search" - negation with override
+    (r"(?:don'?t|do\s+not)\s+(?:create|build|make|download|get)\s+(?:a\s+)?(?:\w+)?[,;]?\s+(?:just\s+)?(?:search|find|look)",
+     IntentType.DATA_SEARCH, {}),
+    
+    # "I don't want to X, just search" - negation with override  
+    (r"i\s+don'?t\s+want\s+to\s+(?:create|download|build|make)[,;]?\s+(?:just\s+)?(?:search|find|look)",
+     IntentType.DATA_SEARCH, {}),
+    
     # "I don't want X, find something else" - search with exclusion
     (r"i\s+don'?t\s+want\s+(.+?)[,;]?\s+(?:find|search|show)\s+(?:something\s+else|alternatives?|others?)",
      IntentType.DATA_SEARCH, {"excluded": 1}),
+    
+    # "forget about searching/X, let's download" - override with second intent
+    (r"forget\s+(?:about\s+)?(?:the\s+)?(?:search(?:ing)?|\w+)[,;]?\s+(?:let'?s?\s+)?(?:download|get)",
+     IntentType.DATA_DOWNLOAD, {}),
+    
     # "Create a search for X" - the word "create" is misleading, it's a search
     (r"(?:create|make|start)\s+a\s+search\s+(?:for|of)\s+(.+)",
      IntentType.DATA_SEARCH, {"query": 1}),
@@ -480,6 +677,13 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"^(?:help|commands?|what\s+can\s+you\s+do|\?+|show\s+help|list\s+commands?)$",
      IntentType.EDUCATION_HELP, {}),
     (r"what\s+(?:can\s+(?:you|i)\s+do|are\s+(?:your|my)\s+(?:options|capabilities))",
+     IntentType.EDUCATION_HELP, {}),
+    # "Show me available commands" / "What features are available?" / "List capabilities"
+    (r"(?:show\s+(?:me\s+)?)?(?:available|all)\s+(?:commands?|features?|options)",
+     IntentType.EDUCATION_HELP, {}),
+    (r"what\s+features\s+are\s+available",
+     IntentType.EDUCATION_HELP, {}),
+    (r"list\s+(?:all\s+)?(?:capabilities|features|commands?|options)",
      IntentType.EDUCATION_HELP, {}),
     
     # Meta/Conversational

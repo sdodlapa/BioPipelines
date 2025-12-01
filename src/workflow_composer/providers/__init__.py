@@ -92,6 +92,7 @@ from .openai import OpenAIProvider
 from .anthropic import AnthropicProvider
 from .ollama import OllamaProvider
 from .vllm import VLLMProvider
+from .github_models import GitHubModelsProvider
 
 # Utilities
 from .utils import (
@@ -147,6 +148,7 @@ __all__ = [
     "AnthropicProvider",
     "OllamaProvider",
     "VLLMProvider",
+    "GitHubModelsProvider",
     
     # Factory
     "get_provider",
