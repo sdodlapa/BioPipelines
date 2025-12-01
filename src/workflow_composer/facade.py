@@ -47,7 +47,7 @@ Advanced Usage:
 
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Iterator, TYPE_CHECKING
+from typing import Any, AsyncIterator, Dict, List, Optional, Union, Iterator, TYPE_CHECKING
 import logging
 
 logger = logging.getLogger(__name__)
@@ -469,6 +469,133 @@ class BioPipelines:
             **options
         )
     
+    # =========================================================================
+    # Chat Helpers (shared between chat and chat_stream)
+    # =========================================================================
+    
+    def _prepare_chat_session(
+        self,
+        session_id: Optional[str],
+        user_id: str,
+        message: str,
+    ):
+        """
+        Prepare session for chat interaction.
+        
+        Handles session creation/retrieval and message logging.
+        
+        Args:
+            session_id: Optional session ID
+            user_id: User identifier
+            message: User's message
+            
+        Returns:
+            Session object or None
+        """
+        session = None
+        if session_id:
+            session = self.session_manager.get_session(session_id)
+            if not session:
+                # Create new session if requested ID doesn't exist
+                session = self.session_manager.create_session(user_id)
+        
+        # Add user message to session
+        if session:
+            self.session_manager.add_user_message(
+                session.session_id,
+                message,
+                parsed_intent=None,
+            )
+        
+        return session
+    
+    def _process_agent_query(self, message: str) -> "AgentResponse":
+        """
+        Process a message through the UnifiedAgent.
+        
+        This enables tool execution (scan data, search databases, etc.)
+        
+        Args:
+            message: User's query
+            
+        Returns:
+            AgentResponse with results
+        """
+        agent = self.agent
+        return agent.process_sync(message)
+    
+    def _finalize_chat_session(
+        self,
+        session,
+        response_message: str,
+        workflow=None,
+    ) -> None:
+        """
+        Finalize session after chat interaction.
+        
+        Adds the assistant's response to session history.
+        
+        Args:
+            session: Session object or None
+            response_message: Assistant's response
+            workflow: Optional generated workflow
+        """
+        if session:
+            self.session_manager.add_assistant_message(
+                session.session_id,
+                response_message,
+                workflow=workflow,
+            )
+    
+    def _was_tool_executed(self, result: "AgentResponse") -> bool:
+        """
+        Check if the agent executed a tool for the query.
+        
+        Args:
+            result: AgentResponse from agent processing
+            
+        Returns:
+            True if a tool was executed
+        """
+        return (
+            (hasattr(result, 'tools_used') and result.tools_used) or
+            (hasattr(result, 'data') and result.data) or
+            (hasattr(result, 'response_type') and 
+             str(result.response_type) not in ('ResponseType.INFO', 'ResponseType.ERROR'))
+        )
+    
+    def _get_chat_system_prompt(self, session=None) -> str:
+        """
+        Get the system prompt for chat interactions.
+        
+        Args:
+            session: Optional session for context
+            
+        Returns:
+            System prompt string
+        """
+        system_prompt = """You are BioPipelines, an AI assistant for bioinformatics workflow generation.
+You help users create, manage, and run bioinformatics pipelines.
+
+IMPORTANT: You CAN access local files and run commands. When users ask about local data:
+- Use 'scan data in /path' to scan directories
+- Use 'search for <query>' to search databases
+- Use 'show jobs' to list running jobs
+
+Be helpful, concise, and technically accurate."""
+        
+        # Add session context if available
+        if session:
+            context = self.session_manager.get_session_context(session.session_id)
+            if context.get("context_summary"):
+                system_prompt += f"\n\nUser context: {context['context_summary']}"
+        
+        return system_prompt
+    
+    # =========================================================================
+    # Core API - Chat Interface
+    # =========================================================================
+    
     def chat(
         self,
         message: str,
@@ -512,45 +639,21 @@ class BioPipelines:
         """
         from .agents import UnifiedAgent
         
-        agent = self.agent
         user_id = user_id or "default"
         
-        # Session management
-        session = None
-        if session_id:
-            session = self.session_manager.get_session(session_id)
+        # Prepare session (uses shared helper)
+        session = self._prepare_chat_session(session_id, user_id, message)
         
-        # If session requested but not found, create new one
-        if session_id and not session:
-            session = self.session_manager.create_session(user_id)
+        # Process message through agent (uses shared helper)
+        result = self._process_agent_query(message)
         
-        # Add user message to session
-        if session:
-            self.session_manager.add_user_message(
-                session.session_id, 
-                message,
-                parsed_intent=None,  # Will be updated after parsing
-            )
-        
-        # Get session context for enhanced processing
-        context = {}
-        if session:
-            context = self.session_manager.get_session_context(session.session_id)
-        
-        # Process message
-        result = agent.process_sync(message)
-        
-        # Add assistant response to session
-        if session:
-            self.session_manager.add_assistant_message(
-                session.session_id,
-                result.message,
-                workflow=result.workflow if hasattr(result, "workflow") else None,
-            )
+        # Finalize session (uses shared helper)
+        workflow = result.workflow if hasattr(result, "workflow") else None
+        self._finalize_chat_session(session, result.message, workflow)
         
         return ChatResponse(
             message=result.message,
-            workflow=result.workflow if hasattr(result, "workflow") else None,
+            workflow=workflow,
             tools_used=result.tools_used if hasattr(result, "tools_used") else [],
             suggestions=result.suggestions if hasattr(result, "suggestions") else [],
             session_id=session.session_id if session else None,
@@ -593,69 +696,56 @@ class BioPipelines:
         """
         user_id = user_id or "default"
         
-        # Session management
-        session = None
-        if session_id:
-            session = self.session_manager.get_session(session_id)
-            if not session:
-                session = self.session_manager.create_session(user_id)
-        
-        # Add user message to session
-        if session:
-            self.session_manager.add_user_message(session.session_id, message)
+        # Prepare session (uses shared helper)
+        session = self._prepare_chat_session(session_id, user_id, message)
         
         try:
-            # IMPORTANT: First try to process through the UnifiedAgent
-            # This enables tool execution (scan data, search databases, etc.)
-            agent = self.agent
-            result = agent.process_sync(message)
+            # Detect what kind of query this is to show appropriate progress
+            query_lower = message.lower()
+            progress_message = None
             
-            # Check if a tool was executed (has tools_used or specific response types)
-            tool_executed = (
-                hasattr(result, 'tools_used') and result.tools_used or
-                hasattr(result, 'data') and result.data or
-                (hasattr(result, 'response_type') and 
-                 str(result.response_type) not in ('ResponseType.INFO', 'ResponseType.ERROR'))
-            )
+            if any(word in query_lower for word in ['scan', 'list', 'find', 'what data', 'local data', 'local folder']):
+                progress_message = "🔍 Scanning data directories...\n\n"
+            elif any(word in query_lower for word in ['search', 'database', 'encode', 'geo', 'tcga']):
+                progress_message = "🌐 Searching databases...\n\n"
+            elif any(word in query_lower for word in ['generate', 'create', 'workflow', 'pipeline']):
+                progress_message = "🧬 Generating workflow...\n\n"
+            elif any(word in query_lower for word in ['submit', 'run', 'execute', 'launch']):
+                progress_message = "🚀 Submitting job...\n\n"
+            elif any(word in query_lower for word in ['status', 'job', 'running']):
+                progress_message = "📊 Checking job status...\n\n"
+            
+            # Yield progress indicator immediately for tool-like queries
+            if progress_message:
+                yield progress_message
+            
+            # Process through the UnifiedAgent (uses shared helper)
+            result = self._process_agent_query(message)
+            
+            # Check if a tool was executed (uses shared helper)
+            tool_executed = self._was_tool_executed(result)
             
             if tool_executed or result.success:
                 # Tool was executed or we got a good response - yield the result
                 response_message = result.message or "Action completed."
                 
-                # Simulate streaming by yielding chunks
+                # Stream the response in chunks for smooth UX
                 chunk_size = 50  # Characters per chunk for smooth streaming
                 for i in range(0, len(response_message), chunk_size):
                     yield response_message[i:i + chunk_size]
                 
-                # Add to session
-                if session:
-                    self.session_manager.add_assistant_message(
-                        session.session_id,
-                        response_message,
-                        workflow=result.workflow if hasattr(result, "workflow") else None,
-                    )
+                # Finalize session (uses shared helper)
+                workflow = result.workflow if hasattr(result, "workflow") else None
+                full_message = (progress_message or "") + response_message
+                self._finalize_chat_session(session, full_message, workflow)
                 return
             
             # No tool matched - fall back to LLM streaming for general queries
             from .providers import get_router
             router = get_router()
             
-            # Build system prompt for the agent context
-            system_prompt = """You are BioPipelines, an AI assistant for bioinformatics workflow generation.
-You help users create, manage, and run bioinformatics pipelines.
-
-IMPORTANT: You CAN access local files and run commands. When users ask about local data:
-- Use 'scan data in /path' to scan directories
-- Use 'search for <query>' to search databases
-- Use 'show jobs' to list running jobs
-
-Be helpful, concise, and technically accurate."""
-            
-            # Add session context to system prompt
-            if session:
-                context = self.session_manager.get_session_context(session.session_id)
-                if context.get("context_summary"):
-                    system_prompt += f"\n\nUser context: {context['context_summary']}"
+            # Get system prompt (uses shared helper)
+            system_prompt = self._get_chat_system_prompt(session)
             
             # Collect full response for session storage
             full_response = []
@@ -665,18 +755,111 @@ Be helpful, concise, and technically accurate."""
                 full_response.append(chunk)
                 yield chunk
             
-            # Add assistant response to session
-            if session:
-                self.session_manager.add_assistant_message(
-                    session.session_id,
-                    "".join(full_response),
-                )
+            # Finalize session (uses shared helper)
+            self._finalize_chat_session(session, "".join(full_response))
             
         except Exception as e:
             # Fallback to non-streaming
             logger.warning(f"Streaming failed, falling back: {e}")
             response = self.chat(message, history, session_id, user_id)
             yield response.message
+    
+    async def chat_stream_async(
+        self,
+        message: str,
+        history: Optional[List[Dict[str, str]]] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
+    ):
+        """
+        Async streaming chat with true real-time progress for workflow generation.
+        
+        For workflow generation queries, this uses the multi-agent system which
+        yields real progress updates as each phase (planning, codegen, validation,
+        documentation) completes.
+        
+        Args:
+            message: User's message
+            history: Optional conversation history
+            session_id: Optional session ID for multi-turn conversations
+            user_id: User ID for preference learning (defaults to "default")
+            
+        Yields:
+            String chunks of the assistant's response
+            
+        Example:
+            async for chunk in bp.chat_stream_async("Generate RNA-seq workflow"):
+                print(chunk, end="", flush=True)
+        """
+        user_id = user_id or "default"
+        
+        # Prepare session
+        session = self._prepare_chat_session(session_id, user_id, message)
+        
+        # Check if this is a workflow generation query
+        query_lower = message.lower()
+        is_workflow_query = any(
+            phrase in query_lower 
+            for phrase in ['generate', 'create workflow', 'create pipeline', 'build workflow', 'make workflow']
+        )
+        
+        if is_workflow_query:
+            # Use multi-agent streaming for workflow generation
+            try:
+                yield "🧬 **Starting Workflow Generation**\n\n"
+                
+                async for update in self.generate_with_agents_streaming(message):
+                    phase = update.get("phase", "")
+                    status = update.get("status", "")
+                    
+                    if phase == "planning":
+                        if status == "started":
+                            yield "📋 **Planning**: Analyzing requirements...\n"
+                        elif status == "complete":
+                            plan_info = update.get("plan", {})
+                            yield f"📋 **Planning**: Complete - {plan_info.get('steps', 0)} steps\n\n"
+                    
+                    elif phase == "codegen":
+                        if status == "started":
+                            yield "💻 **Code Generation**: Writing Nextflow code...\n"
+                        elif status == "complete":
+                            lines = update.get("lines", 0)
+                            yield f"💻 **Code Generation**: Complete - {lines} lines\n\n"
+                    
+                    elif phase == "validation":
+                        if status == "started":
+                            yield "✅ **Validation**: Checking code...\n"
+                        elif status == "complete":
+                            issues = update.get("issues", 0)
+                            yield f"✅ **Validation**: Complete - {issues} issues\n\n"
+                    
+                    elif phase == "documentation":
+                        if status == "started":
+                            yield "📚 **Documentation**: Generating README...\n"
+                        elif status == "complete":
+                            yield "📚 **Documentation**: Complete\n\n"
+                    
+                    elif phase == "complete":
+                        result = update.get("result", {})
+                        yield f"\n🎉 **Workflow Generated Successfully!**\n"
+                        yield f"- Name: {result.get('name', 'Unknown')}\n"
+                        yield f"- Lines of code: {result.get('code_lines', 0)}\n"
+                        yield f"- Validation: {'Passed' if result.get('validation_passed') else 'Has issues'}\n"
+                    
+                    elif phase == "error":
+                        yield f"\n❌ **Error**: {update.get('error', 'Unknown error')}\n"
+                
+                # Finalize session
+                self._finalize_chat_session(session, "Workflow generation complete.")
+                return
+                
+            except ImportError:
+                # Multi-agent not available, fall back to sync
+                yield "⚠️ Multi-agent streaming not available, using standard generation...\n\n"
+        
+        # For non-workflow queries, use sync processing (wrapped as async)
+        for chunk in self.chat_stream(message, history, session_id, user_id):
+            yield chunk
     
     def parse_intent(self, description: str) -> "ParsedIntent":
         """
