@@ -44,22 +44,89 @@ def cmd_generate(args):
     llm = get_llm(args.llm, args.model) if args.llm else None
     composer = Composer(llm=llm)
     
-    # Generate workflow
-    workflow = composer.generate(
-        args.description,
-        output_dir=args.output,
-        auto_create_modules=not args.no_auto_create
-    )
-    
-    if args.output:
-        print(f"\n✓ Workflow saved to: {args.output}")
+    # Check if using multi-agent system
+    if args.agents:
+        print("🤖 Using multi-agent generation system...")
+        print("   Agents: Planner → CodeGen → Validator → Doc → QC\n")
+        
+        if args.streaming:
+            # Streaming mode shows progress in real-time
+            import asyncio
+            asyncio.run(_generate_with_agents_streaming(composer, args))
+        else:
+            # Synchronous mode
+            workflow = composer.generate_with_agents(
+                args.description,
+                output_dir=args.output
+            )
+            
+            if args.output:
+                print(f"\n✓ Workflow saved to: {args.output}")
+            else:
+                print(f"\n✓ Workflow generated: {workflow.name}")
+                if args.show:
+                    print("\n" + "="*60)
+                    print("main.nf:")
+                    print("="*60)
+                    print(workflow.main_nf)
     else:
-        print(f"\n✓ Workflow generated: {workflow.name}")
-        if args.show:
-            print("\n" + "="*60)
-            print("main.nf:")
-            print("="*60)
-            print(workflow.main_nf)
+        # Standard generation
+        workflow = composer.generate(
+            args.description,
+            output_dir=args.output,
+            auto_create_modules=not args.no_auto_create
+        )
+        
+        if args.output:
+            print(f"\n✓ Workflow saved to: {args.output}")
+        else:
+            print(f"\n✓ Workflow generated: {workflow.name}")
+            if args.show:
+                print("\n" + "="*60)
+                print("main.nf:")
+                print("="*60)
+                print(workflow.main_nf)
+
+
+async def _generate_with_agents_streaming(composer, args):
+    """Helper to run streaming multi-agent generation."""
+    from .agents.specialists import WorkflowState
+    
+    state_emojis = {
+        WorkflowState.IDLE: "⏳",
+        WorkflowState.PLANNING: "📋",
+        WorkflowState.GENERATING: "🔧",
+        WorkflowState.VALIDATING: "🔍",
+        WorkflowState.FIXING: "🔨",
+        WorkflowState.DOCUMENTING: "📝",
+        WorkflowState.COMPLETE: "✅",
+        WorkflowState.FAILED: "❌"
+    }
+    
+    workflow = None
+    async for update in composer.generate_with_agents_streaming(
+        args.description,
+        output_dir=args.output
+    ):
+        state = update.get("state", WorkflowState.IDLE)
+        emoji = state_emojis.get(state, "🔄")
+        
+        if "message" in update:
+            print(f"{emoji} [{state.name}] {update['message']}")
+        
+        if state == WorkflowState.COMPLETE and "result" in update:
+            workflow = update["result"]
+    
+    if workflow:
+        if args.output:
+            print(f"\n✓ Workflow saved to: {args.output}")
+        else:
+            print(f"\n✓ Workflow generated: {workflow.name}")
+            if args.show:
+                print("\n" + "="*60)
+                print("main.nf:")
+                print("="*60)
+                print(workflow.main_nf)
 
 
 def cmd_chat(args):
@@ -232,6 +299,87 @@ def cmd_modules(args):
             print(f"  {category}: {len(mods)}")
 
 
+def cmd_agents(args):
+    """Show or test multi-agent system."""
+    setup_logging(args.verbose)
+    
+    from .agents.specialists import (
+        SupervisorAgent, PlannerAgent, CodeGenAgent, 
+        ValidatorAgent, DocAgent, QCAgent, WorkflowState
+    )
+    
+    if args.status:
+        # Show status of all agents
+        print("\n🤖 Multi-Agent System Status\n")
+        print("=" * 50)
+        
+        agents_info = [
+            ("SupervisorAgent", "Coordinator", "Orchestrates all specialist agents"),
+            ("PlannerAgent", "Planner", "Designs workflow from NL query"),
+            ("CodeGenAgent", "Code Generator", "Generates Nextflow DSL2 code"),
+            ("ValidatorAgent", "Validator", "Static analysis + LLM review"),
+            ("DocAgent", "Documentation", "Creates README, DAGs, parameter docs"),
+            ("QCAgent", "Quality Control", "Checks against analysis-type thresholds"),
+        ]
+        
+        print(f"{'Agent':<18} {'Role':<16} {'Description'}")
+        print("-" * 50)
+        for name, role, desc in agents_info:
+            print(f"{name:<18} {role:<16} {desc}")
+        
+        print("\n📋 Workflow States:")
+        print("-" * 30)
+        state_flow = ["IDLE", "PLANNING", "GENERATING", "VALIDATING", 
+                      "FIXING", "DOCUMENTING", "COMPLETE/FAILED"]
+        print(" → ".join(state_flow))
+        
+        print("\n✅ Multi-agent system is available")
+    
+    elif args.test:
+        # Quick test with a simple query
+        print("\n🧪 Testing Multi-Agent System...\n")
+        
+        test_query = args.test
+        print(f"Query: {test_query}\n")
+        
+        # Test PlannerAgent
+        print("Testing PlannerAgent...")
+        planner = PlannerAgent()
+        try:
+            plan = planner.plan_sync(test_query)
+            print(f"  ✓ Generated plan with {len(plan.steps)} steps")
+            print(f"  Analysis type: {plan.analysis_type}")
+            for step in plan.steps[:3]:
+                print(f"    - {step.name}: {step.tools}")
+        except Exception as e:
+            print(f"  ✗ Error: {e}")
+        
+        print("\n✅ Agent test complete")
+    
+    else:
+        # Default: show help
+        print("""
+🤖 Multi-Agent Generation System
+================================
+
+The multi-agent system uses specialized AI agents to generate
+high-quality, validated Nextflow workflows.
+
+Agent Pipeline:
+  1. PlannerAgent    - Analyzes query, designs workflow structure
+  2. CodeGenAgent    - Generates Nextflow DSL2 code  
+  3. ValidatorAgent  - Static analysis + LLM code review
+  4. DocAgent        - Creates README and documentation
+  5. QCAgent         - Quality control checks
+
+Usage:
+  biocomposer generate --agents "RNA-seq differential expression"
+  biocomposer generate --agents --streaming "ChIP-seq analysis"
+  biocomposer agents --status
+  biocomposer agents --test "Simple alignment workflow"
+""")
+
+
 def cmd_providers(args):
     """List and check LLM providers."""
     setup_logging(args.verbose)
@@ -327,6 +475,10 @@ def main():
     gen_parser.add_argument("-m", "--model", help="Model name")
     gen_parser.add_argument("--no-auto-create", action="store_true", help="Don't auto-create missing modules")
     gen_parser.add_argument("--show", action="store_true", help="Show generated code")
+    gen_parser.add_argument("--agents", action="store_true", 
+                           help="Use multi-agent system (Planner→CodeGen→Validator→Doc→QC)")
+    gen_parser.add_argument("--streaming", action="store_true",
+                           help="Show real-time progress (requires --agents)")
     gen_parser.set_defaults(func=cmd_generate)
     
     # Chat command
@@ -351,6 +503,12 @@ def main():
     prov_parser = subparsers.add_parser("providers", help="List LLM providers")
     prov_parser.add_argument("-c", "--check", action="store_true", help="Check availability")
     prov_parser.set_defaults(func=cmd_providers)
+    
+    # Agents command
+    agents_parser = subparsers.add_parser("agents", help="Multi-agent system info and testing")
+    agents_parser.add_argument("--status", action="store_true", help="Show agent system status")
+    agents_parser.add_argument("--test", metavar="QUERY", help="Test agents with a query")
+    agents_parser.set_defaults(func=cmd_agents)
     
     # UI command
     ui_parser = subparsers.add_parser("ui", help="Launch web UI")

@@ -99,19 +99,21 @@ class SupervisorAgent:
     5. QCAgent configures quality checks
     """
     
-    def __init__(self, router=None):
+    def __init__(self, router=None, knowledge_base=None):
         """
         Initialize supervisor with specialist agents.
         
         Args:
             router: LLM provider router for agent operations
+            knowledge_base: Optional KnowledgeBase for RAG enhancement
         """
         self.router = router
+        self.knowledge_base = knowledge_base
         
-        # Initialize specialist agents
-        self.planner = PlannerAgent(router)
+        # Initialize specialist agents with knowledge base
+        self.planner = PlannerAgent(router, knowledge_base=knowledge_base)
         self.codegen = CodeGenAgent(router)
-        self.validator = ValidatorAgent(router)
+        self.validator = ValidatorAgent(router, knowledge_base=knowledge_base)
         self.docs = DocAgent(router)
         self.qc = None  # Initialized per-workflow based on analysis type
         

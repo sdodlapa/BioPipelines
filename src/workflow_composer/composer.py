@@ -35,11 +35,25 @@ Data-First Workflow Example:
         "RNA-seq differential expression",
         data_manifest=manifest
     )
+
+Multi-Agent Generation Example:
+    from workflow_composer import Composer
+    
+    composer = Composer()
+    
+    # Use multi-agent system for advanced generation
+    result = composer.generate_with_agents(
+        "RNA-seq differential expression for human",
+        output_dir="workflows/rnaseq"
+    )
+    print(result.code)  # Nextflow DSL2
+    print(result.documentation)  # README.md
 """
 
+import asyncio
 import logging
 from pathlib import Path
-from typing import Optional, Dict, Any, List, TYPE_CHECKING
+from typing import Optional, Dict, Any, List, TYPE_CHECKING, AsyncIterator
 
 from .config import Config
 from .llm import LLMAdapter, get_llm
@@ -65,6 +79,20 @@ try:
 except ImportError:
     DATA_MANIFEST_AVAILABLE = False
     DataManifest = None
+
+# Import multi-agent specialists (Phase 2.4)
+try:
+    from .agents.specialists import (
+        SupervisorAgent,
+        PlannerAgent,
+        WorkflowResult as AgentWorkflowResult,
+        WorkflowPlan,
+    )
+    MULTI_AGENT_AVAILABLE = True
+except ImportError:
+    MULTI_AGENT_AVAILABLE = False
+    SupervisorAgent = None
+    AgentWorkflowResult = None
 
 logger = logging.getLogger(__name__)
 
@@ -584,3 +612,146 @@ class Composer:
         self.llm = get_llm(provider, model)
         self.intent_parser = IntentParser(self.llm)
         logger.info(f"Switched to LLM: {self.llm}")
+    
+    # =========================================================================
+    # Multi-Agent Generation (Phase 2.4)
+    # =========================================================================
+    
+    def _get_supervisor(self) -> "SupervisorAgent":
+        """Get or create the multi-agent supervisor."""
+        if not MULTI_AGENT_AVAILABLE:
+            raise ImportError(
+                "Multi-agent specialists not available. "
+                "Install required dependencies."
+            )
+        
+        if not hasattr(self, '_supervisor') or self._supervisor is None:
+            # Try to get provider router for LLM operations
+            try:
+                from .providers import get_router
+                router = get_router()
+            except Exception:
+                router = None
+            
+            self._supervisor = SupervisorAgent(router=router)
+        
+        return self._supervisor
+    
+    def generate_with_agents(
+        self,
+        description: str,
+        output_dir: Optional[str] = None,
+    ) -> "AgentWorkflowResult":
+        """
+        Generate a workflow using multi-agent coordination (synchronous).
+        
+        This method uses the multi-agent system with:
+        - PlannerAgent: Designs workflow architecture
+        - CodeGenAgent: Generates Nextflow DSL2 code
+        - ValidatorAgent: Reviews code with fix loops
+        - DocAgent: Creates documentation
+        - QCAgent: Configures quality checks
+        
+        Args:
+            description: Natural language description of the workflow
+            output_dir: Optional directory to save generated files
+            
+        Returns:
+            AgentWorkflowResult with code, config, documentation
+            
+        Example:
+            composer = Composer()
+            result = composer.generate_with_agents(
+                "RNA-seq differential expression for human",
+                output_dir="workflows/rnaseq"
+            )
+            if result.success:
+                print(f"Generated: {result.plan.name}")
+                print(f"Code lines: {len(result.code.split(chr(10)))}")
+        """
+        if not MULTI_AGENT_AVAILABLE:
+            raise ImportError(
+                "Multi-agent generation not available. "
+                "Ensure agents.specialists module is properly installed."
+            )
+        
+        logger.info(f"Multi-agent generation: {description[:100]}...")
+        supervisor = self._get_supervisor()
+        
+        return supervisor.execute_sync(description, output_dir)
+    
+    async def generate_with_agents_async(
+        self,
+        description: str,
+        output_dir: Optional[str] = None,
+    ) -> "AgentWorkflowResult":
+        """
+        Generate a workflow using multi-agent coordination (async).
+        
+        Same as generate_with_agents but fully async with LLM calls.
+        
+        Args:
+            description: Natural language description
+            output_dir: Optional directory for output files
+            
+        Returns:
+            AgentWorkflowResult with generated artifacts
+        """
+        if not MULTI_AGENT_AVAILABLE:
+            raise ImportError("Multi-agent generation not available.")
+        
+        logger.info(f"Async multi-agent generation: {description[:100]}...")
+        supervisor = self._get_supervisor()
+        
+        return await supervisor.execute(description, output_dir)
+    
+    async def generate_with_agents_streaming(
+        self,
+        description: str,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Generate a workflow with streaming progress updates.
+        
+        Yields progress updates as the multi-agent system works:
+        - Planning phase
+        - Code generation phase
+        - Validation phase (with fix attempts)
+        - Documentation phase
+        
+        Args:
+            description: Natural language description
+            
+        Yields:
+            Dict with phase, status, and progress info
+            
+        Example:
+            async for update in composer.generate_with_agents_streaming("RNA-seq"):
+                print(f"{update['phase']}: {update['status']}")
+                if update['phase'] == 'complete':
+                    result = update['result']
+        """
+        if not MULTI_AGENT_AVAILABLE:
+            raise ImportError("Multi-agent generation not available.")
+        
+        supervisor = self._get_supervisor()
+        
+        async for update in supervisor.execute_streaming(description):
+            yield update
+    
+    def get_agent_plan(self, description: str) -> "WorkflowPlan":
+        """
+        Get just the workflow plan without full generation.
+        
+        Useful for previewing what the multi-agent system would create.
+        
+        Args:
+            description: Natural language description
+            
+        Returns:
+            WorkflowPlan with steps, tools, and resources
+        """
+        if not MULTI_AGENT_AVAILABLE:
+            raise ImportError("Multi-agent planning not available.")
+        
+        supervisor = self._get_supervisor()
+        return supervisor.planner.create_plan_sync(description)

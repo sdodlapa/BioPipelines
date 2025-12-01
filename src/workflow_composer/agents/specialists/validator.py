@@ -83,14 +83,16 @@ Report issues as JSON:
         (r'set\s*\{\s*\w+\s*\}', 'Prefer collect() over set{}', 'info'),
     ]
 
-    def __init__(self, router=None):
+    def __init__(self, router=None, knowledge_base=None):
         """
         Initialize validator agent.
         
         Args:
             router: LLM provider router for semantic validation
+            knowledge_base: Optional KnowledgeBase for error pattern lookup
         """
         self.router = router
+        self.knowledge_base = knowledge_base
     
     async def validate(self, code: str) -> ValidationResult:
         """
@@ -107,6 +109,14 @@ Report issues as JSON:
         # Static analysis
         static_issues = self._static_analysis(code)
         issues.extend(static_issues)
+        
+        # Check known error patterns from knowledge base
+        if self.knowledge_base:
+            try:
+                kb_issues = await self._check_known_issues(code)
+                issues.extend(kb_issues)
+            except Exception as e:
+                logger.debug(f"Knowledge base check failed: {e}")
         
         # LLM semantic review
         if self.router:
@@ -126,6 +136,38 @@ Report issues as JSON:
             warnings=[i.message for i in warnings],
             suggestions=self._generate_suggestions(code, issues)
         )
+    
+    async def _check_known_issues(self, code: str) -> List[_ValidationIssue]:
+        """Check code against known error patterns in knowledge base."""
+        issues = []
+        
+        if not self.knowledge_base:
+            return issues
+        
+        try:
+            from ..rag.knowledge_base import KnowledgeSource
+            
+            # Search for error patterns that might apply
+            error_docs = self.knowledge_base.search(
+                "common nextflow error",
+                sources=[KnowledgeSource.ERROR_PATTERNS],
+                limit=10
+            )
+            
+            for doc in error_docs:
+                # Check if any pattern from the error doc matches the code
+                pattern = doc.metadata.get("pattern")
+                if pattern and re.search(pattern, code, re.IGNORECASE):
+                    issues.append(_ValidationIssue(
+                        severity="warning",
+                        message=f"Known issue: {doc.title} - {doc.content[:200]}",
+                        rule="known-error-pattern"
+                    ))
+                    
+        except Exception as e:
+            logger.debug(f"Error pattern check failed: {e}")
+        
+        return issues
     
     def validate_sync(self, code: str) -> ValidationResult:
         """Synchronous validation using static analysis only."""

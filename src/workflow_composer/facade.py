@@ -313,7 +313,15 @@ class BioPipelines:
                 router = self.orchestrator
             except Exception:
                 router = None
-            self._supervisor = SupervisorAgent(router=router)
+            
+            # Try to get knowledge base for RAG
+            try:
+                from .agents.rag import KnowledgeBase
+                knowledge_base = KnowledgeBase()
+            except Exception:
+                knowledge_base = None
+            
+            self._supervisor = SupervisorAgent(router=router, knowledge_base=knowledge_base)
         return self._supervisor
     
     async def generate_with_agents(

@@ -169,6 +169,84 @@ EXAMPLES = [
 
 
 # ============================================================================
+# Multi-Agent Workflow Generation
+# ============================================================================
+
+def generate_workflow_with_agents(description: str) -> Generator[str, None, None]:
+    """
+    Generate workflow using multi-agent system with streaming progress.
+    
+    Args:
+        description: Natural language workflow description
+    
+    Yields:
+        Progress updates as markdown strings
+    """
+    if not bp:
+        yield "❌ BioPipelines not available"
+        return
+    
+    try:
+        from workflow_composer.agents.specialists import WorkflowState
+        
+        state_emojis = {
+            WorkflowState.IDLE: "⏳",
+            WorkflowState.PLANNING: "📋",
+            WorkflowState.GENERATING: "🔧",
+            WorkflowState.VALIDATING: "🔍",
+            WorkflowState.FIXING: "🔨",
+            WorkflowState.DOCUMENTING: "📝",
+            WorkflowState.COMPLETE: "✅",
+            WorkflowState.FAILED: "❌"
+        }
+        
+        output_lines = ["## 🤖 Multi-Agent Workflow Generation\n"]
+        output_lines.append(f"**Query:** {description}\n")
+        output_lines.append("---\n")
+        
+        import asyncio
+        
+        async def stream_updates():
+            async for update in bp.generate_with_agents_streaming(description):
+                state = update.get("state", WorkflowState.IDLE)
+                emoji = state_emojis.get(state, "🔄")
+                
+                if "message" in update:
+                    output_lines.append(f"{emoji} **{state.name}**: {update['message']}\n")
+                
+                if state == WorkflowState.COMPLETE and "result" in update:
+                    result = update["result"]
+                    output_lines.append("\n---\n")
+                    output_lines.append("### ✅ Workflow Generated Successfully!\n")
+                    output_lines.append(f"- **Validation:** {'Passed ✓' if result.validation_passed else 'Issues found ⚠️'}\n")
+                    if result.output_files:
+                        output_lines.append("- **Output files:**\n")
+                        for f in result.output_files:
+                            output_lines.append(f"  - `{f}`\n")
+                
+                yield "\n".join(output_lines)
+        
+        # Run async generator synchronously
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            gen = stream_updates()
+            while True:
+                try:
+                    result = loop.run_until_complete(gen.__anext__())
+                    yield result
+                except StopAsyncIteration:
+                    break
+        finally:
+            loop.close()
+            
+    except ImportError as e:
+        yield f"❌ Multi-agent system not available: {e}"
+    except Exception as e:
+        yield f"❌ Error during generation: {e}"
+
+
+# ============================================================================
 # Main UI
 # ============================================================================
 
@@ -263,6 +341,32 @@ def create_app() -> gr.Blocks:
                 stats_btn = gr.Button("📊 Show Stats")
                 stats_output = gr.JSON(label="Learning Statistics")
         
+        # Advanced Multi-Agent Generation
+        with gr.Accordion("🤖 Advanced Generation (Multi-Agent)", open=False):
+            gr.Markdown("""
+            **Multi-Agent Workflow Generation** uses specialized AI agents for higher quality workflows:
+            - 📋 **Planner**: Designs workflow structure from your description
+            - 🔧 **CodeGen**: Generates Nextflow DSL2 code
+            - 🔍 **Validator**: Static analysis + LLM code review
+            - 📝 **DocAgent**: Creates documentation
+            - ✅ **QCAgent**: Quality control checks
+            """)
+            
+            with gr.Row():
+                agent_query = gr.Textbox(
+                    label="Workflow Description",
+                    placeholder="Describe your bioinformatics workflow...",
+                    scale=4,
+                )
+                agent_output_dir = gr.Textbox(
+                    label="Output Directory (optional)",
+                    placeholder="e.g., ./my_workflow",
+                    scale=2,
+                )
+            
+            agent_generate_btn = gr.Button("🚀 Generate with Multi-Agent System", variant="primary")
+            agent_progress = gr.Markdown("*Click 'Generate' to start...*")
+        
         # Settings (collapsed)
         with gr.Accordion("⚙️ Settings", open=False):
             settings_info = "**BioPipelines:** " + ("Available ✓" if BP_AVAILABLE else "Not available")
@@ -313,6 +417,20 @@ def create_app() -> gr.Blocks:
         clear.click(clear_chat, outputs=[chatbot, msg])
         feedback_btn.click(submit_feedback, [feedback_query, feedback_intent, feedback_text], feedback_result)
         stats_btn.click(get_learning_stats, outputs=stats_output)
+        
+        # Multi-agent generation event
+        def run_agent_generation(query, output_dir):
+            if not query or not query.strip():
+                yield "*Please enter a workflow description*"
+                return
+            for update in generate_workflow_with_agents(query):
+                yield update
+        
+        agent_generate_btn.click(
+            run_agent_generation,
+            inputs=[agent_query, agent_output_dir],
+            outputs=agent_progress
+        )
         
         # Job panel events
         def refresh_all_jobs():

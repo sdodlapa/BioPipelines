@@ -87,6 +87,8 @@ class PlannerAgent:
     
     Takes user queries and creates structured workflow plans
     that can be passed to CodeGenAgent for implementation.
+    
+    Can optionally use RAG from KnowledgeBase for enhanced planning.
     """
     
     SYSTEM_PROMPT = """You are a bioinformatics workflow architect expert.
@@ -127,14 +129,16 @@ Output ONLY valid JSON matching this structure:
   "recommended_cpus": 8
 }"""
 
-    def __init__(self, router=None):
+    def __init__(self, router=None, knowledge_base=None):
         """
         Initialize planner agent.
         
         Args:
             router: LLM provider router for generating plans
+            knowledge_base: Optional KnowledgeBase for RAG enhancement
         """
         self.router = router
+        self.knowledge_base = knowledge_base
         self._plan_cache = {}
     
     async def create_plan(self, query: str) -> WorkflowPlan:
@@ -158,8 +162,12 @@ Output ONLY valid JSON matching this structure:
             return self._create_default_plan(query)
         
         try:
+            # Enhance prompt with RAG if knowledge base available
+            context = await self._get_rag_context(query) if self.knowledge_base else ""
+            
             # Generate plan using LLM
-            prompt = f"{self.SYSTEM_PROMPT}\n\nUser Query: {query}"
+            rag_section = f"\n\nRelevant context from knowledge base:\n{context}" if context else ""
+            prompt = f"{self.SYSTEM_PROMPT}{rag_section}\n\nUser Query: {query}"
             response = await self.router.route_async(prompt)
             
             # Extract JSON from response
@@ -174,6 +182,44 @@ Output ONLY valid JSON matching this structure:
         except Exception as e:
             logger.warning(f"LLM planning failed: {e}, using default plan")
             return self._create_default_plan(query)
+    
+    async def _get_rag_context(self, query: str) -> str:
+        """
+        Get relevant context from knowledge base.
+        
+        Args:
+            query: User query
+            
+        Returns:
+            Formatted context string
+        """
+        if not self.knowledge_base:
+            return ""
+        
+        try:
+            # Import knowledge source types
+            from ..rag.knowledge_base import KnowledgeSource
+            
+            # Search for relevant modules and tools
+            results = self.knowledge_base.search(
+                query, 
+                sources=[KnowledgeSource.NF_CORE_MODULES, KnowledgeSource.TOOL_CATALOG],
+                limit=5
+            )
+            
+            if not results:
+                return ""
+            
+            # Format context
+            context_parts = []
+            for doc in results:
+                context_parts.append(f"[{doc.source.value}] {doc.title}:\n{doc.content[:500]}")
+            
+            return "\n\n".join(context_parts)
+            
+        except Exception as e:
+            logger.debug(f"RAG context retrieval failed: {e}")
+            return ""
     
     def create_plan_sync(self, query: str) -> WorkflowPlan:
         """Synchronous version of create_plan."""
