@@ -76,7 +76,7 @@ def scan_data_impl(
     manifest=None,
 ) -> ToolResult:
     """
-    Scan a directory for FASTQ files.
+    Scan a directory for FASTQ files and display hierarchical folder structure.
     
     Args:
         path: Directory path to scan. Defaults to current directory.
@@ -84,7 +84,7 @@ def scan_data_impl(
         manifest: DataManifest instance
         
     Returns:
-        ToolResult with discovered samples
+        ToolResult with discovered samples organized by folder
     """
     if scanner is None:
         return ToolResult(
@@ -132,27 +132,8 @@ def scan_data_impl(
             for sample in samples:
                 manifest.add_sample(sample)
         
-        # Build response message
-        if samples:
-            sample_list = []
-            for s in samples[:10]:
-                file_count = 2 if (hasattr(s, 'is_paired') and s.is_paired) or (hasattr(s, 'fastq_2') and s.fastq_2) else 1
-                layout = "paired" if file_count == 2 else "single"
-                if hasattr(s, 'library_layout'):
-                    layout = s.library_layout.value if hasattr(s.library_layout, 'value') else str(s.library_layout)
-                sample_list.append(f"  - `{s.sample_id}`: {file_count} files ({layout})")
-            
-            sample_str = "\n".join(sample_list)
-            if len(samples) > 10:
-                sample_str += f"\n  - ... and {len(samples) - 10} more"
-            
-            message = f"""✅ Found **{len(samples)} samples** in `{scan_path}`:
-
-{sample_str}
-
-Added to data manifest. Ready for workflow generation!"""
-        else:
-            message = f"⚠️ No FASTQ samples found in `{scan_path}`"
+        # Build hierarchical folder summary
+        message = _build_folder_summary(scan_path, samples, result)
         
         return ToolResult(
             success=True,
@@ -177,6 +158,237 @@ Added to data manifest. Ready for workflow generation!"""
             error=str(e),
             message=f"❌ Failed to scan directory: {e}"
         )
+
+
+def _build_folder_summary(scan_path: Path, samples: list, scan_result) -> str:
+    """
+    Build a hierarchical folder summary instead of listing individual files.
+    
+    Groups samples by:
+    1. Top-level folders (data types like rna-seq, chip-seq, etc.)
+    2. Sub-folders (projects, experiments)
+    3. File type breakdown (paired/single-end, file formats)
+    """
+    from collections import defaultdict
+    
+    if not samples:
+        # Still show folder structure even if no FASTQ found
+        return _build_empty_folder_summary(scan_path)
+    
+    # Group samples by their parent directories (relative to scan_path)
+    folder_stats = defaultdict(lambda: {
+        "paired": 0,
+        "single": 0,
+        "total_files": 0,
+        "subfolders": defaultdict(lambda: {"paired": 0, "single": 0, "files": 0}),
+        "sample_ids": []
+    })
+    
+    for sample in samples:
+        # Get the relative path of the sample
+        sample_path = Path(sample.fastq_1) if hasattr(sample, 'fastq_1') else None
+        if not sample_path:
+            continue
+            
+        try:
+            rel_path = sample_path.relative_to(scan_path)
+            parts = rel_path.parts
+            
+            # Top-level folder (or "." for root)
+            top_folder = parts[0] if len(parts) > 1 else "."
+            
+            # Subfolder (second level)
+            sub_folder = parts[1] if len(parts) > 2 else None
+            
+            # Determine if paired or single
+            is_paired = (hasattr(sample, 'is_paired') and sample.is_paired) or \
+                       (hasattr(sample, 'fastq_2') and sample.fastq_2) or \
+                       (hasattr(sample, 'library_layout') and 
+                        str(getattr(sample.library_layout, 'value', sample.library_layout)).lower() == 'paired')
+            
+            # Update stats
+            if is_paired:
+                folder_stats[top_folder]["paired"] += 1
+                folder_stats[top_folder]["total_files"] += 2
+            else:
+                folder_stats[top_folder]["single"] += 1
+                folder_stats[top_folder]["total_files"] += 1
+            
+            folder_stats[top_folder]["sample_ids"].append(sample.sample_id)
+            
+            # Track subfolders
+            if sub_folder:
+                if is_paired:
+                    folder_stats[top_folder]["subfolders"][sub_folder]["paired"] += 1
+                    folder_stats[top_folder]["subfolders"][sub_folder]["files"] += 2
+                else:
+                    folder_stats[top_folder]["subfolders"][sub_folder]["single"] += 1
+                    folder_stats[top_folder]["subfolders"][sub_folder]["files"] += 1
+                    
+        except ValueError:
+            # Path not relative to scan_path
+            continue
+    
+    # Build the message
+    lines = [f"📁 **Data Overview**: `{scan_path}`\n"]
+    
+    total_samples = len(samples)
+    total_paired = sum(f["paired"] for f in folder_stats.values())
+    total_single = sum(f["single"] for f in folder_stats.values())
+    
+    lines.append(f"**Summary**: {total_samples} samples ({total_paired} paired-end, {total_single} single-end)\n")
+    lines.append("---\n")
+    
+    # Sort folders - put data type folders first, then alphabetically
+    priority_folders = ["rna-seq", "chip-seq", "atac-seq", "wgs", "wes", "methylation", 
+                       "hic", "scrna-seq", "raw", "processed", "references"]
+    
+    def folder_sort_key(name):
+        name_lower = name.lower()
+        for i, pf in enumerate(priority_folders):
+            if pf in name_lower:
+                return (0, i, name_lower)
+        return (1, 0, name_lower)
+    
+    sorted_folders = sorted(folder_stats.keys(), key=folder_sort_key)
+    
+    for folder in sorted_folders:
+        stats = folder_stats[folder]
+        
+        # Folder header with emoji based on inferred data type
+        emoji = _get_folder_emoji(folder)
+        folder_display = folder if folder != "." else "(root)"
+        
+        lines.append(f"\n{emoji} **{folder_display}/**")
+        lines.append(f"   {stats['paired'] + stats['single']} samples "
+                    f"({stats['paired']} paired, {stats['single']} single) • "
+                    f"{stats['total_files']} files")
+        
+        # Show subfolders if any (limit to top 5)
+        if stats["subfolders"]:
+            subfolder_items = sorted(stats["subfolders"].items(), 
+                                    key=lambda x: -(x[1]["paired"] + x[1]["single"]))
+            
+            for sub_name, sub_stats in subfolder_items[:5]:
+                sub_count = sub_stats["paired"] + sub_stats["single"]
+                lines.append(f"   └── `{sub_name}/`: {sub_count} samples")
+            
+            if len(subfolder_items) > 5:
+                lines.append(f"   └── ... and {len(subfolder_items) - 5} more subfolders")
+    
+    # Add suggestions based on data types found
+    lines.append("\n---")
+    lines.append(_generate_data_suggestions(folder_stats, samples))
+    
+    return "\n".join(lines)
+
+
+def _build_empty_folder_summary(scan_path: Path) -> str:
+    """Build a folder structure summary when no FASTQ files found."""
+    lines = [f"📁 **Scanning**: `{scan_path}`\n"]
+    lines.append("⚠️ **No FASTQ samples found**\n")
+    
+    # Show what folders exist
+    try:
+        subdirs = [d for d in scan_path.iterdir() if d.is_dir()]
+        if subdirs:
+            lines.append("**Existing folders:**")
+            for d in sorted(subdirs)[:10]:
+                # Count files in each
+                file_count = sum(1 for _ in d.rglob("*") if _.is_file())
+                lines.append(f"  📂 `{d.name}/` ({file_count} files)")
+            if len(subdirs) > 10:
+                lines.append(f"  ... and {len(subdirs) - 10} more folders")
+        
+        # Check for other data types
+        other_files = list(scan_path.rglob("*.bam"))[:5]
+        other_files += list(scan_path.rglob("*.vcf*"))[:5]
+        other_files += list(scan_path.rglob("*.bed"))[:5]
+        
+        if other_files:
+            lines.append("\n**Other data files found:**")
+            file_types = defaultdict(int)
+            for f in scan_path.rglob("*"):
+                if f.is_file():
+                    ext = "".join(f.suffixes[-2:]) if len(f.suffixes) > 1 else f.suffix
+                    if ext in ['.bam', '.vcf', '.vcf.gz', '.bed', '.bigwig', '.bw', '.gtf', '.gff']:
+                        file_types[ext] += 1
+            
+            for ext, count in sorted(file_types.items(), key=lambda x: -x[1])[:5]:
+                lines.append(f"  • {ext}: {count} files")
+                
+    except PermissionError:
+        lines.append("  (Permission denied to list folders)")
+    
+    lines.append("\n💡 **Tip**: Upload FASTQ files or specify a different path.")
+    
+    return "\n".join(lines)
+
+
+def _get_folder_emoji(folder_name: str) -> str:
+    """Get an emoji based on the folder name/data type."""
+    name_lower = folder_name.lower()
+    
+    emoji_map = {
+        "rna": "🧬",
+        "chip": "🎯",
+        "atac": "🔓",
+        "wgs": "🧬",
+        "wes": "🔬",
+        "methyl": "⚗️",
+        "hic": "🔗",
+        "scrna": "🦠",
+        "single": "🦠",
+        "raw": "📥",
+        "process": "⚙️",
+        "result": "📊",
+        "reference": "📚",
+        "genome": "🧬",
+        "annotation": "📝",
+    }
+    
+    for key, emoji in emoji_map.items():
+        if key in name_lower:
+            return emoji
+    
+    return "📂"
+
+
+def _generate_data_suggestions(folder_stats: dict, samples: list) -> str:
+    """Generate suggestions based on discovered data."""
+    suggestions = []
+    
+    # Detect data types
+    data_types = set()
+    for folder in folder_stats.keys():
+        folder_lower = folder.lower()
+        if "rna" in folder_lower:
+            data_types.add("RNA-seq")
+        elif "chip" in folder_lower:
+            data_types.add("ChIP-seq")
+        elif "atac" in folder_lower:
+            data_types.add("ATAC-seq")
+        elif "wgs" in folder_lower or "wes" in folder_lower:
+            data_types.add("DNA-seq")
+        elif "methyl" in folder_lower:
+            data_types.add("Methylation")
+        elif "hic" in folder_lower:
+            data_types.add("Hi-C")
+        elif "scrna" in folder_lower or "single" in folder_lower:
+            data_types.add("scRNA-seq")
+    
+    if data_types:
+        type_list = ", ".join(sorted(data_types))
+        suggestions.append(f"📊 **Detected data types**: {type_list}")
+        suggestions.append(f"💡 Try: *\"Create a {list(data_types)[0]} workflow\"*")
+    else:
+        # Infer from sample count
+        total = len(samples)
+        if total > 0:
+            suggestions.append(f"💡 **Ready for analysis**: {total} samples available")
+            suggestions.append("   Try: *\"What workflows can I run with this data?\"*")
+    
+    return "\n".join(suggestions) if suggestions else "✅ Data scan complete. Ready for workflow generation!"
 
 
 # =============================================================================
