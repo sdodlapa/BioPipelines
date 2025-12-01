@@ -78,8 +78,8 @@ from .intent import (
     QueryParseResult, 
     ConversationContext, 
     DialogueManager,
-    UnifiedEnsembleParser,
-    EnsembleParseResult,
+    UnifiedIntentParser,
+    UnifiedParseResult,
 )
 
 # Observability - distributed tracing
@@ -404,8 +404,8 @@ class UnifiedAgent:
         # Hybrid intent parser (legacy, for fallback)
         self._query_parser: Optional[HybridQueryParser] = None
         
-        # Unified ensemble parser (new, multi-method)
-        self._ensemble_parser: Optional[UnifiedEnsembleParser] = None
+        # Unified intent parser (recommended - uses arbiter)
+        self._intent_parser: Optional[UnifiedIntentParser] = None
         
         # Conversation context for multi-turn memory
         self._context: Optional[ConversationContext] = None
@@ -460,21 +460,27 @@ class UnifiedAgent:
         return self._query_parser
     
     @property
-    def ensemble_parser(self) -> Optional[UnifiedEnsembleParser]:
+    def intent_parser(self) -> Optional[UnifiedIntentParser]:
         """
-        Get or initialize the unified ensemble parser.
+        Get or initialize the unified intent parser.
         
-        Uses multiple parsing methods (rule, semantic, NER, LLM, RAG)
-        with weighted voting for robust intent detection.
+        Uses hierarchical parsing with LLM arbiter for complex queries.
+        Recommended over UnifiedEnsembleParser (deprecated).
         """
-        if self._ensemble_parser is None:
+        if self._intent_parser is None:
             try:
-                self._ensemble_parser = UnifiedEnsembleParser()
-                logger.info("UnifiedEnsembleParser initialized")
+                self._intent_parser = UnifiedIntentParser(use_cascade=True)
+                logger.info("UnifiedIntentParser initialized")
             except Exception as e:
-                logger.warning(f"Failed to initialize UnifiedEnsembleParser: {e}")
-                self._ensemble_parser = None
-        return self._ensemble_parser
+                logger.warning(f"Failed to initialize UnifiedIntentParser: {e}")
+                self._intent_parser = None
+        return self._intent_parser
+    
+    # Keep ensemble_parser as alias for backward compatibility
+    @property
+    def ensemble_parser(self) -> Optional[UnifiedIntentParser]:
+        """Deprecated: Use intent_parser instead."""
+        return self.intent_parser
     
     @property
     def context(self) -> ConversationContext:
@@ -767,65 +773,60 @@ class UnifiedAgent:
             span.add_event("task_classified", {"task_type": task_type.value})
             logger.info(f"Task classified as: {task_type.value}")
             
-            # Try unified ensemble parsing first (multi-method with voting)
+            # Try unified intent parsing first (pattern + semantic + arbiter)
             detected_tool = None
             detected_args = []
             hybrid_params = None  # Params from parser (preferred)
             parse_result: Optional[QueryParseResult] = None
-            ensemble_result: Optional[EnsembleParseResult] = None
+            intent_result: Optional[UnifiedParseResult] = None
             extracted_entities = []  # For context tracking
-            agreement_score = 0.0  # Track method agreement
             
-            # Use ensemble parser (preferred) or fall back to hybrid
-            if self.ensemble_parser:
+            # Use intent parser (recommended) or fall back to hybrid
+            if self.intent_parser:
                 try:
-                    with tracer.start_span("ensemble_parse") as parse_span:
-                        ensemble_result = self.ensemble_parser.parse(query)
-                        parse_span.add_tag("intent", ensemble_result.intent)
-                        parse_span.add_tag("confidence", ensemble_result.confidence)
-                        parse_span.add_tag("agreement", ensemble_result.agreement_level)
-                        parse_span.add_tag("methods_used", len(ensemble_result.votes))
+                    with tracer.start_span("intent_parse") as parse_span:
+                        intent_result = self.intent_parser.parse(query)
+                        intent_name = intent_result.primary_intent.name
+                        parse_span.add_tag("intent", intent_name)
+                        parse_span.add_tag("confidence", intent_result.confidence)
+                        parse_span.add_tag("method", intent_result.method)
+                        parse_span.add_tag("llm_invoked", intent_result.llm_invoked)
                     
-                    agreement_score = ensemble_result.agreement_level
                     logger.info(
-                        f"EnsembleParser: intent={ensemble_result.intent}, "
-                        f"confidence={ensemble_result.confidence:.2f}, "
-                        f"agreement={ensemble_result.agreement_level:.2f}, "
-                        f"methods={len(ensemble_result.votes)}"
+                        f"IntentParser: intent={intent_name}, "
+                        f"confidence={intent_result.confidence:.2f}, "
+                        f"method={intent_result.method}, "
+                        f"llm={intent_result.llm_invoked}"
                     )
                     
-                    # Extract entities from ensemble
-                    extracted_entities = ensemble_result.entities if ensemble_result.entities else []
+                    # Extract entities from result
+                    extracted_entities = intent_result.entities if intent_result.entities else []
                     
-                    # Check if we need clarification (low agreement or confidence)
-                    if ensemble_result.confidence < 0.5 and ensemble_result.agreement_level < 0.6:
-                        # Methods disagree - ask for clarification
-                        conflicting_intents = set(v.intent for v in ensemble_result.votes)
-                        if len(conflicting_intents) > 1:
-                            return AgentResponse(
-                                success=True,
-                                message=self._build_clarification_request(query, ensemble_result),
-                                response_type=ResponseType.QUESTION,
-                                task_type=task_type,
-                                data={"possible_intents": list(conflicting_intents)},
-                            )
+                    # Check if clarification needed (low confidence)
+                    if intent_result.needs_clarification:
+                        return AgentResponse(
+                            success=True,
+                            message=intent_result.clarification_prompt or "Could you please clarify your request?",
+                            response_type=ResponseType.QUESTION,
+                            task_type=task_type,
+                        )
                     
                     # Map intent to tool if confidence is reasonable
-                    if ensemble_result.confidence >= 0.35 and ensemble_result.intent in INTENT_TO_TOOL:
-                        detected_tool = INTENT_TO_TOOL[ensemble_result.intent]
+                    if intent_result.confidence >= 0.35 and intent_name in INTENT_TO_TOOL:
+                        detected_tool = INTENT_TO_TOOL[intent_name]
                         
-                        # Build params from ensemble slots
-                        hybrid_params = self._build_params_from_ensemble_result(ensemble_result, query)
+                        # Build params from slots
+                        hybrid_params = intent_result.slots.copy() if intent_result.slots else {}
                         detected_args = list(hybrid_params.values()) if hybrid_params else []
-                        logger.info(f"Mapped intent '{ensemble_result.intent}' to tool: {detected_tool}, params: {hybrid_params}")
+                        logger.info(f"Mapped intent '{intent_name}' to tool: {detected_tool}, params: {hybrid_params}")
                     
                     # Handle context-aware intents
-                    if ensemble_result.intent in ("CONTEXT_RECALL", "CONTEXT_METADATA"):
-                        return await self._handle_context_query(ensemble_result.intent, query, task_type)
+                    if intent_name in ("CONTEXT_RECALL", "CONTEXT_METADATA"):
+                        return await self._handle_context_query(intent_name, query, task_type)
                         
                 except Exception as e:
-                    span.add_event("ensemble_fallback", {"error": str(e)})
-                    logger.warning(f"EnsembleParser failed, falling back to HybridParser: {e}")
+                    span.add_event("intent_fallback", {"error": str(e)})
+                    logger.warning(f"IntentParser failed, falling back to HybridParser: {e}")
             
             # Fallback to legacy hybrid parser if ensemble didn't work
             if not detected_tool and self.query_parser:
@@ -857,19 +858,38 @@ class UnifiedAgent:
         # Add user turn to conversation context
         # Note: We pass entities=[] because BioEntity and Entity have different structures
         # The context still tracks the message and intent
+        detected_intent = None
+        if intent_result:
+            detected_intent = intent_result.primary_intent.name
+        elif parse_result:
+            detected_intent = parse_result.intent
+            
         self.context.add_turn(
             role="user",
             content=query,
             entities=[],  # BioEntity not compatible with Entity, store separately
-            intent=parse_result.intent if parse_result else None
+            intent=detected_intent
         )
         
         # Store extracted entities in context state for later use
         if extracted_entities:
-            self.context.update_state("last_entities", [
-                {"type": e.entity_type, "text": e.text, "canonical": e.canonical}
-                for e in extracted_entities
-            ])
+            # Handle both Entity (type, value) and BioEntity (entity_type, text) formats
+            entity_list = []
+            for e in extracted_entities:
+                entity_type = getattr(e, 'entity_type', None) or getattr(e, 'type', None)
+                entity_text = getattr(e, 'text', None) or getattr(e, 'value', None)
+                entity_canonical = getattr(e, 'canonical', entity_text)
+                if entity_type and entity_text:
+                    # Convert enum to string if needed
+                    if hasattr(entity_type, 'name'):
+                        entity_type = entity_type.name
+                    entity_list.append({
+                        "type": entity_type, 
+                        "text": entity_text, 
+                        "canonical": entity_canonical
+                    })
+            if entity_list:
+                self.context.update_state("last_entities", entity_list)
         
         # Fallback to regex-based detection if hybrid parsing didn't find a tool
         if not detected_tool:
@@ -1094,13 +1114,14 @@ class UnifiedAgent:
     
     def _build_params_from_ensemble_result(
         self,
-        ensemble_result: EnsembleParseResult,
+        ensemble_result,  # EnsembleParseResult or UnifiedParseResult
         original_query: str
     ) -> Dict[str, Any]:
         """
         Build tool parameters from ensemble parse result.
         
-        Similar to _build_params_from_parse_result but uses the unified ensemble format.
+        DEPRECATED: Now using intent_result.slots directly.
+        Kept for backward compatibility.
         """
         params = {}
         slots = ensemble_result.slots
@@ -1170,9 +1191,14 @@ class UnifiedAgent:
     def _build_clarification_request(
         self,
         query: str,
-        ensemble_result: EnsembleParseResult
+        ensemble_result  # EnsembleParseResult (deprecated)
     ) -> str:
-        """Build a clarification request when ensemble methods disagree."""
+        """
+        Build a clarification request when ensemble methods disagree.
+        
+        DEPRECATED: UnifiedIntentParser handles clarification via needs_clarification flag.
+        Kept for backward compatibility.
+        """
         conflicting_intents = {}
         for vote in ensemble_result.votes:
             if vote.intent not in conflicting_intents:
