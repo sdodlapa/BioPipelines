@@ -58,13 +58,39 @@ except Exception as e:
 # Chat Response Generator
 # ============================================================================
 
-def chat_response(message: str, history: List[Dict]) -> Generator[List[Dict], None, None]:
+# Session ID per web client (simplified - in production, use cookies/auth)
+_session_ids = {}
+
+
+def get_or_create_session(request: gr.Request = None) -> str:
+    """Get or create a session for the web client."""
+    if not bp:
+        return None
+    
+    # Use request client ID if available, otherwise default
+    client_id = "web_default"
+    if request and hasattr(request, 'client'):
+        client_id = f"web_{request.client.host}_{request.client.port}"
+    
+    if client_id not in _session_ids:
+        try:
+            _session_ids[client_id] = bp.create_session(client_id)
+        except Exception:
+            return None
+    
+    return _session_ids.get(client_id)
+
+
+def chat_response(message: str, history: List[Dict], request: gr.Request = None) -> Generator[List[Dict], None, None]:
     """
     Generate chat response using the BioPipelines facade with streaming.
+    
+    Supports session management for multi-turn conversations.
     
     Args:
         message: User's input message
         history: Chat history as list of dicts with "role" and "content"
+        request: Gradio request for session identification
     
     Yields:
         Updated history with assistant response (progressively)
@@ -80,6 +106,9 @@ def chat_response(message: str, history: List[Dict]) -> Generator[List[Dict], No
         ]
         return
     
+    # Get session for this client
+    session_id = get_or_create_session(request)
+    
     # Add user message to history first
     new_history = history + [
         {"role": "user", "content": message},
@@ -89,15 +118,15 @@ def chat_response(message: str, history: List[Dict]) -> Generator[List[Dict], No
     # Try streaming if available
     try:
         if hasattr(bp, 'chat_stream'):
-            # Use streaming chat
+            # Use streaming chat with session support
             full_response = ""
-            for chunk in bp.chat_stream(message, history=history):
+            for chunk in bp.chat_stream(message, history=history, session_id=session_id):
                 full_response += chunk
                 new_history[-1]["content"] = full_response
                 yield new_history
         else:
             # Fallback to non-streaming
-            response = bp.chat(message, history=history)
+            response = bp.chat(message, history=history, session_id=session_id)
             new_history[-1]["content"] = response.message
             yield new_history
     except Exception as e:

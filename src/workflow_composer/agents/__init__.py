@@ -82,10 +82,27 @@ from .orchestrator import (
     get_sync_orchestrator,
 )
 from .memory import (
+    # Core memory
     AgentMemory,
     MemoryEntry,
     SearchResult,
     EmbeddingModel,
+    get_memory,
+    remember,
+    recall,
+    # User profiles
+    UserProfile,
+    PersistentProfileStore,
+    PreferenceLearner,
+    get_profile_store,
+    get_preference_learner,
+    get_user_profile,
+    update_preferences,
+    # Sessions
+    Session,
+    Message,
+    SessionManager,
+    get_session_manager,
 )
 from .react_agent import (
     ReactAgent,
@@ -240,6 +257,22 @@ __all__ = [
     "MemoryEntry",
     "SearchResult",
     "EmbeddingModel",
+    "get_memory",
+    "remember",
+    "recall",
+    # User Profiles
+    "UserProfile",
+    "PersistentProfileStore",
+    "PreferenceLearner",
+    "get_profile_store",
+    "get_preference_learner",
+    "get_user_profile",
+    "update_preferences",
+    # Sessions
+    "Session",
+    "Message",
+    "SessionManager",
+    "get_session_manager",
     # ReAct Agent
     "ReactAgent",
     "SimpleAgent",

@@ -110,6 +110,9 @@ class ChatResponse:
     
     correlation_id: str = ""
     """Request correlation ID for tracking."""
+    
+    session_id: Optional[str] = None
+    """Session ID for multi-turn conversations."""
 
 
 class BioPipelines:
@@ -183,6 +186,7 @@ class BioPipelines:
         self._agent = None
         self._orchestrator = None
         self._cost_tracker = None
+        self._session_manager = None
         self._initialized = False
         
         logger.info(f"BioPipelines initialized (llm={llm_provider or 'default'})")
@@ -256,6 +260,25 @@ class BioPipelines:
             from .llm import CostTracker
             self._cost_tracker = CostTracker()
         return self._cost_tracker
+    
+    @property
+    def session_manager(self) -> "SessionManager":
+        """
+        Access the session manager for multi-turn conversations.
+        
+        Sessions provide:
+        - Conversation history persistence
+        - User preference learning
+        - Context injection (organism, analysis type)
+        
+        Example:
+            session = bp.session_manager.create_session("user_123")
+            response = bp.chat("RNA-seq analysis", session_id=session.session_id)
+        """
+        if self._session_manager is None:
+            from .agents.memory import SessionManager
+            self._session_manager = SessionManager()
+        return self._session_manager
     
     def health_check(self) -> Dict[str, Any]:
         """
@@ -361,6 +384,8 @@ class BioPipelines:
         self,
         message: str,
         history: Optional[List[Dict[str, str]]] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> ChatResponse:
         """
         Chat interface for natural language interaction.
@@ -371,55 +396,130 @@ class BioPipelines:
         - Getting help with errors
         - Exploring the tool catalog
         
+        Session Support:
+        - If session_id is provided, conversation is tracked
+        - User preferences are learned from interactions
+        - Context (organism, analysis type) is maintained
+        
         Args:
             message: User's message
-            history: Optional conversation history
+            history: Optional conversation history (for non-session use)
+            session_id: Optional session ID for multi-turn conversations
+            user_id: User ID for preference learning (defaults to "default")
             
         Returns:
-            ChatResponse with the assistant's reply
+            ChatResponse with the assistant's reply and session_id
             
         Example:
+            # Without session (stateless)
             response = bp.chat("What tools do I need for ChIP-seq analysis?")
-            print(response.message)
             
-            # Follow-up
-            response = bp.chat("Generate that workflow", history=...)
+            # With session (stateful)
+            session = bp.session_manager.create_session("user_123")
+            response = bp.chat("I work with mouse samples", 
+                               session_id=session.session_id)
+            # Context is maintained in follow-up
+            response = bp.chat("Run RNA-seq", session_id=session.session_id)
         """
         from .agents import UnifiedAgent
         
         agent = self.agent
+        user_id = user_id or "default"
+        
+        # Session management
+        session = None
+        if session_id:
+            session = self.session_manager.get_session(session_id)
+        
+        # If session requested but not found, create new one
+        if session_id and not session:
+            session = self.session_manager.create_session(user_id)
+        
+        # Add user message to session
+        if session:
+            self.session_manager.add_user_message(
+                session.session_id, 
+                message,
+                parsed_intent=None,  # Will be updated after parsing
+            )
+        
+        # Get session context for enhanced processing
+        context = {}
+        if session:
+            context = self.session_manager.get_session_context(session.session_id)
         
         # Process message
         result = agent.process_sync(message)
+        
+        # Add assistant response to session
+        if session:
+            self.session_manager.add_assistant_message(
+                session.session_id,
+                result.message,
+                workflow=result.workflow if hasattr(result, "workflow") else None,
+            )
         
         return ChatResponse(
             message=result.message,
             workflow=result.workflow if hasattr(result, "workflow") else None,
             tools_used=result.tools_used if hasattr(result, "tools_used") else [],
             suggestions=result.suggestions if hasattr(result, "suggestions") else [],
+            session_id=session.session_id if session else None,
         )
     
     def chat_stream(
         self,
         message: str,
         history: Optional[List[Dict[str, str]]] = None,
+        session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> Iterator[str]:
         """
         Streaming chat interface for real-time responses.
         
         Yields response chunks as they arrive from the LLM.
+        Supports session-based conversations for context persistence.
         
         Args:
             message: User's message
             history: Optional conversation history
+            session_id: Optional session ID for multi-turn conversations
+            user_id: User ID for preference learning (defaults to "default")
             
         Yields:
             String chunks of the assistant's response
             
         Example:
-            for chunk in bp.chat_stream("Explain RNA-seq"):
+            # Create a session
+            session = bp.session_manager.create_session("user_123")
+            
+            # Stream with session context
+            full_response = ""
+            for chunk in bp.chat_stream("Explain RNA-seq", 
+                                        session_id=session.session_id):
                 print(chunk, end="", flush=True)
+                full_response += chunk
         """
+        user_id = user_id or "default"
+        
+        # Session management
+        session = None
+        if session_id:
+            session = self.session_manager.get_session(session_id)
+            if not session:
+                session = self.session_manager.create_session(user_id)
+        
+        # Add user message to session
+        if session:
+            self.session_manager.add_user_message(session.session_id, message)
+        
+        # Get chat history for context
+        chat_history = []
+        if session:
+            chat_history = self.session_manager.get_chat_history(
+                session.session_id, limit=10
+            )
+        
         try:
             # Try to use provider router streaming
             from .providers import get_router
@@ -430,13 +530,31 @@ class BioPipelines:
 You help users create, manage, and run bioinformatics pipelines.
 Be helpful, concise, and technically accurate."""
             
+            # Add session context to system prompt
+            if session:
+                context = self.session_manager.get_session_context(session.session_id)
+                if context.get("context_summary"):
+                    system_prompt += f"\n\nUser context: {context['context_summary']}"
+            
+            # Collect full response for session storage
+            full_response = []
+            
             # Stream from the router
-            yield from router.stream(message, system_prompt=system_prompt)
+            for chunk in router.stream(message, system_prompt=system_prompt):
+                full_response.append(chunk)
+                yield chunk
+            
+            # Add assistant response to session
+            if session:
+                self.session_manager.add_assistant_message(
+                    session.session_id,
+                    "".join(full_response),
+                )
             
         except Exception as e:
             # Fallback to non-streaming
             logger.warning(f"Streaming failed, falling back: {e}")
-            response = self.chat(message, history)
+            response = self.chat(message, history, session_id, user_id)
             yield response.message
     
     def parse_intent(self, description: str) -> "ParsedIntent":
@@ -453,6 +571,65 @@ Be helpful, concise, and technically accurate."""
         """
         self._ensure_initialized()
         return self._composer.parse_intent(description)
+    
+    # =========================================================================
+    # Session Management API
+    # =========================================================================
+    
+    def create_session(self, user_id: str = "default") -> str:
+        """
+        Create a new chat session.
+        
+        Sessions enable:
+        - Multi-turn conversations with context
+        - User preference learning
+        - Conversation history persistence
+        
+        Args:
+            user_id: User identifier for preference tracking
+            
+        Returns:
+            Session ID to use in chat() calls
+            
+        Example:
+            session_id = bp.create_session("user_123")
+            response = bp.chat("I work with human samples", session_id=session_id)
+            # Context is now tracked
+            response = bp.chat("Run RNA-seq", session_id=session_id)
+        """
+        session = self.session_manager.create_session(user_id)
+        return session.session_id
+    
+    def end_session(self, session_id: str) -> None:
+        """
+        End a session and persist its history.
+        
+        Args:
+            session_id: Session to end
+        """
+        self.session_manager.end_session(session_id)
+    
+    def get_user_profile(self, user_id: str = "default") -> Dict[str, Any]:
+        """
+        Get a user's profile and preferences.
+        
+        Args:
+            user_id: User identifier
+            
+        Returns:
+            Dict with user preferences and history
+            
+        Example:
+            profile = bp.get_user_profile("user_123")
+            print(f"Preferred organism: {profile.get('preferred_organism')}")
+        """
+        from .agents.memory import get_profile_store
+        store = get_profile_store()
+        profile = store.load_profile(user_id)
+        
+        if profile:
+            return profile.to_dict()
+        return {"user_id": user_id, "message": "No profile found"}
     
     # =========================================================================
     # Core API - Data Discovery
