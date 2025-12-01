@@ -162,125 +162,247 @@ def scan_data_impl(
 
 def _build_folder_summary(scan_path: Path, samples: list, scan_result) -> str:
     """
-    Build a hierarchical folder summary instead of listing individual files.
-    
-    Groups samples by:
-    1. Top-level folders (data types like rna-seq, chip-seq, etc.)
-    2. Sub-folders (projects, experiments)
-    3. File type breakdown (paired/single-end, file formats)
+    Build an intelligent folder summary that:
+    1. Separates INPUT data from OUTPUT/work directories
+    2. Groups by data type (RNA-seq, ChIP-seq, etc.)
+    3. Shows meaningful folder names (skips hash directories)
+    4. Includes file sizes to distinguish real data from test files
     """
     from collections import defaultdict
+    import os
     
     if not samples:
-        # Still show folder structure even if no FASTQ found
         return _build_empty_folder_summary(scan_path)
     
-    # Group samples by their parent directories (relative to scan_path)
-    folder_stats = defaultdict(lambda: {
-        "paired": 0,
-        "single": 0,
-        "total_files": 0,
-        "subfolders": defaultdict(lambda: {"paired": 0, "single": 0, "files": 0}),
-        "sample_ids": []
+    # Categorize folders
+    input_folders = {}   # Actual input data (raw/, data/, etc.)
+    output_folders = {}  # Pipeline outputs (work/, results/, test_*)
+    
+    # Folders that are clearly pipeline outputs or temporary
+    output_patterns = ['work', 'results', 'output', 'tmp', 'temp', 'cache', 
+                       'nextflow', '.nextflow', 'test_', 'logs']
+    
+    # Group samples by folder with metadata
+    folder_data = defaultdict(lambda: {
+        "paired": 0, "single": 0, "total_size_bytes": 0,
+        "data_types": set(), "sample_ids": [], "subfolders": defaultdict(int)
     })
     
     for sample in samples:
-        # Get the relative path of the sample
         sample_path = Path(sample.fastq_1) if hasattr(sample, 'fastq_1') else None
         if not sample_path:
             continue
-            
+        
         try:
             rel_path = sample_path.relative_to(scan_path)
             parts = rel_path.parts
-            
-            # Top-level folder (or "." for root)
             top_folder = parts[0] if len(parts) > 1 else "."
             
-            # Subfolder (second level)
-            sub_folder = parts[1] if len(parts) > 2 else None
+            # Get file size
+            try:
+                file_size = sample_path.stat().st_size
+                if hasattr(sample, 'fastq_2') and sample.fastq_2:
+                    file_size += Path(sample.fastq_2).stat().st_size
+            except:
+                file_size = 0
             
-            # Determine if paired or single
+            # Determine paired/single
             is_paired = (hasattr(sample, 'is_paired') and sample.is_paired) or \
-                       (hasattr(sample, 'fastq_2') and sample.fastq_2) or \
-                       (hasattr(sample, 'library_layout') and 
-                        str(getattr(sample.library_layout, 'value', sample.library_layout)).lower() == 'paired')
+                       (hasattr(sample, 'fastq_2') and sample.fastq_2)
+            
+            # Detect data type from path or sample name
+            data_type = _infer_data_type_from_path(str(sample_path), sample.sample_id)
+            if data_type:
+                folder_data[top_folder]["data_types"].add(data_type)
             
             # Update stats
             if is_paired:
-                folder_stats[top_folder]["paired"] += 1
-                folder_stats[top_folder]["total_files"] += 2
+                folder_data[top_folder]["paired"] += 1
             else:
-                folder_stats[top_folder]["single"] += 1
-                folder_stats[top_folder]["total_files"] += 1
+                folder_data[top_folder]["single"] += 1
             
-            folder_stats[top_folder]["sample_ids"].append(sample.sample_id)
+            folder_data[top_folder]["total_size_bytes"] += file_size
+            folder_data[top_folder]["sample_ids"].append(sample.sample_id)
             
-            # Track subfolders
-            if sub_folder:
-                if is_paired:
-                    folder_stats[top_folder]["subfolders"][sub_folder]["paired"] += 1
-                    folder_stats[top_folder]["subfolders"][sub_folder]["files"] += 2
-                else:
-                    folder_stats[top_folder]["subfolders"][sub_folder]["single"] += 1
-                    folder_stats[top_folder]["subfolders"][sub_folder]["files"] += 1
+            # Track meaningful subfolders (skip hash-like names)
+            if len(parts) > 2:
+                sub = parts[1]
+                if not _is_hash_folder(sub):
+                    folder_data[top_folder]["subfolders"][sub] += 1
                     
         except ValueError:
-            # Path not relative to scan_path
             continue
     
-    # Build the message
+    # Categorize folders as input vs output
+    for folder, stats in folder_data.items():
+        is_output = any(p in folder.lower() for p in output_patterns)
+        # Also check if it's mostly small files (likely intermediate)
+        avg_size = stats["total_size_bytes"] / max(1, stats["paired"] + stats["single"])
+        is_small = avg_size < 1_000_000  # Less than 1MB average = likely not real FASTQ
+        
+        if is_output or (is_small and folder not in ['data', 'raw', '.']):
+            output_folders[folder] = stats
+        else:
+            input_folders[folder] = stats
+    
+    # Build output message
     lines = [f"📁 **Data Overview**: `{scan_path}`\n"]
     
-    total_samples = len(samples)
-    total_paired = sum(f["paired"] for f in folder_stats.values())
-    total_single = sum(f["single"] for f in folder_stats.values())
+    # Summary
+    total_input = sum(s["paired"] + s["single"] for s in input_folders.values())
+    total_output = sum(s["paired"] + s["single"] for s in output_folders.values())
+    total_size = sum(s["total_size_bytes"] for s in input_folders.values())
     
-    lines.append(f"**Summary**: {total_samples} samples ({total_paired} paired-end, {total_single} single-end)\n")
-    lines.append("---\n")
+    lines.append(f"**Input Data**: {total_input} samples ({_format_size(total_size)})")
+    if total_output > 0:
+        lines.append(f"**Pipeline Outputs**: {total_output} intermediate files (in work/results folders)")
+    lines.append("")
     
-    # Sort folders - put data type folders first, then alphabetically
-    priority_folders = ["rna-seq", "chip-seq", "atac-seq", "wgs", "wes", "methylation", 
-                       "hic", "scrna-seq", "raw", "processed", "references"]
-    
-    def folder_sort_key(name):
-        name_lower = name.lower()
-        for i, pf in enumerate(priority_folders):
-            if pf in name_lower:
-                return (0, i, name_lower)
-        return (1, 0, name_lower)
-    
-    sorted_folders = sorted(folder_stats.keys(), key=folder_sort_key)
-    
-    for folder in sorted_folders:
-        stats = folder_stats[folder]
+    # Show INPUT folders prominently
+    if input_folders:
+        lines.append("### 📥 Input Data")
+        lines.append("")
         
-        # Folder header with emoji based on inferred data type
-        emoji = _get_folder_emoji(folder)
-        folder_display = folder if folder != "." else "(root)"
-        
-        lines.append(f"\n{emoji} **{folder_display}/**")
-        lines.append(f"   {stats['paired'] + stats['single']} samples "
-                    f"({stats['paired']} paired, {stats['single']} single) • "
-                    f"{stats['total_files']} files")
-        
-        # Show subfolders if any (limit to top 5)
-        if stats["subfolders"]:
-            subfolder_items = sorted(stats["subfolders"].items(), 
-                                    key=lambda x: -(x[1]["paired"] + x[1]["single"]))
-            
-            for sub_name, sub_stats in subfolder_items[:5]:
-                sub_count = sub_stats["paired"] + sub_stats["single"]
-                lines.append(f"   └── `{sub_name}/`: {sub_count} samples")
-            
-            if len(subfolder_items) > 5:
-                lines.append(f"   └── ... and {len(subfolder_items) - 5} more subfolders")
+        for folder in sorted(input_folders.keys(), key=lambda f: -(input_folders[f]["paired"] + input_folders[f]["single"])):
+            stats = input_folders[folder]
+            _add_folder_section(lines, folder, stats, show_details=True)
     
-    # Add suggestions based on data types found
-    lines.append("\n---")
-    lines.append(_generate_data_suggestions(folder_stats, samples))
+    # Collect all data types
+    all_data_types = set()
+    for stats in folder_data.values():
+        all_data_types.update(stats["data_types"])
+    
+    # Show OUTPUT folders collapsed (just summary)
+    if output_folders:
+        lines.append("")
+        lines.append("### ⚙️ Pipeline Outputs (intermediate files)")
+        output_types = set()
+        for stats in output_folders.values():
+            output_types.update(stats["data_types"])
+        
+        if output_types:
+            lines.append(f"   Contains: {', '.join(sorted(output_types))} workflow outputs")
+        lines.append(f"   Location: `work/`, `results/`, `test_*/` folders")
+        lines.append(f"   *These are intermediate files, not input data*")
+    
+    # Suggestions
+    lines.append("")
+    lines.append("---")
+    lines.append(_generate_smart_suggestions(input_folders, all_data_types, total_input))
     
     return "\n".join(lines)
+
+
+def _infer_data_type_from_path(path: str, sample_id: str) -> str:
+    """Infer data type from file path or sample name."""
+    combined = (path + " " + sample_id).lower()
+    
+    # Check for explicit data type markers
+    type_patterns = [
+        (["rna-seq", "rnaseq", "rna_seq", "transcriptome"], "RNA-seq"),
+        (["chip-seq", "chipseq", "chip_seq", "h3k", "h3k4", "h3k27", "h3k9"], "ChIP-seq"),
+        (["atac-seq", "atacseq", "atac_seq", "atac"], "ATAC-seq"),
+        (["methyl", "bisulfite", "wgbs", "rrbs"], "Methylation"),
+        (["wgs", "whole-genome", "wholegenome"], "WGS"),
+        (["wes", "exome", "whole-exome"], "WES"),
+        (["hic", "hi-c"], "Hi-C"),
+        (["scrna", "single-cell", "singlecell", "10x"], "scRNA-seq"),
+        (["cut&run", "cutrun", "cut-run", "cut&tag", "cuttag"], "CUT&RUN"),
+    ]
+    
+    for patterns, dtype in type_patterns:
+        if any(p in combined for p in patterns):
+            return dtype
+    
+    return None
+
+
+def _is_hash_folder(name: str) -> bool:
+    """Check if folder name looks like a hash/UUID (not meaningful to display)."""
+    # Hash-like: all hex chars, 2 chars, long random strings
+    if len(name) <= 2 and all(c in '0123456789abcdef' for c in name.lower()):
+        return True
+    if len(name) >= 20 and all(c in '0123456789abcdef-_' for c in name.lower()):
+        return True
+    # Nextflow work directory pattern
+    if len(name) == 2:
+        return True
+    return False
+
+
+def _format_size(size_bytes: int) -> str:
+    """Format bytes to human readable."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024**2:
+        return f"{size_bytes/1024:.1f} KB"
+    elif size_bytes < 1024**3:
+        return f"{size_bytes/1024**2:.1f} MB"
+    else:
+        return f"{size_bytes/1024**3:.1f} GB"
+
+
+def _add_folder_section(lines: list, folder: str, stats: dict, show_details: bool = True):
+    """Add a folder section to the output."""
+    emoji = _get_folder_emoji(folder)
+    folder_display = folder if folder != "." else "(root)"
+    total_samples = stats["paired"] + stats["single"]
+    size_str = _format_size(stats["total_size_bytes"])
+    
+    # Data type tag
+    type_tag = ""
+    if stats["data_types"]:
+        type_tag = f" **[{', '.join(sorted(stats['data_types']))}]**"
+    
+    lines.append(f"{emoji} **{folder_display}/**{type_tag}")
+    lines.append(f"   {total_samples} samples ({stats['paired']} paired, {stats['single']} single) • {size_str}")
+    
+    if show_details and stats["subfolders"]:
+        # Show meaningful subfolders
+        sorted_subs = sorted(stats["subfolders"].items(), key=lambda x: -x[1])[:4]
+        for sub_name, count in sorted_subs:
+            lines.append(f"   └── `{sub_name}/`: {count} samples")
+        
+        remaining = len(stats["subfolders"]) - 4
+        if remaining > 0:
+            lines.append(f"   └── ... and {remaining} more")
+
+
+def _generate_smart_suggestions(input_folders: dict, data_types: set, total_input: int) -> str:
+    """Generate contextual suggestions based on data."""
+    suggestions = []
+    
+    if data_types:
+        type_list = ", ".join(sorted(data_types))
+        suggestions.append(f"📊 **Detected data types**: {type_list}")
+        
+        # Suggest workflows for each type
+        suggestions.append("")
+        suggestions.append("💡 **Suggested next steps:**")
+        
+        for dtype in sorted(data_types):
+            if dtype == "RNA-seq":
+                suggestions.append(f'   • *"Create an RNA-seq differential expression workflow"*')
+            elif dtype == "ChIP-seq":
+                suggestions.append(f'   • *"Create a ChIP-seq peak calling workflow"*')
+            elif dtype == "ATAC-seq":
+                suggestions.append(f'   • *"Create an ATAC-seq accessibility analysis"*')
+            elif dtype == "Methylation":
+                suggestions.append(f'   • *"Create a methylation analysis workflow"*')
+            elif dtype == "scRNA-seq":
+                suggestions.append(f'   • *"Create a single-cell RNA-seq clustering workflow"*')
+            else:
+                suggestions.append(f'   • *"Create a {dtype} analysis workflow"*')
+    elif total_input > 0:
+        suggestions.append(f"📊 **Found {total_input} samples** ready for analysis")
+        suggestions.append("")
+        suggestions.append("💡 **To determine data type:**")
+        suggestions.append('   • *"What type of sequencing data is in sample X?"*')
+        suggestions.append('   • *"Describe the samples in the raw folder"*')
+    else:
+        suggestions.append("⚠️ No input data found. Upload FASTQ files or specify a path.")
+    
+    return "\n".join(suggestions)
 
 
 def _build_empty_folder_summary(scan_path: Path) -> str:
@@ -352,43 +474,6 @@ def _get_folder_emoji(folder_name: str) -> str:
             return emoji
     
     return "📂"
-
-
-def _generate_data_suggestions(folder_stats: dict, samples: list) -> str:
-    """Generate suggestions based on discovered data."""
-    suggestions = []
-    
-    # Detect data types
-    data_types = set()
-    for folder in folder_stats.keys():
-        folder_lower = folder.lower()
-        if "rna" in folder_lower:
-            data_types.add("RNA-seq")
-        elif "chip" in folder_lower:
-            data_types.add("ChIP-seq")
-        elif "atac" in folder_lower:
-            data_types.add("ATAC-seq")
-        elif "wgs" in folder_lower or "wes" in folder_lower:
-            data_types.add("DNA-seq")
-        elif "methyl" in folder_lower:
-            data_types.add("Methylation")
-        elif "hic" in folder_lower:
-            data_types.add("Hi-C")
-        elif "scrna" in folder_lower or "single" in folder_lower:
-            data_types.add("scRNA-seq")
-    
-    if data_types:
-        type_list = ", ".join(sorted(data_types))
-        suggestions.append(f"📊 **Detected data types**: {type_list}")
-        suggestions.append(f"💡 Try: *\"Create a {list(data_types)[0]} workflow\"*")
-    else:
-        # Infer from sample count
-        total = len(samples)
-        if total > 0:
-            suggestions.append(f"💡 **Ready for analysis**: {total} samples available")
-            suggestions.append("   Try: *\"What workflows can I run with this data?\"*")
-    
-    return "\n".join(suggestions) if suggestions else "✅ Data scan complete. Ready for workflow generation!"
 
 
 # =============================================================================
