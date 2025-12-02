@@ -9,6 +9,8 @@ Specialist agents for coordinated workflow generation:
 - DocAgent: Generates documentation
 - QCAgent: Quality control validation
 - SupervisorAgent: Coordinates all specialists
+- ReferenceDiscoveryAgent: Discovers relevant code references (DeepCode-inspired)
+- CodebaseIndexer: Indexes existing codebases for intelligent reference (DeepCode-inspired)
 """
 
 from dataclasses import dataclass, field
@@ -51,6 +53,18 @@ from .validator import ValidatorAgent
 from .docs import DocAgent
 from .qc import QCAgent, QCMetric, QCReport
 from .supervisor import SupervisorAgent, WorkflowState
+from .reference_discovery import (
+    ReferenceDiscoveryAgent,
+    ReferenceSource,
+    CodeReference,
+    ReferenceSearchResult,
+)
+from .codebase_indexer import (
+    CodebaseIndexer,
+    CodebaseIndex,
+    CodeElement,
+    CodeElementType,
+)
 
 
 @dataclass
@@ -77,11 +91,20 @@ __all__ = [
     "WorkflowState",
     "QCMetric",
     "QCReport",
-    # Agents
+    # Core Agents
     "PlannerAgent",
     "CodeGenAgent",
     "ValidatorAgent",
     "DocAgent",
     "QCAgent",
     "SupervisorAgent",
+    # DeepCode-inspired Agents
+    "ReferenceDiscoveryAgent",
+    "ReferenceSource",
+    "CodeReference",
+    "ReferenceSearchResult",
+    "CodebaseIndexer",
+    "CodebaseIndex",
+    "CodeElement",
+    "CodeElementType",
 ]

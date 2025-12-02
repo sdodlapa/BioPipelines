@@ -1622,11 +1622,38 @@ class DegradationChain:
   - Token tracking
   - Optional concise memory for long workflows
 
-### Week 4: Testing & Documentation (NEXT)
-16. [ ] Integration tests for full workflow
-17. [ ] Update documentation
-18. [ ] Performance benchmarks
-19. [ ] Create migration guide for existing code
+### Week 4: Reference Discovery & Codebase Indexing ✅ COMPLETED
+16. [x] Implement `ReferenceDiscoveryAgent` for nf-core/modules discovery
+17. [x] Implement `CodebaseIndexer` for existing codebase indexing
+18. [x] Create `tests/test_reference_discovery.py` (18 tests)
+19. [x] Create `tests/test_codebase_indexer.py` (21 tests)
+20. [x] Update specialists `__init__.py` exports
+
+**New Components:**
+- **ReferenceDiscoveryAgent**: Discovers relevant code references from:
+  - nf-core/modules (17+ tools indexed)
+  - nf-core/pipelines (10+ analysis types)
+  - Local knowledge base
+  - GitHub repositories (optional, requires token)
+  - Includes module snippets for common tools
+
+- **CodebaseIndexer**: Indexes existing Nextflow codebases:
+  - Parses processes, workflows, channels, parameters
+  - Detects containers and tools automatically
+  - Builds relationship graphs between components
+  - Supports save/load for persistent indices
+  - Provides search and similarity matching
+
+**Test Results:**
+- 39 additional tests passing
+- 122+ total tests across DeepCode enhancements
+
+### Week 5: Integration & Documentation (NEXT)
+21. [ ] Integration tests for full workflow with reference discovery
+22. [ ] Integrate reference discovery into SupervisorAgent
+23. [ ] Update documentation
+24. [ ] Performance benchmarks
+25. [ ] Create migration guide for existing code
 
 ---
 
@@ -1638,6 +1665,8 @@ class DegradationChain:
 | LLM retry success rate | Unknown | > 80% |
 | Token usage efficiency | N/A | 70%+ reduction with ConciseMemory |
 | Error diagnosis accuracy | Pattern-only | Pattern + LLM + Guidance |
+| Reference discovery coverage | N/A | 90%+ common tools/pipelines |
+| Codebase indexing accuracy | N/A | 95%+ process detection |
 
 ---
 
