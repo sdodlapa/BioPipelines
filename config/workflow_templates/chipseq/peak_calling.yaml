@@ -1,0 +1,211 @@
+# ChIP-seq Peak Calling Template
+# ===============================
+
+name: chipseq_peak_calling
+display_name: "ChIP-seq Peak Calling Pipeline"
+version: "1.0.0"
+category: chipseq
+engine: nextflow
+
+description: |
+  ChIP-seq analysis pipeline for peak calling, annotation, and visualization.
+  Supports both narrow (TF) and broad (histone) peak calling with MACS2.
+  Includes IDR analysis for reproducibility.
+
+tags:
+  - chip-seq
+  - peak-calling
+  - macs2
+  - transcription-factor
+  - histone-modification
+
+inputs:
+  required:
+    - name: input_dir
+      type: path
+      description: Directory containing FASTQ files
+    
+    - name: organism
+      type: string
+      description: Reference organism
+      enum: [human, mouse, rat]
+    
+    - name: peak_type
+      type: string
+      description: Type of peaks to call
+      enum: [narrow, broad]
+  
+  optional:
+    - name: aligner
+      type: string
+      description: Alignment tool
+      default: bwa
+      enum: [bwa, bowtie2]
+    
+    - name: control_samples
+      type: list
+      description: Input/IgG control sample names
+      default: []
+    
+    - name: genome_build
+      type: string
+      default: auto
+    
+    - name: effective_genome_size
+      type: integer
+      description: Effective genome size for MACS2
+      default: auto
+    
+    - name: q_value
+      type: number
+      description: MACS2 q-value threshold
+      default: 0.05
+    
+    - name: run_idr
+      type: boolean
+      description: Run IDR on replicates
+      default: true
+    
+    - name: run_motif
+      type: boolean
+      description: Run motif analysis
+      default: false
+
+steps:
+  - name: fastqc
+    description: Quality control of raw reads
+    tool: fastqc
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      reports: "qc/fastqc/"
+
+  - name: trim_adapters
+    description: Adapter trimming
+    tool: trimmomatic
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      trimmed: "trimmed/*.fastq.gz"
+    params:
+      illuminaclip: "TruSeq3-SE:2:30:10"
+      minlen: 36
+
+  - name: align
+    description: Align reads to reference genome
+    tool: "${aligner}"
+    inputs:
+      reads: "trimmed/*.fastq.gz"
+      index: "${reference_dir}/${aligner}_index"
+    outputs:
+      bam: "aligned/*.bam"
+    params:
+      threads: 8
+
+  - name: filter_bam
+    description: Filter and remove duplicates
+    tool: samtools
+    inputs:
+      bam: "aligned/*.bam"
+    outputs:
+      filtered: "filtered/*.bam"
+    params:
+      quality: 30
+      remove_duplicates: true
+
+  - name: macs2_peaks
+    description: Call peaks with MACS2
+    tool: macs2
+    inputs:
+      treatment: "filtered/*.bam"
+      control: "${control_bams}"
+    outputs:
+      peaks: "peaks/macs2/"
+      bdg: "peaks/macs2/*.bdg"
+    params:
+      gsize: "${effective_genome_size}"
+      qvalue: "${q_value}"
+      broad: "${peak_type == 'broad'}"
+
+  - name: idr_analysis
+    description: Reproducibility analysis with IDR
+    tool: idr
+    inputs:
+      peaks: "peaks/macs2/*.narrowPeak"
+    outputs:
+      idr_peaks: "peaks/idr/"
+    condition: "run_idr == true"
+
+  - name: peak_annotation
+    description: Annotate peaks with ChIPseeker
+    tool: chipseeker
+    inputs:
+      peaks: "peaks/macs2/*.bed"
+      gtf: "${reference_dir}/annotation.gtf"
+    outputs:
+      annotated: "annotation/"
+      plots: "plots/annotation/"
+
+  - name: bigwig
+    description: Generate signal tracks
+    tool: deeptools
+    inputs:
+      bam: "filtered/*.bam"
+    outputs:
+      bigwig: "bigwig/*.bw"
+    params:
+      normalize: "RPKM"
+
+  - name: motif_analysis
+    description: De novo motif discovery
+    tool: homer
+    inputs:
+      peaks: "peaks/macs2/*.bed"
+      genome: "${reference_dir}/genome.fa"
+    outputs:
+      motifs: "motifs/"
+    condition: "run_motif == true"
+
+  - name: multiqc
+    description: Aggregate QC reports
+    tool: multiqc
+    inputs:
+      - "qc/"
+      - "aligned/"
+      - "peaks/"
+    outputs:
+      report: "qc/multiqc_report.html"
+
+outputs:
+  primary:
+    - name: peaks
+      path: "peaks/macs2/"
+      description: Called peaks (narrowPeak/broadPeak)
+    - name: qc_report
+      path: "qc/multiqc_report.html"
+  
+  secondary:
+    - name: bigwig
+      path: "bigwig/"
+    - name: annotation
+      path: "annotation/"
+    - name: idr_peaks
+      path: "peaks/idr/"
+    - name: motifs
+      path: "motifs/"
+
+resources:
+  default:
+    cpus: 4
+    memory: "16 GB"
+    time: "12h"
+  
+  align:
+    cpus: 8
+    memory: "32 GB"
+    time: "8h"
+  
+  macs2_peaks:
+    cpus: 4
+    memory: "16 GB"
+    time: "4h"

@@ -1,0 +1,235 @@
+# Germline Variant Calling Template
+# ==================================
+
+name: germline_variant_calling
+display_name: "Germline Variant Calling Pipeline"
+version: "1.0.0"
+category: variant
+engine: nextflow
+
+description: |
+  GATK best practices pipeline for germline variant calling from
+  whole genome or whole exome sequencing data. Includes alignment,
+  BQSR, variant calling, and filtering.
+
+tags:
+  - variant-calling
+  - wgs
+  - wes
+  - gatk
+  - germline
+  - snp
+  - indel
+
+inputs:
+  required:
+    - name: input_dir
+      type: path
+      description: Directory containing FASTQ files
+    
+    - name: organism
+      type: string
+      description: Reference organism
+      enum: [human, mouse]
+  
+  optional:
+    - name: seq_type
+      type: string
+      description: Sequencing type
+      default: WGS
+      enum: [WGS, WES]
+    
+    - name: genome_build
+      type: string
+      default: GRCh38
+      enum: [GRCh38, GRCh37, GRCm39]
+    
+    - name: intervals
+      type: file
+      description: Target intervals for WES
+      default: null
+    
+    - name: known_sites
+      type: list
+      description: Known variant sites for BQSR
+      default: [dbsnp, mills, 1000g]
+    
+    - name: caller
+      type: string
+      description: Variant caller
+      default: gatk
+      enum: [gatk, deepvariant, freebayes]
+    
+    - name: joint_calling
+      type: boolean
+      description: Use joint calling for multiple samples
+      default: true
+    
+    - name: vqsr
+      type: boolean
+      description: Apply VQSR filtering
+      default: true
+
+steps:
+  - name: fastqc
+    description: Quality control
+    tool: fastqc
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      reports: "qc/fastqc/"
+
+  - name: trim_adapters
+    description: Adapter trimming
+    tool: fastp
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      trimmed: "trimmed/*.fastq.gz"
+
+  - name: bwa_align
+    description: Align reads with BWA-MEM2
+    tool: bwa-mem2
+    inputs:
+      reads: "trimmed/*.fastq.gz"
+      reference: "${reference_dir}/genome.fa"
+    outputs:
+      bam: "aligned/*.bam"
+    params:
+      threads: 16
+
+  - name: mark_duplicates
+    description: Mark PCR duplicates
+    tool: gatk_markduplicates
+    inputs:
+      bam: "aligned/*.bam"
+    outputs:
+      marked_bam: "dedup/*.bam"
+      metrics: "qc/dup_metrics/"
+
+  - name: bqsr
+    description: Base quality score recalibration
+    tool: gatk_bqsr
+    inputs:
+      bam: "dedup/*.bam"
+      reference: "${reference_dir}/genome.fa"
+      known_sites: "${known_sites_vcfs}"
+    outputs:
+      recal_bam: "bqsr/*.bam"
+      recal_table: "bqsr/*.table"
+
+  - name: haplotypecaller
+    description: Call variants with HaplotypeCaller
+    tool: gatk_haplotypecaller
+    inputs:
+      bam: "bqsr/*.bam"
+      reference: "${reference_dir}/genome.fa"
+      intervals: "${intervals}"
+    outputs:
+      gvcf: "gvcf/*.g.vcf.gz"
+    params:
+      emit_ref_confidence: "GVCF"
+
+  - name: joint_genotyping
+    description: Joint genotyping across samples
+    tool: gatk_genotypegvcfs
+    inputs:
+      gvcfs: "gvcf/*.g.vcf.gz"
+      reference: "${reference_dir}/genome.fa"
+    outputs:
+      vcf: "vcf/joint_called.vcf.gz"
+    condition: "joint_calling == true"
+
+  - name: vqsr_snp
+    description: VQSR for SNPs
+    tool: gatk_vqsr
+    inputs:
+      vcf: "vcf/joint_called.vcf.gz"
+      resources: "${vqsr_resources}"
+    outputs:
+      filtered_vcf: "vcf/filtered_snps.vcf.gz"
+    params:
+      mode: "SNP"
+    condition: "vqsr == true"
+
+  - name: vqsr_indel
+    description: VQSR for INDELs
+    tool: gatk_vqsr
+    inputs:
+      vcf: "vcf/filtered_snps.vcf.gz"
+      resources: "${vqsr_resources}"
+    outputs:
+      filtered_vcf: "vcf/filtered.vcf.gz"
+    params:
+      mode: "INDEL"
+    condition: "vqsr == true"
+
+  - name: hard_filter
+    description: Hard filtering (if VQSR disabled)
+    tool: gatk_variantfiltration
+    inputs:
+      vcf: "vcf/joint_called.vcf.gz"
+    outputs:
+      filtered_vcf: "vcf/filtered.vcf.gz"
+    params:
+      snp_filter: "QD < 2.0 || MQ < 40.0 || FS > 60.0"
+      indel_filter: "QD < 2.0 || FS > 200.0"
+    condition: "vqsr == false"
+
+  - name: annotation
+    description: Variant annotation with VEP
+    tool: ensembl_vep
+    inputs:
+      vcf: "vcf/filtered.vcf.gz"
+      cache: "${vep_cache}"
+    outputs:
+      annotated: "annotation/annotated.vcf.gz"
+      summary: "annotation/summary.html"
+
+  - name: multiqc
+    description: Aggregate QC
+    tool: multiqc
+    inputs:
+      - "qc/"
+      - "aligned/"
+      - "vcf/"
+    outputs:
+      report: "qc/multiqc_report.html"
+
+outputs:
+  primary:
+    - name: variants
+      path: "vcf/filtered.vcf.gz"
+      description: Filtered variant calls
+    - name: annotated_variants
+      path: "annotation/annotated.vcf.gz"
+      description: Annotated variants
+  
+  secondary:
+    - name: qc_report
+      path: "qc/multiqc_report.html"
+    - name: gvcfs
+      path: "gvcf/"
+    - name: bams
+      path: "bqsr/"
+
+resources:
+  default:
+    cpus: 8
+    memory: "32 GB"
+    time: "24h"
+  
+  bwa_align:
+    cpus: 16
+    memory: "64 GB"
+    time: "12h"
+  
+  haplotypecaller:
+    cpus: 4
+    memory: "32 GB"
+    time: "24h"
+  
+  joint_genotyping:
+    cpus: 8
+    memory: "64 GB"
+    time: "48h"

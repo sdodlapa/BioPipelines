@@ -1,0 +1,232 @@
+# Full RNA-seq Analysis Pipeline Template
+# =======================================
+
+name: rnaseq_full_analysis
+display_name: "Complete RNA-seq Analysis Pipeline"
+version: "1.0.0"
+category: rnaseq
+engine: nextflow
+
+description: |
+  Comprehensive RNA-seq analysis including QC, alignment, quantification,
+  differential expression, gene set enrichment, and visualization.
+  Supports multiple DE tools and pathway analysis.
+
+tags:
+  - rna-seq
+  - differential-expression
+  - pathway-analysis
+  - comprehensive
+  - publication-ready
+
+inputs:
+  required:
+    - name: input_dir
+      type: path
+      description: Directory containing FASTQ files
+    
+    - name: sample_sheet
+      type: file
+      description: CSV with sample metadata (sample_id, condition, replicate)
+    
+    - name: organism
+      type: string
+      description: Reference organism
+      enum: [human, mouse, rat, zebrafish]
+    
+    - name: comparisons
+      type: list
+      description: Condition comparisons for DE analysis
+  
+  optional:
+    - name: aligner
+      type: string
+      description: Alignment tool
+      default: STAR
+      enum: [STAR, hisat2, salmon]
+    
+    - name: quantifier
+      type: string
+      description: Quantification method
+      default: featurecounts
+      enum: [featurecounts, salmon, kallisto, rsem]
+    
+    - name: de_tool
+      type: string
+      description: DE analysis tool
+      default: DESeq2
+      enum: [DESeq2, edgeR, limma]
+    
+    - name: strandedness
+      type: string
+      description: Library strandedness
+      default: auto
+      enum: [auto, unstranded, forward, reverse]
+    
+    - name: run_gsea
+      type: boolean
+      description: Run gene set enrichment
+      default: true
+    
+    - name: gsea_databases
+      type: list
+      description: GSEA databases to use
+      default: [GO_BP, KEGG, Reactome]
+    
+    - name: fdr_threshold
+      type: number
+      default: 0.05
+    
+    - name: lfc_threshold
+      type: number
+      default: 1.0
+
+steps:
+  - name: fastqc_raw
+    description: Initial quality control
+    tool: fastqc
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      reports: "qc/fastqc_raw/"
+
+  - name: fastp_trim
+    description: Adapter trimming and quality filtering
+    tool: fastp
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      trimmed: "trimmed/*.fastq.gz"
+      json: "qc/fastp/*.json"
+      html: "qc/fastp/*.html"
+
+  - name: fastqc_trimmed
+    description: Post-trimming QC
+    tool: fastqc
+    inputs:
+      reads: "trimmed/*.fastq.gz"
+    outputs:
+      reports: "qc/fastqc_trimmed/"
+
+  - name: align
+    description: Read alignment
+    tool: "${aligner}"
+    inputs:
+      reads: "trimmed/*.fastq.gz"
+      index: "${reference_dir}/${aligner}_index"
+    outputs:
+      bam: "aligned/*.bam"
+      logs: "logs/alignment/"
+    condition: "aligner != 'salmon'"
+
+  - name: salmon_quant
+    description: Salmon pseudo-alignment and quantification
+    tool: salmon
+    inputs:
+      reads: "trimmed/*.fastq.gz"
+      index: "${reference_dir}/salmon_index"
+    outputs:
+      quant: "salmon/*/"
+    condition: "aligner == 'salmon'"
+
+  - name: samtools_stats
+    description: Alignment statistics
+    tool: samtools
+    inputs:
+      bam: "aligned/*.bam"
+    outputs:
+      stats: "qc/samtools/*.stats"
+    condition: "aligner != 'salmon'"
+
+  - name: quantify
+    description: Gene-level quantification
+    tool: "${quantifier}"
+    inputs:
+      bam: "aligned/*.bam"
+      gtf: "${reference_dir}/annotation.gtf"
+    outputs:
+      counts: "counts/gene_counts.txt"
+    condition: "quantifier != 'salmon'"
+
+  - name: multiqc
+    description: Aggregate all QC metrics
+    tool: multiqc
+    inputs:
+      - "qc/"
+      - "aligned/"
+      - "counts/"
+    outputs:
+      report: "qc/multiqc_report.html"
+
+  - name: differential_expression
+    description: Differential expression analysis
+    tool: "${de_tool}"
+    inputs:
+      counts: "counts/gene_counts.txt"
+      sample_sheet: "${sample_sheet}"
+      comparisons: "${comparisons}"
+    outputs:
+      results: "de/${de_tool}/results/"
+      normalized: "de/${de_tool}/normalized_counts.csv"
+      plots: "de/${de_tool}/plots/"
+    params:
+      fdr: "${fdr_threshold}"
+      lfc: "${lfc_threshold}"
+
+  - name: gsea_analysis
+    description: Gene set enrichment analysis
+    tool: fgsea
+    inputs:
+      de_results: "de/${de_tool}/results/"
+      gene_sets: "${gsea_databases}"
+    outputs:
+      enrichment: "gsea/results/"
+      plots: "gsea/plots/"
+    condition: "run_gsea == true"
+
+  - name: visualization
+    description: Generate publication-ready plots
+    tool: custom_plotting
+    inputs:
+      de_results: "de/${de_tool}/results/"
+      normalized_counts: "de/${de_tool}/normalized_counts.csv"
+    outputs:
+      volcano: "plots/volcano/"
+      heatmaps: "plots/heatmaps/"
+      pca: "plots/pca.pdf"
+
+outputs:
+  primary:
+    - name: de_results
+      path: "de/${de_tool}/results/"
+      description: Differential expression results
+    - name: qc_report
+      path: "qc/multiqc_report.html"
+      description: QC summary
+    - name: gsea_results
+      path: "gsea/results/"
+      description: Enrichment analysis
+  
+  secondary:
+    - name: normalized_counts
+      path: "de/${de_tool}/normalized_counts.csv"
+    - name: plots
+      path: "plots/"
+    - name: aligned_bams
+      path: "aligned/*.bam"
+
+resources:
+  default:
+    cpus: 8
+    memory: "32 GB"
+    time: "24h"
+  
+  align:
+    cpus: 16
+    memory: "64 GB"
+    time: "12h"
+  
+  salmon_quant:
+    cpus: 8
+    memory: "32 GB"
+    time: "4h"

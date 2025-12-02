@@ -1,0 +1,161 @@
+# Basic RNA-seq Differential Expression Template
+# =============================================
+
+name: rnaseq_basic_de
+display_name: "Basic RNA-seq Differential Expression"
+version: "1.0.0"
+category: rnaseq
+engine: nextflow
+
+description: |
+  End-to-end RNA-seq analysis from raw FASTQ files to differential
+  expression results. Includes QC, alignment with STAR, quantification,
+  and DESeq2-based differential expression analysis.
+
+tags:
+  - rna-seq
+  - differential-expression
+  - deseq2
+  - star
+  - quick-start
+
+inputs:
+  required:
+    - name: input_dir
+      type: path
+      description: Directory containing FASTQ files (paired-end expected)
+    
+    - name: organism
+      type: string
+      description: Reference organism
+      enum: [human, mouse, rat, zebrafish]
+    
+    - name: comparisons
+      type: string
+      description: Comparison specification (e.g., "treated_vs_control")
+  
+  optional:
+    - name: genome_build
+      type: string
+      description: Genome assembly version
+      default: auto
+      enum: [auto, GRCh38, GRCh37, GRCm39, GRCm38]
+    
+    - name: strandedness
+      type: string
+      description: Library strandedness
+      default: auto
+      enum: [auto, unstranded, forward, reverse]
+    
+    - name: min_reads
+      type: integer
+      description: Minimum reads per sample
+      default: 1000000
+    
+    - name: fdr_threshold
+      type: number
+      description: FDR threshold for significance
+      default: 0.05
+    
+    - name: lfc_threshold
+      type: number
+      description: Log2 fold change threshold
+      default: 1.0
+
+steps:
+  - name: fastqc_raw
+    description: Quality control of raw reads
+    tool: fastqc
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      reports: "qc/fastqc_raw/"
+    params:
+      threads: 4
+
+  - name: trim_reads
+    description: Adapter trimming with fastp
+    tool: fastp
+    inputs:
+      reads: "${input_dir}/*.fastq.gz"
+    outputs:
+      trimmed: "trimmed/*.fastq.gz"
+      report: "qc/fastp/"
+    params:
+      qualified_quality_phred: 20
+      length_required: 36
+
+  - name: star_align
+    description: Alignment with STAR
+    tool: star
+    inputs:
+      reads: "trimmed/*.fastq.gz"
+      index: "${reference_dir}/star_index"
+    outputs:
+      bam: "aligned/*.bam"
+      logs: "logs/star/"
+    params:
+      outSAMtype: "BAM SortedByCoordinate"
+      outSAMunmapped: "Within"
+
+  - name: featurecounts
+    description: Gene-level quantification
+    tool: featurecounts
+    inputs:
+      bam: "aligned/*.bam"
+      gtf: "${reference_dir}/annotation.gtf"
+    outputs:
+      counts: "counts/gene_counts.txt"
+    params:
+      feature_type: "exon"
+      attribute: "gene_id"
+
+  - name: multiqc
+    description: Aggregate QC reports
+    tool: multiqc
+    inputs:
+      - "qc/"
+      - "aligned/"
+      - "counts/"
+    outputs:
+      report: "qc/multiqc_report.html"
+
+  - name: deseq2
+    description: Differential expression analysis
+    tool: deseq2
+    inputs:
+      counts: "counts/gene_counts.txt"
+      sample_sheet: "${sample_sheet}"
+    outputs:
+      results: "deseq2/results.csv"
+      normalized: "deseq2/normalized_counts.csv"
+      plots: "deseq2/plots/"
+    params:
+      fdr: "${fdr_threshold}"
+      lfc: "${lfc_threshold}"
+
+outputs:
+  primary:
+    - name: de_results
+      path: "deseq2/results.csv"
+      description: Differential expression results
+    - name: qc_report
+      path: "qc/multiqc_report.html"
+      description: Aggregated QC report
+  
+  secondary:
+    - name: normalized_counts
+      path: "deseq2/normalized_counts.csv"
+    - name: aligned_bams
+      path: "aligned/*.bam"
+
+resources:
+  default:
+    cpus: 8
+    memory: "32 GB"
+    time: "24h"
+  
+  star_align:
+    cpus: 16
+    memory: "64 GB"
+    time: "8h"
