@@ -1,0 +1,262 @@
+# BioPipelines Skill Documentation
+# Tool: Trimmomatic
+# ===========================================
+
+name: "trimmomatic"
+display_name: "Trimmomatic"
+version: "1.0.0"
+category: "quality_control"
+subcategory: "read_trimming"
+
+description: |
+  Trimmomatic is a flexible read trimming tool for Illumina NGS data. It can trim 
+  adapters, remove low-quality bases, and filter reads by length. Essential for 
+  preparing raw sequencing data for downstream analysis.
+
+capabilities:
+  - "Remove adapter sequences from reads"
+  - "Trim low-quality bases from read ends"
+  - "Apply sliding window quality filtering"
+  - "Filter reads by minimum length"
+  - "Handle both single-end and paired-end data"
+  - "Process gzipped files directly"
+  - "Support custom adapter sequences"
+  - "Perform leading and trailing base trimming"
+
+aliases:
+  - "trim"
+  - "trimmer"
+  - "read_trimming"
+  - "adapter_removal"
+  - "quality_trimming"
+
+trigger_phrases:
+  - "trim my reads"
+  - "remove adapters from fastq"
+  - "quality trim my data"
+  - "trim low quality bases"
+  - "clean up my sequencing reads"
+  - "remove adapter contamination"
+  - "prepare reads for alignment"
+  - "trim illumina adapters"
+  - "process raw reads"
+  - "filter low quality reads"
+  - "trimmomatic analysis"
+  - "sliding window trimming"
+
+examples:
+  - query: "Trim adapters from my paired-end RNA-seq data"
+    expected_behavior: "Runs Trimmomatic in PE mode with standard TruSeq adapters"
+    parameters:
+      input_r1: "sample_R1.fastq.gz"
+      input_r2: "sample_R2.fastq.gz"
+      mode: "PE"
+      adapters: "TruSeq3-PE"
+      
+  - query: "Remove low quality bases from my reads"
+    expected_behavior: "Applies sliding window trimming with default quality threshold"
+    parameters:
+      input_files: ["reads.fastq.gz"]
+      sliding_window: "4:20"
+      
+  - query: "Clean up my sequencing data before alignment"
+    expected_behavior: "Full preprocessing: adapter removal, quality trimming, length filter"
+    parameters:
+      input_r1: "sample_R1.fastq.gz"
+      input_r2: "sample_R2.fastq.gz"
+      adapters: "TruSeq3-PE"
+      sliding_window: "4:20"
+      minlen: 36
+
+parameters:
+  - name: "input_r1"
+    type: "file_path"
+    required: true
+    description: "Input FASTQ file (or R1 for paired-end)"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "input_r2"
+    type: "file_path"
+    required: false
+    description: "Input R2 FASTQ file for paired-end mode"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "output_dir"
+    type: "directory_path"
+    required: false
+    default: "./trimmed"
+    description: "Directory for output files"
+    
+  - name: "mode"
+    type: "enum"
+    required: false
+    default: "PE"
+    values: ["SE", "PE"]
+    description: "Single-end (SE) or paired-end (PE) mode"
+    
+  - name: "threads"
+    type: "integer"
+    required: false
+    default: 4
+    min: 1
+    max: 64
+    description: "Number of threads to use"
+    
+  - name: "adapters"
+    type: "enum"
+    required: false
+    default: "TruSeq3-PE"
+    values: ["TruSeq2-PE", "TruSeq2-SE", "TruSeq3-PE", "TruSeq3-PE-2", "TruSeq3-SE", "NexteraPE-PE", "custom"]
+    description: "Adapter sequences to remove"
+    
+  - name: "custom_adapters"
+    type: "file_path"
+    required: false
+    description: "Custom adapter FASTA file (when adapters='custom')"
+    
+  - name: "illuminaclip"
+    type: "string"
+    required: false
+    default: "2:30:10"
+    description: "ILLUMINACLIP parameters: seed_mismatches:palindrome_threshold:simple_threshold"
+    
+  - name: "leading"
+    type: "integer"
+    required: false
+    default: 3
+    min: 0
+    max: 42
+    description: "Minimum quality to keep leading bases"
+    
+  - name: "trailing"
+    type: "integer"
+    required: false
+    default: 3
+    min: 0
+    max: 42
+    description: "Minimum quality to keep trailing bases"
+    
+  - name: "sliding_window"
+    type: "string"
+    required: false
+    default: "4:20"
+    description: "Sliding window trimming: window_size:required_quality"
+    
+  - name: "minlen"
+    type: "integer"
+    required: false
+    default: 36
+    min: 1
+    description: "Minimum read length after trimming"
+    
+  - name: "avgqual"
+    type: "integer"
+    required: false
+    min: 0
+    max: 42
+    description: "Minimum average quality for entire read"
+
+outputs:
+  - name: "paired_r1"
+    type: "file"
+    format: "fastq.gz"
+    description: "Trimmed R1 reads that retained their pair (PE mode)"
+    
+  - name: "paired_r2"
+    type: "file"
+    format: "fastq.gz"
+    description: "Trimmed R2 reads that retained their pair (PE mode)"
+    
+  - name: "unpaired_r1"
+    type: "file"
+    format: "fastq.gz"
+    description: "Trimmed R1 reads that lost their pair (PE mode)"
+    
+  - name: "unpaired_r2"
+    type: "file"
+    format: "fastq.gz"
+    description: "Trimmed R2 reads that lost their pair (PE mode)"
+    
+  - name: "trimlog"
+    type: "file"
+    format: "txt"
+    description: "Log of trimming operations per read"
+    
+  - name: "summary"
+    type: "file"
+    format: "txt"
+    description: "Summary statistics of trimming results"
+
+related_skills:
+  - name: "fastqc"
+    relationship: "precedes"
+    description: "Run FastQC before trimming to determine parameters"
+    
+  - name: "fastp"
+    relationship: "alternative"
+    description: "Alternative that combines QC and trimming"
+    
+  - name: "cutadapt"
+    relationship: "alternative"
+    description: "Alternative for adapter removal"
+    
+  - name: "bwa"
+    relationship: "follows"
+    description: "Align trimmed reads"
+    
+  - name: "star"
+    relationship: "follows"
+    description: "Align trimmed RNA-seq reads"
+
+prerequisites:
+  tools:
+    - name: "java"
+      version: ">=8"
+      optional: false
+      purpose: "Runtime environment"
+      
+  memory: "~1GB base + reads in memory"
+  disk_space: "~same as input files"
+
+limitations:
+  - "Does not generate QC reports (use FastQC after)"
+  - "Order of trimming steps affects final output"
+  - "Custom adapters require FASTA format"
+  - "Cannot trim by specific positions (use cutadapt for that)"
+  - "No automatic adapter detection"
+
+best_practices:
+  - "Run FastQC before trimming to identify issues"
+  - "Run FastQC after trimming to verify improvement"
+  - "Use appropriate adapter files for your library prep kit"
+  - "Keep minlen >= seed length for your aligner"
+  - "For RNA-seq, consider keeping shorter reads (minlen=25)"
+  - "Save trimlog for troubleshooting if needed"
+  - "Use paired output files for downstream PE analysis"
+
+interpretation:
+  success_criteria:
+    reads_surviving: ">= 80% of input reads"
+    avg_length_after: "Close to original average - trimmed amount"
+    
+  common_issues:
+    - symptom: "Very few reads surviving"
+      cause: "Trimming parameters too stringent"
+      solution: "Reduce quality thresholds or minlen"
+      
+    - symptom: "Still seeing adapters after trimming"
+      cause: "Wrong adapter file selected"
+      solution: "Check library prep kit and use correct adapter file"
+
+references:
+  documentation: "http://www.usadellab.org/cms/?page=trimmomatic"
+  publication: "https://doi.org/10.1093/bioinformatics/btu170"
+  source_code: "https://github.com/usadellab/Trimmomatic"
+  citation: "Bolger AM, et al. (2014) Trimmomatic: a flexible trimmer for Illumina sequence data. Bioinformatics."
+
+metadata:
+  container: "biocontainers/trimmomatic:0.39--hdfd78af_2"
+  nextflow_module: "nf-core/trimmomatic"
+  bioconda_package: "trimmomatic"
+  typical_runtime: "5-30 minutes depending on file size"
+  scalability: "Linear with file size, parallelizable"

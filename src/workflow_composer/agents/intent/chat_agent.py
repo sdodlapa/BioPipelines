@@ -99,6 +99,15 @@ from .out_of_scope import (
     reset_out_of_scope_handler,
 )
 
+# Skill Documentation System (Claude Scientific Skills Integration)
+from .skill_loader import (
+    SkillLoader,
+    SkillMatch,
+    get_skill_loader,
+    reset_skill_loader,
+    find_skills,
+)
+
 # Import UnifiedAgent for tool execution
 # Late import to avoid circular dependency - done in _initialize_unified_agent
 
@@ -134,6 +143,7 @@ class AgentCapability(Enum):
     RICH_RESPONSES = "rich_responses"
     SCOPE_DETECTION = "scope_detection"
     SESSION_MEMORY = "session_memory"
+    SKILL_SUGGESTIONS = "skill_suggestions"  # Claude Scientific Skills integration
 
 
 # =============================================================================
@@ -532,6 +542,7 @@ class ChatAgent:
         self._ab_testing: Optional[ABTestingManager] = None
         self._message_formatter: Optional[MessageFormatter] = None
         self._scope_handler: Optional[OutOfScopeHandler] = None
+        self._skill_loader: Optional[SkillLoader] = None
         
         # UnifiedAgent for tool execution (lazy initialized)
         self._unified_agent = None
@@ -545,6 +556,7 @@ class ChatAgent:
             "handoffs_initiated": 0,
             "out_of_scope_queries": 0,
             "tools_executed": 0,
+            "skill_suggestions_made": 0,
         }
         
         self._lock = threading.Lock()
@@ -574,6 +586,10 @@ class ChatAgent:
         if self.config.is_enabled(AgentCapability.SCOPE_DETECTION):
             reset_out_of_scope_handler()
             self._scope_handler = get_out_of_scope_handler()
+        
+        if self.config.is_enabled(AgentCapability.SKILL_SUGGESTIONS):
+            reset_skill_loader()
+            self._skill_loader = get_skill_loader()
         
         # Always create response generator
         self._response_generator = create_response_generator()
@@ -634,6 +650,83 @@ class ChatAgent:
         except Exception as e:
             logger.error(f"Sync UnifiedAgent execution error: {e}")
             return None
+    
+    # =========================================================================
+    # Skill-Based Tool Suggestions (Claude Scientific Skills Integration)
+    # =========================================================================
+    
+    def get_skill_suggestions(self, query: str, limit: int = 3) -> List[SkillMatch]:
+        """
+        Get skill suggestions based on user query.
+        
+        Uses the skill documentation system to find relevant tools.
+        
+        Args:
+            query: User's natural language query
+            limit: Maximum number of suggestions
+            
+        Returns:
+            List of SkillMatch objects with matching skills
+        """
+        if not self._skill_loader:
+            return []
+        
+        try:
+            matches = self._skill_loader.find_skills_for_query(query, limit=limit)
+            with self._lock:
+                self._stats["skill_suggestions_made"] += len(matches)
+            return matches
+        except Exception as e:
+            logger.error(f"Error getting skill suggestions: {e}")
+            return []
+    
+    def get_skill_help(self, skill_name: str) -> Optional[str]:
+        """
+        Get detailed help for a specific skill/tool.
+        
+        Args:
+            skill_name: Name of the skill (e.g., "fastqc", "star")
+            
+        Returns:
+            Formatted help text or None if skill not found
+        """
+        if not self._skill_loader:
+            return None
+        
+        return self._skill_loader.get_skill_help(skill_name)
+    
+    def suggest_workflow_from_skill(self, skill_name: str) -> List[Dict[str, Any]]:
+        """
+        Suggest a workflow based on a skill's relationships.
+        
+        Args:
+            skill_name: Starting skill name
+            
+        Returns:
+            List of workflow steps with before/main/after relationships
+        """
+        if not self._skill_loader:
+            return []
+        
+        return self._skill_loader.suggest_workflow(skill_name)
+    
+    def _format_skill_suggestions(self, matches: List[SkillMatch]) -> str:
+        """Format skill matches into a user-friendly message."""
+        if not matches:
+            return ""
+        
+        lines = ["\n**Suggested Tools:**"]
+        for match in matches[:3]:
+            # Get skill for full info
+            skill = self._skill_loader.get_skill(match.name) if self._skill_loader else None
+            if skill:
+                desc = skill.description.split('\n')[0][:100]  # First line, truncated
+                lines.append(f"• **{skill.display_name}** - {desc}")
+                if match.match_reasons:
+                    reason = match.match_reasons[0]
+                    lines.append(f"  _{reason}_")
+        
+        return "\n".join(lines)
     
     # =========================================================================
     # Plugin Management
@@ -973,11 +1066,21 @@ class ChatAgent:
         requires_handoff: bool = False,
         handoff_request: Optional[HandoffRequest] = None,
         suggestions: Optional[List[str]] = None,
-        unified_result: Optional[Dict[str, Any]] = None
+        unified_result: Optional[Dict[str, Any]] = None,
+        include_skill_suggestions: bool = False
     ) -> AgentResponse:
         """Create an agent response."""
+        final_content = content
+        
+        # Add skill-based suggestions if enabled and query is tool-related
+        if include_skill_suggestions and self._skill_loader:
+            skill_matches = self.get_skill_suggestions(original_message.content, limit=3)
+            if skill_matches:
+                skill_suggestions = self._format_skill_suggestions(skill_matches)
+                final_content = f"{content}{skill_suggestions}"
+        
         response_message = Message(
-            content=content,
+            content=final_content,
             direction=MessageDirection.OUTGOING,
             channel=original_message.channel,
             session_id=session.id,
@@ -1147,6 +1250,24 @@ class ChatAgent:
         context: Dict[str, Any]
     ) -> str:
         """Generate a default response."""
+        # Check if we can provide skill-based suggestions
+        if self._skill_loader:
+            matches = self.get_skill_suggestions(message.content, limit=3)
+            if matches:
+                lines = [
+                    "I understand you're asking about bioinformatics workflows. "
+                    "Based on your query, here are some tools that might help:"
+                ]
+                for match in matches:
+                    skill = self._skill_loader.get_skill(match.name)
+                    if skill:
+                        lines.append(f"\n**{skill.display_name}**: {skill.description.split(chr(10))[0][:100]}")
+                lines.append(
+                    "\nWould you like me to help you set up one of these tools, "
+                    "or would you like more details about any of them?"
+                )
+                return "\n".join(lines)
+        
         return (
             "I understand you're asking about bioinformatics workflows. "
             "Could you please provide more details about what you'd like to accomplish? "
@@ -1156,6 +1277,34 @@ class ChatAgent:
             "- Configure ChIP-seq analysis\n"
             "- Run methylation analysis"
         )
+    
+    def handle_tool_help_query(self, tool_name: str) -> Optional[str]:
+        """
+        Handle a query asking for help with a specific tool.
+        
+        Args:
+            tool_name: Name of the tool to get help for
+            
+        Returns:
+            Help text for the tool, or None if not found
+        """
+        if not self._skill_loader:
+            return None
+        
+        help_text = self._skill_loader.get_skill_help(tool_name)
+        if help_text:
+            return help_text
+        
+        # Try to find similar tools
+        matches = self._skill_loader.find_skills_for_query(tool_name, limit=3)
+        if matches:
+            suggestions = [f"- **{m.display_name}**" for m in matches]
+            return (
+                f"I couldn't find exact help for '{tool_name}'. "
+                f"Did you mean one of these?\n" + "\n".join(suggestions)
+            )
+        
+        return None
     
     # =========================================================================
     # Session Management

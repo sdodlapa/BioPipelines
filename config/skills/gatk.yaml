@@ -1,0 +1,320 @@
+# BioPipelines Skill Documentation
+# Tool: GATK (Genome Analysis Toolkit)
+# ===========================================
+
+name: "gatk"
+display_name: "GATK"
+version: "1.0.0"
+category: "variant_calling"
+
+description: |
+  GATK (Genome Analysis Toolkit) is a comprehensive suite of tools for variant 
+  discovery in high-throughput sequencing data. It includes best practices pipelines 
+  for germline and somatic variant calling, with tools for base quality recalibration, 
+  variant calling, filtering, and annotation.
+
+capabilities:
+  - "Call germline SNPs and indels (HaplotypeCaller)"
+  - "Call somatic mutations (Mutect2)"
+  - "Perform base quality score recalibration (BQSR)"
+  - "Mark duplicate reads"
+  - "Apply variant quality score recalibration (VQSR)"
+  - "Filter variants by various criteria"
+  - "Perform joint genotyping across cohorts"
+  - "Generate GVCF for cohort analysis"
+  - "Support CNV detection"
+  - "Handle both WGS and exome data"
+
+aliases:
+  - "genome_analysis_toolkit"
+  - "variant_caller"
+  - "haplotype_caller"
+  - "mutect2"
+  - "bqsr"
+  - "snp_caller"
+  - "indel_caller"
+
+trigger_phrases:
+  - "call variants"
+  - "detect snps"
+  - "find mutations"
+  - "run gatk"
+  - "variant calling"
+  - "haplotype caller"
+  - "snp detection"
+  - "indel calling"
+  - "germline variant calling"
+  - "somatic mutation detection"
+  - "call snps and indels"
+  - "base quality recalibration"
+  - "mark duplicates"
+  - "joint genotyping"
+  - "gvcf workflow"
+
+examples:
+  - query: "Call variants from my aligned BAM file"
+    expected_behavior: "Runs HaplotypeCaller for germline variant calling"
+    parameters:
+      input_bam: "aligned.bam"
+      reference: "GRCh38.fa"
+      tool: "HaplotypeCaller"
+      
+  - query: "Detect somatic mutations in my tumor-normal pair"
+    expected_behavior: "Runs Mutect2 for somatic variant calling"
+    parameters:
+      tumor_bam: "tumor.bam"
+      normal_bam: "normal.bam"
+      reference: "GRCh38.fa"
+      tool: "Mutect2"
+      
+  - query: "Run the GATK best practices pipeline on my WGS data"
+    expected_behavior: "Runs full pipeline: MarkDuplicates, BQSR, HaplotypeCaller"
+    parameters:
+      input_bam: "aligned.bam"
+      reference: "GRCh38.fa"
+      known_sites: ["dbsnp.vcf", "mills_indels.vcf"]
+      
+  - query: "Recalibrate base quality scores"
+    expected_behavior: "Runs BaseRecalibrator and ApplyBQSR"
+    parameters:
+      input_bam: "marked_duplicates.bam"
+      reference: "GRCh38.fa"
+      known_sites: ["dbsnp.vcf"]
+      tool: "BaseRecalibrator"
+
+parameters:
+  - name: "tool"
+    type: "enum"
+    required: true
+    values: 
+      - "HaplotypeCaller"
+      - "Mutect2"
+      - "BaseRecalibrator"
+      - "ApplyBQSR"
+      - "MarkDuplicates"
+      - "GenotypeGVCFs"
+      - "CombineGVCFs"
+      - "VariantFiltration"
+      - "SelectVariants"
+      - "VariantRecalibrator"
+      - "ApplyVQSR"
+    description: "GATK tool to run"
+    
+  - name: "input_bam"
+    type: "file_path"
+    required: true
+    description: "Input BAM file (sorted and indexed)"
+    file_types: [".bam", ".cram"]
+    
+  - name: "reference"
+    type: "file_path"
+    required: true
+    description: "Reference genome FASTA file"
+    file_types: [".fa", ".fasta"]
+    
+  - name: "output_file"
+    type: "file_path"
+    required: false
+    description: "Output file name"
+    
+  - name: "intervals"
+    type: "file_path"
+    required: false
+    description: "Genomic intervals to process (BED file or interval list)"
+    file_types: [".bed", ".interval_list"]
+    
+  - name: "known_sites"
+    type: "file_path[]"
+    required: false
+    description: "Known sites for BQSR (dbSNP, Mills indels, etc.)"
+    file_types: [".vcf", ".vcf.gz"]
+    
+  - name: "emit_ref_confidence"
+    type: "enum"
+    required: false
+    values: ["NONE", "GVCF", "BP_RESOLUTION"]
+    default: "NONE"
+    description: "Mode for emitting reference confidence (GVCF for cohort analysis)"
+    
+  # Mutect2 specific
+  - name: "tumor_bam"
+    type: "file_path"
+    required: false
+    description: "Tumor sample BAM (for Mutect2)"
+    
+  - name: "normal_bam"
+    type: "file_path"
+    required: false
+    description: "Matched normal BAM (for Mutect2)"
+    
+  - name: "panel_of_normals"
+    type: "file_path"
+    required: false
+    description: "Panel of normals VCF (for Mutect2)"
+    
+  - name: "germline_resource"
+    type: "file_path"
+    required: false
+    description: "Germline resource VCF (for Mutect2, typically gnomAD)"
+    
+  # Performance
+  - name: "java_options"
+    type: "string"
+    required: false
+    default: "-Xmx4g"
+    description: "Java VM options"
+    
+  - name: "native_pair_hmm_threads"
+    type: "integer"
+    required: false
+    default: 4
+    description: "Number of threads for pair HMM"
+
+outputs:
+  - name: "vcf_file"
+    type: "file"
+    format: "vcf.gz"
+    description: "Called variants in VCF format"
+    
+  - name: "vcf_index"
+    type: "file"
+    format: "vcf.gz.tbi"
+    description: "VCF index file"
+    
+  - name: "gvcf_file"
+    type: "file"
+    format: "g.vcf.gz"
+    description: "GVCF file (if emit_ref_confidence=GVCF)"
+    
+  - name: "recal_table"
+    type: "file"
+    format: "table"
+    description: "Base recalibration table"
+    
+  - name: "recalibrated_bam"
+    type: "file"
+    format: "bam"
+    description: "BAM file with recalibrated base qualities"
+    
+  - name: "metrics"
+    type: "file"
+    format: "txt"
+    description: "Various metrics files depending on tool"
+
+related_skills:
+  - name: "bwa"
+    relationship: "precedes"
+    description: "Align reads before variant calling"
+    
+  - name: "picard"
+    relationship: "companion"
+    description: "Additional BAM processing tools"
+    
+  - name: "bcftools"
+    relationship: "follows"
+    description: "VCF manipulation and filtering"
+    
+  - name: "vep"
+    relationship: "follows"
+    description: "Variant annotation"
+    
+  - name: "annovar"
+    relationship: "follows"
+    description: "Alternative variant annotation"
+    
+  - name: "deepvariant"
+    relationship: "alternative"
+    description: "ML-based variant caller"
+    
+  - name: "freebayes"
+    relationship: "alternative"
+    description: "Bayesian variant caller"
+
+prerequisites:
+  tools:
+    - name: "java"
+      version: ">=8"
+      optional: false
+      purpose: "Runtime environment"
+      
+    - name: "samtools"
+      version: ">=1.10"
+      optional: false
+      purpose: "BAM indexing"
+      
+  reference_files:
+    - name: "Reference genome FASTA"
+      required: true
+      
+    - name: "Reference FASTA index (.fai)"
+      required: true
+      
+    - name: "Reference dictionary (.dict)"
+      required: true
+      
+    - name: "Known sites VCFs (dbSNP, etc.)"
+      required: false
+      note: "Required for BQSR"
+      
+  memory: "4-32GB depending on tool and genome size"
+  disk_space: "VCF output is typically small; temp files can be large"
+
+limitations:
+  - "Memory intensive for whole genome analysis"
+  - "VQSR requires large cohorts (>30 samples)"
+  - "Some tools require specific resource files"
+  - "Processing time can be long for WGS"
+  - "Mutect2 requires matched normal for best results"
+
+best_practices:
+  - "Follow GATK Best Practices documentation"
+  - "Always run MarkDuplicates before variant calling"
+  - "Use BQSR to improve base quality scores"
+  - "For cohorts, use GVCF workflow with joint genotyping"
+  - "Apply hard filters if cohort too small for VQSR"
+  - "Use intervals for targeted sequencing to improve speed"
+  - "Keep intermediate files for debugging"
+  - "Use latest GATK version for bug fixes and improvements"
+
+interpretation:
+  success_criteria:
+    variant_count: "Depends on sequencing type and coverage"
+    ti_tv_ratio: "~2.0-2.1 for WGS, ~3.0 for exome"
+    
+  quality_metrics:
+    - metric: "Ti/Tv Ratio (WGS)"
+      good: "2.0-2.1"
+      acceptable: "1.8-2.2"
+      poor: "< 1.8 or > 2.3"
+      
+    - metric: "Het/Hom Ratio"
+      good: "~1.5-2.0"
+      acceptable: "1.0-2.5"
+      poor: "< 1.0 or > 3.0"
+      
+  common_issues:
+    - symptom: "Low variant count"
+      cause: "Stringent filtering, low coverage, or wrong parameters"
+      solution: "Check coverage, adjust filtering thresholds"
+      
+    - symptom: "Too many variants"
+      cause: "No BQSR, or filtering not applied"
+      solution: "Run full best practices pipeline with filtering"
+      
+    - symptom: "VQSR fails"
+      cause: "Not enough variants for training"
+      solution: "Use hard filtering instead for small cohorts"
+
+references:
+  documentation: "https://gatk.broadinstitute.org/"
+  best_practices: "https://gatk.broadinstitute.org/hc/en-us/articles/360035894711"
+  publication: "https://doi.org/10.1038/ng.806"
+  source_code: "https://github.com/broadinstitute/gatk"
+  citation: "McKenna A, et al. (2010) The Genome Analysis Toolkit. Genome Research."
+
+metadata:
+  container: "broadinstitute/gatk:4.4.0.0"
+  nextflow_module: "nf-core/gatk4"
+  bioconda_package: "gatk4"
+  typical_runtime: "Several hours for WGS, faster for exome/targeted"
+  scalability: "Can be parallelized by chromosome/interval"

@@ -1,0 +1,234 @@
+# BioPipelines Skill Documentation
+# Tool: FastQC
+# ===========================================
+
+name: "fastqc"
+display_name: "FastQC"
+version: "1.0.0"
+category: "quality_control"
+
+description: |
+  FastQC provides a comprehensive quality control report for raw sequence data 
+  from high-throughput sequencing pipelines. It performs a modular set of analyses 
+  to give a quick impression of whether your data has any problems.
+
+capabilities:
+  - "Generate per-base quality score plots"
+  - "Identify adapter contamination"
+  - "Detect overrepresented sequences"
+  - "Analyze GC content distribution"
+  - "Report sequence length distribution"
+  - "Check for sequence duplication levels"
+  - "Identify per-sequence quality scores"
+  - "Generate HTML and text reports"
+
+# Alternative names users might use
+aliases:
+  - "fast_qc"
+  - "quality_check"
+  - "qc"
+  - "read_quality"
+
+# Phrases that should trigger this tool
+trigger_phrases:
+  - "check quality of my reads"
+  - "run quality control on fastq"
+  - "assess sequencing quality"
+  - "generate qc report"
+  - "check fastq quality"
+  - "quality check my data"
+  - "fastqc analysis"
+  - "what is the quality of my sequencing data"
+  - "check for adapter contamination"
+  - "assess read quality"
+  - "quality assessment of my reads"
+  - "run fastqc"
+
+# Example queries and expected behavior
+examples:
+  - query: "I need to check the quality of my FASTQ files"
+    expected_behavior: "Runs FastQC on all provided FASTQ files and generates HTML reports"
+    parameters:
+      input_files: ["sample1.fastq.gz", "sample2.fastq.gz"]
+      output_dir: "./fastqc_output"
+    
+  - query: "Run quality control on my RNA-seq data before alignment"
+    expected_behavior: "Generates FastQC reports optimized for RNA-seq data"
+    parameters:
+      input_files: ["rna_sample_R1.fastq.gz", "rna_sample_R2.fastq.gz"]
+      output_dir: "./qc_reports"
+    
+  - query: "Check if there's adapter contamination in my reads"
+    expected_behavior: "Runs FastQC with focus on adapter content module"
+    parameters:
+      input_files: ["reads.fastq.gz"]
+      
+  - query: "I want to see the quality scores for my whole genome sequencing data"
+    expected_behavior: "Generates comprehensive FastQC report for WGS data"
+    parameters:
+      input_files: ["wgs_sample.fastq.gz"]
+
+# Input parameters
+parameters:
+  - name: "input_files"
+    type: "file_path[]"
+    required: true
+    description: "Input FASTQ files to analyze"
+    file_types:
+      - ".fastq"
+      - ".fastq.gz"
+      - ".fq"
+      - ".fq.gz"
+    
+  - name: "output_dir"
+    type: "directory_path"
+    required: false
+    default: "./fastqc_output"
+    description: "Directory for output files"
+    
+  - name: "threads"
+    type: "integer"
+    required: false
+    default: 4
+    min: 1
+    max: 64
+    description: "Number of threads to use for parallel processing"
+    
+  - name: "extract"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Extract the zipped output file"
+    
+  - name: "nogroup"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Disable grouping of bases for reads >50bp"
+    
+  - name: "quiet"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Suppress progress messages"
+    
+  - name: "adapters"
+    type: "file_path"
+    required: false
+    description: "File containing list of adapter sequences to screen"
+    
+  - name: "contaminants"
+    type: "file_path"
+    required: false
+    description: "File containing list of contaminant sequences"
+    
+  - name: "limits"
+    type: "file_path"
+    required: false
+    description: "File specifying custom limits for PASS/WARN/FAIL criteria"
+
+# Expected outputs
+outputs:
+  - name: "html_report"
+    type: "file"
+    format: "html"
+    description: "Interactive HTML quality report per input file"
+    
+  - name: "zip_archive"
+    type: "file"
+    format: "zip"
+    description: "Compressed archive containing all analysis results"
+    
+  - name: "summary_txt"
+    type: "file"
+    format: "txt"
+    description: "Text summary of all QC modules (PASS/WARN/FAIL)"
+    
+  - name: "fastqc_data"
+    type: "file"
+    format: "txt"
+    description: "Detailed numerical data from all analyses"
+
+# Related tools for workflow suggestions
+related_skills:
+  - name: "multiqc"
+    relationship: "aggregates"
+    description: "Aggregates FastQC reports from multiple samples"
+    
+  - name: "trimmomatic"
+    relationship: "follows"
+    description: "Trims reads based on FastQC findings"
+    
+  - name: "fastp"
+    relationship: "alternative"
+    description: "Alternative QC tool that also performs trimming"
+    
+  - name: "cutadapt"
+    relationship: "follows"
+    description: "Removes adapters identified by FastQC"
+
+# Prerequisites
+prerequisites:
+  tools:
+    - name: "java"
+      version: ">=11"
+      optional: false
+      purpose: "Runtime environment for FastQC"
+      
+  memory: "256MB per thread"
+  
+  disk_space: "~3x input file size for extracted output"
+
+# Known limitations
+limitations:
+  - "Does not perform read trimming - use trimmomatic or fastp for that"
+  - "GC content warnings may be expected for some organisms"
+  - "Duplication warnings are common in RNA-seq and targeted sequencing"
+  - "Overrepresented sequences may be expected in amplicon sequencing"
+  - "Memory usage increases with number of parallel threads"
+  - "Cannot analyze SAM/BAM files directly (convert to FASTQ first)"
+
+# Best practices for using this tool
+best_practices:
+  - "Run on raw data before any processing steps"
+  - "Use with MultiQC to aggregate reports from multiple samples"
+  - "Check adapter content before alignment"
+  - "Review per-base quality scores to decide trimming parameters"
+  - "Compare QC metrics across samples to identify outliers"
+  - "Consider organism-specific GC content when interpreting results"
+  - "Save both HTML reports and zip archives for downstream analysis"
+
+# Interpretation guidance
+interpretation:
+  pass_criteria:
+    per_base_quality: "Most bases have quality score >= 28"
+    per_sequence_quality: "Mean quality score >= 27 for most reads"
+    gc_content: "Distribution matches expected organism GC content"
+    
+  common_warnings:
+    - module: "Sequence Duplication Levels"
+      explanation: "Often expected in RNA-seq due to highly expressed genes"
+      action: "Typically safe to proceed if < 50% duplication"
+      
+    - module: "Overrepresented Sequences"
+      explanation: "May indicate adapter contamination or highly expressed sequences"
+      action: "Check if sequences are adapters; if so, run trimming"
+      
+    - module: "Per Base Sequence Content"
+      explanation: "Uneven content at start is common due to random hexamer priming"
+      action: "First 10-15bp bias is usually acceptable"
+
+# Reference information
+references:
+  documentation: "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/"
+  tutorial: "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/Help/"
+  source_code: "https://github.com/s-andrews/FastQC"
+  citation: "Andrews S. (2010). FastQC: A Quality Control Tool for High Throughput Sequence Data"
+
+# Tool metadata for system integration
+metadata:
+  container: "biocontainers/fastqc:0.12.1--hdfd78af_0"
+  nextflow_module: "nf-core/fastqc"
+  bioconda_package: "fastqc"
+  typical_runtime: "1-5 minutes per FASTQ file"
+  scalability: "Linear with number of files"

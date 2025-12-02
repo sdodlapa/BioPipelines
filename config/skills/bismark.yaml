@@ -1,0 +1,349 @@
+# BioPipelines Skill Documentation
+# Tool: Bismark (Methylation Mapper)
+# ===========================================
+
+name: "bismark"
+display_name: "Bismark"
+version: "1.0.0"
+category: "epigenomics"
+subcategory: "methylation_analysis"
+
+description: |
+  Bismark is a tool for mapping bisulfite-treated sequencing reads and determining 
+  cytosine methylation states. It performs alignment using Bowtie2 or HISAT2 and 
+  extracts methylation information for CpG, CHG, and CHH contexts.
+
+capabilities:
+  - "Align bisulfite-treated reads to reference genome"
+  - "Extract methylation calls at single-base resolution"
+  - "Support CpG, CHG, and CHH context methylation"
+  - "Handle both directional and non-directional libraries"
+  - "Support single-end and paired-end sequencing"
+  - "Generate comprehensive methylation reports"
+  - "Deduplicate aligned reads"
+  - "Create bedGraph and coverage files"
+  - "Generate genome-wide methylation summary"
+
+aliases:
+  - "methylation_mapper"
+  - "bisulfite_aligner"
+  - "dna_methylation"
+  - "methylation_analysis"
+  - "bs_seq"
+  - "wgbs"
+  - "rrbs"
+
+trigger_phrases:
+  - "align bisulfite sequencing data"
+  - "methylation analysis"
+  - "map methylation reads"
+  - "analyze dna methylation"
+  - "run bismark"
+  - "cpg methylation"
+  - "wgbs analysis"
+  - "rrbs analysis"
+  - "bisulfite treated reads"
+  - "extract methylation levels"
+  - "methylation mapping"
+  - "epigenetic analysis"
+
+examples:
+  - query: "Align my WGBS data to the human genome"
+    expected_behavior: "Runs Bismark alignment for whole-genome bisulfite sequencing"
+    parameters:
+      reference: "GRCh38_bismark_index"
+      input_r1: "wgbs_R1.fastq.gz"
+      input_r2: "wgbs_R2.fastq.gz"
+      
+  - query: "Extract methylation calls from my aligned data"
+    expected_behavior: "Runs bismark_methylation_extractor"
+    parameters:
+      input_bam: "sample_bismark.bam"
+      output_format: "bedGraph"
+      
+  - query: "Generate a bismark index for my reference"
+    expected_behavior: "Creates bisulfite-converted genome index"
+    parameters:
+      reference: "genome.fa"
+      action: "genome_preparation"
+      
+  - query: "Analyze RRBS data with reduced representation"
+    expected_behavior: "Runs Bismark with RRBS-specific parameters"
+    parameters:
+      reference: "GRCh38_bismark_index"
+      input_r1: "rrbs_R1.fastq.gz"
+      library_type: "rrbs"
+
+parameters:
+  - name: "reference_dir"
+    type: "directory_path"
+    required: true
+    description: "Directory containing Bismark-prepared genome"
+    
+  - name: "input_r1"
+    type: "file_path"
+    required: true
+    description: "Input FASTQ file (or R1 for paired-end)"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "input_r2"
+    type: "file_path"
+    required: false
+    description: "Input R2 FASTQ file for paired-end mode"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "output_dir"
+    type: "directory_path"
+    required: false
+    default: "./bismark_output"
+    description: "Directory for output files"
+    
+  - name: "aligner"
+    type: "enum"
+    required: false
+    default: "bowtie2"
+    values: ["bowtie2", "hisat2"]
+    description: "Alignment algorithm to use"
+    
+  - name: "library_type"
+    type: "enum"
+    required: false
+    default: "directional"
+    values: ["directional", "non_directional", "rrbs"]
+    description: "Library preparation type"
+    
+  - name: "threads"
+    type: "integer"
+    required: false
+    default: 4
+    min: 1
+    max: 64
+    description: "Number of parallel instances"
+    
+  - name: "seed_length"
+    type: "integer"
+    required: false
+    default: 20
+    description: "Seed length for alignment"
+    
+  - name: "score_min"
+    type: "string"
+    required: false
+    default: "L,0,-0.2"
+    description: "Minimum alignment score function"
+    
+  - name: "nucleotide_coverage"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Generate nucleotide coverage report"
+    
+  - name: "ambiguous"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Write ambiguous reads to separate file"
+    
+  - name: "unmapped"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Write unmapped reads to separate file"
+    
+  # Methylation extractor parameters
+  - name: "comprehensive"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Merge strand-specific methylation calls"
+    
+  - name: "cytosine_report"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Generate genome-wide cytosine report"
+    
+  - name: "bedgraph"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Generate bedGraph output"
+    
+  - name: "remove_duplicates"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Remove duplicate reads"
+    
+  - name: "ignore_read1"
+    type: "integer"
+    required: false
+    default: 0
+    description: "Ignore first N bases of read 1"
+    
+  - name: "ignore_read2"
+    type: "integer"
+    required: false
+    default: 0
+    description: "Ignore first N bases of read 2"
+
+outputs:
+  - name: "aligned_bam"
+    type: "file"
+    format: "bam"
+    description: "Bismark-aligned BAM file"
+    
+  - name: "alignment_report"
+    type: "file"
+    format: "txt"
+    description: "Alignment statistics report"
+    
+  - name: "dedup_bam"
+    type: "file"
+    format: "bam"
+    description: "Deduplicated BAM file"
+    
+  - name: "dedup_report"
+    type: "file"
+    format: "txt"
+    description: "Deduplication statistics"
+    
+  - name: "cpg_report"
+    type: "file"
+    format: "txt"
+    description: "CpG context methylation calls"
+    
+  - name: "chg_report"
+    type: "file"
+    format: "txt"
+    description: "CHG context methylation calls"
+    
+  - name: "chh_report"
+    type: "file"
+    format: "txt"
+    description: "CHH context methylation calls"
+    
+  - name: "bedgraph"
+    type: "file"
+    format: "bedGraph"
+    description: "BedGraph format methylation coverage"
+    
+  - name: "cytosine_report"
+    type: "file"
+    format: "txt"
+    description: "Genome-wide cytosine methylation report"
+    
+  - name: "mbias_report"
+    type: "file"
+    format: "txt"
+    description: "M-bias plot data for QC"
+
+related_skills:
+  - name: "trimgalore"
+    relationship: "precedes"
+    description: "Trim adapters from bisulfite reads"
+    
+  - name: "fastqc"
+    relationship: "precedes"
+    description: "QC before alignment"
+    
+  - name: "methylkit"
+    relationship: "follows"
+    description: "Differential methylation analysis"
+    
+  - name: "dmrfinder"
+    relationship: "follows"
+    description: "Find differentially methylated regions"
+    
+  - name: "bsmap"
+    relationship: "alternative"
+    description: "Alternative bisulfite mapper"
+    
+  - name: "bwa-meth"
+    relationship: "alternative"
+    description: "BWA-based bisulfite aligner"
+    
+  - name: "multiqc"
+    relationship: "follows"
+    description: "Aggregate Bismark reports"
+
+prerequisites:
+  tools:
+    - name: "bowtie2"
+      version: ">=2.3"
+      optional: false
+      purpose: "Alignment backend"
+      
+    - name: "samtools"
+      version: ">=1.10"
+      optional: false
+      purpose: "BAM processing"
+      
+  reference_files:
+    - name: "Bismark-prepared genome"
+      required: true
+      note: "Use bismark_genome_preparation first"
+      
+  memory: "~5x genome size for indexing"
+  disk_space: "3-4x input file size for outputs"
+
+limitations:
+  - "Slower than BWA due to bisulfite complexity"
+  - "High memory usage for genome preparation"
+  - "Not optimized for very long reads"
+  - "CHG/CHH contexts only informative for plants"
+  - "Requires specific library type specification"
+
+best_practices:
+  - "Use Trim Galore for adapter trimming (optimized for bisulfite)"
+  - "Check M-bias plots for end bias"
+  - "Use --ignore parameters if M-bias shows bias"
+  - "Deduplicate reads for WGBS (not always for RRBS)"
+  - "Report methylation separately for CpG context"
+  - "Merge cytosine reports for downstream DMR analysis"
+  - "Check alignment rates and bisulfite conversion rates"
+
+interpretation:
+  success_criteria:
+    alignment_rate: ">= 70% for WGBS, >= 60% for RRBS"
+    bisulfite_conversion: ">= 99% (check CHH methylation)"
+    duplication_rate: "< 30% for WGBS"
+    
+  quality_metrics:
+    - metric: "Mapping Efficiency"
+      good: ">= 70%"
+      acceptable: "50-70%"
+      poor: "< 50%"
+      
+    - metric: "Bisulfite Conversion"
+      good: ">= 99%"
+      acceptable: "98-99%"
+      poor: "< 98%"
+      note: "CHH methylation should be < 1% in mammals"
+      
+  common_issues:
+    - symptom: "Low alignment rate"
+      cause: "Adapters not trimmed, contamination, or degraded DNA"
+      solution: "Run Trim Galore, check for contamination"
+      
+    - symptom: "Low conversion rate"
+      cause: "Incomplete bisulfite treatment"
+      solution: "Check wet lab protocol, may need to redo"
+      
+    - symptom: "M-bias at read ends"
+      cause: "Library prep artifacts"
+      solution: "Use --ignore parameters to exclude biased bases"
+
+references:
+  documentation: "https://www.bioinformatics.babraham.ac.uk/projects/bismark/"
+  user_guide: "https://rawgit.com/FelixKrueger/Bismark/master/Docs/Bismark_User_Guide.html"
+  publication: "https://doi.org/10.1093/bioinformatics/btr167"
+  source_code: "https://github.com/FelixKrueger/Bismark"
+  citation: "Krueger F and Andrews SR. (2011) Bismark: a flexible aligner and methylation caller for Bisulfite-Seq applications. Bioinformatics."
+
+metadata:
+  container: "biocontainers/bismark:0.24.0--hdfd78af_0"
+  nextflow_module: "nf-core/bismark"
+  bioconda_package: "bismark"
+  typical_runtime: "Several hours per sample for WGBS"
+  scalability: "Parallelizable per sample, multi-threaded alignment"

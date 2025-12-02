@@ -1,0 +1,306 @@
+# BioPipelines Skill Documentation
+# Tool: Kraken2
+# ===========================================
+
+name: "kraken2"
+display_name: "Kraken2"
+version: "1.0.0"
+category: "metagenomics"
+subcategory: "taxonomic_classification"
+
+description: |
+  Kraken2 is an ultrafast and highly accurate program for taxonomic classification 
+  of metagenomic sequences. It uses exact k-mer matches to classify sequences to 
+  taxonomic nodes in a reference database.
+
+capabilities:
+  - "Classify metagenomic reads to taxonomy"
+  - "Support bacteria, archaea, viruses, and eukaryotes"
+  - "Provide confidence scores for classifications"
+  - "Generate abundance reports at various taxonomic levels"
+  - "Handle paired-end and single-end reads"
+  - "Support custom database construction"
+  - "Process at extremely high speed"
+  - "Provide per-read classification output"
+  - "Generate Kraken-style and Bracken-compatible reports"
+
+aliases:
+  - "taxonomic_classifier"
+  - "metagenome_classifier"
+  - "microbiome_profiler"
+  - "species_identifier"
+  - "kraken"
+
+trigger_phrases:
+  - "classify metagenomic reads"
+  - "identify species in my sample"
+  - "taxonomic classification"
+  - "run kraken2"
+  - "what organisms are in my sample"
+  - "microbiome profiling"
+  - "identify bacteria"
+  - "detect pathogens"
+  - "metagenome analysis"
+  - "species identification"
+  - "taxonomic assignment"
+  - "classify microbiome data"
+
+examples:
+  - query: "Classify my metagenomic reads to identify bacteria"
+    expected_behavior: "Runs Kraken2 with standard database"
+    parameters:
+      database: "standard"
+      input_r1: "metagenome_R1.fastq.gz"
+      input_r2: "metagenome_R2.fastq.gz"
+      
+  - query: "What species are present in my microbiome sample?"
+    expected_behavior: "Taxonomic classification with abundance report"
+    parameters:
+      database: "standard"
+      input_files: ["microbiome.fastq.gz"]
+      report: true
+      
+  - query: "Screen my sample for viral contamination"
+    expected_behavior: "Runs Kraken2 with viral database"
+    parameters:
+      database: "viral"
+      input_r1: "sample_R1.fastq.gz"
+      input_r2: "sample_R2.fastq.gz"
+      
+  - query: "Build a custom Kraken2 database"
+    expected_behavior: "Constructs database from provided genomes"
+    parameters:
+      action: "build"
+      genomes_dir: "./genomes/"
+      taxonomy: "NCBI"
+
+parameters:
+  - name: "database"
+    type: "string"
+    required: true
+    description: "Path to Kraken2 database or standard database name"
+    predefined_values:
+      - "standard"
+      - "standard-8"
+      - "standard-16"
+      - "minikraken"
+      - "viral"
+      - "bacterial"
+      - "plant"
+      - "human"
+      - "fungi"
+    
+  - name: "input_r1"
+    type: "file_path"
+    required: true
+    description: "Input FASTQ file (or R1 for paired-end)"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz", ".fasta", ".fa"]
+    
+  - name: "input_r2"
+    type: "file_path"
+    required: false
+    description: "Input R2 FASTQ file for paired-end mode"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "output_file"
+    type: "file_path"
+    required: false
+    default: "kraken2_output.txt"
+    description: "Per-read classification output"
+    
+  - name: "report_file"
+    type: "file_path"
+    required: false
+    default: "kraken2_report.txt"
+    description: "Taxonomic report output"
+    
+  - name: "threads"
+    type: "integer"
+    required: false
+    default: 8
+    min: 1
+    max: 128
+    description: "Number of threads to use"
+    
+  - name: "confidence"
+    type: "float"
+    required: false
+    default: 0.0
+    min: 0
+    max: 1
+    description: "Confidence score threshold for classification"
+    
+  - name: "minimum_base_quality"
+    type: "integer"
+    required: false
+    default: 0
+    min: 0
+    max: 42
+    description: "Minimum base quality for k-mer extraction"
+    
+  - name: "minimum_hit_groups"
+    type: "integer"
+    required: false
+    default: 2
+    description: "Minimum number of hit groups for classification"
+    
+  - name: "use_mpa_style"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Generate MetaPhlAn-style output"
+    
+  - name: "report_zero_counts"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Include zero-count taxa in report"
+    
+  - name: "unclassified_out"
+    type: "file_path"
+    required: false
+    description: "Output file for unclassified reads"
+    
+  - name: "classified_out"
+    type: "file_path"
+    required: false
+    description: "Output file for classified reads"
+    
+  - name: "memory_mapping"
+    type: "boolean"
+    required: false
+    default: false
+    description: "Use memory-mapped database (slower but less RAM)"
+
+outputs:
+  - name: "classification_output"
+    type: "file"
+    format: "txt"
+    description: "Per-read classification results"
+    columns:
+      - "C/U: Classified or Unclassified"
+      - "Read ID"
+      - "Taxonomy ID"
+      - "Read length"
+      - "LCA mapping"
+    
+  - name: "report"
+    type: "file"
+    format: "txt"
+    description: "Kraken2-style taxonomic report"
+    columns:
+      - "Percentage of reads"
+      - "Reads at this taxon"
+      - "Reads at this taxon (direct)"
+      - "Taxonomic rank"
+      - "NCBI taxonomy ID"
+      - "Scientific name"
+    
+  - name: "classified_reads"
+    type: "file"
+    format: "fastq"
+    description: "FASTQ file of classified reads (if requested)"
+    
+  - name: "unclassified_reads"
+    type: "file"
+    format: "fastq"
+    description: "FASTQ file of unclassified reads (if requested)"
+
+related_skills:
+  - name: "bracken"
+    relationship: "follows"
+    description: "Abundance re-estimation from Kraken2 output"
+    
+  - name: "krona"
+    relationship: "follows"
+    description: "Interactive visualization of taxonomic data"
+    
+  - name: "metaphlan"
+    relationship: "alternative"
+    description: "Marker-gene based profiling"
+    
+  - name: "centrifuge"
+    relationship: "alternative"
+    description: "Alternative k-mer classifier"
+    
+  - name: "kaiju"
+    relationship: "alternative"
+    description: "Protein-level classification"
+    
+  - name: "multiqc"
+    relationship: "follows"
+    description: "Aggregate Kraken2 reports"
+    
+  - name: "fastqc"
+    relationship: "precedes"
+    description: "QC before classification"
+
+prerequisites:
+  tools:
+    - name: "kraken2"
+      version: ">=2.1"
+      optional: false
+      
+  reference_files:
+    - name: "Kraken2 database"
+      required: true
+      note: "Pre-built or custom database"
+      
+  memory: "Database size + ~2GB (standard ~50GB)"
+  disk_space: "Database size (standard ~50GB compressed)"
+
+limitations:
+  - "High memory requirements for full databases"
+  - "Cannot identify species not in database"
+  - "Short reads may have lower classification accuracy"
+  - "Cannot distinguish very closely related species"
+  - "Abundance estimates may be biased (use Bracken)"
+
+best_practices:
+  - "Use Bracken for abundance estimation"
+  - "Apply confidence threshold for higher precision"
+  - "Use paired-end mode for better accuracy"
+  - "Choose database appropriate for your sample"
+  - "Validate unexpected findings with other methods"
+  - "Use memory-mapping for limited RAM systems"
+  - "Pre-filter host reads before classification"
+  - "Check classification rate to assess database coverage"
+
+interpretation:
+  success_criteria:
+    classification_rate: "Varies by sample type (20-90%)"
+    expected_taxa: "Major taxa present as expected"
+    
+  quality_metrics:
+    - metric: "Classification Rate"
+      context: "Depends on sample and database"
+      environmental: "20-50% typical"
+      clinical: "50-80% typical"
+      pure_culture: ">90% expected"
+      
+  common_issues:
+    - symptom: "Low classification rate"
+      cause: "Database doesn't cover sample organisms"
+      solution: "Use more comprehensive database or build custom"
+      
+    - symptom: "Unexpected dominant species"
+      cause: "Contamination or database bias"
+      solution: "Verify with alternative method, check for contamination"
+      
+    - symptom: "Many reads classified to higher taxa"
+      cause: "Ambiguous k-mers, short reads, or close relatives"
+      solution: "Use Bracken for species-level estimation"
+
+references:
+  documentation: "https://github.com/DerrickWood/kraken2/wiki"
+  publication: "https://doi.org/10.1186/s13059-019-1891-0"
+  source_code: "https://github.com/DerrickWood/kraken2"
+  database_building: "https://github.com/DerrickWood/kraken2/wiki/Manual#custom-databases"
+  citation: "Wood DE, Lu J, Langmead B. (2019) Improved metagenomic analysis with Kraken 2. Genome Biology."
+
+metadata:
+  container: "biocontainers/kraken2:2.1.2--pl5321h9f5acd7_2"
+  nextflow_module: "nf-core/kraken2"
+  bioconda_package: "kraken2"
+  typical_runtime: "Minutes for most samples"
+  scalability: "Excellent multi-threading, scales with database in memory"

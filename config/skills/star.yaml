@@ -1,0 +1,351 @@
+# BioPipelines Skill Documentation
+# Tool: STAR (Spliced Transcripts Alignment to a Reference)
+# ===========================================
+
+name: "star"
+display_name: "STAR RNA-Seq Aligner"
+version: "1.0.0"
+category: "alignment"
+subcategory: "rna_seq_alignment"
+
+description: |
+  STAR is a fast RNA-seq aligner that performs spliced alignment of RNA-seq reads 
+  to a reference genome. It can detect splice junctions, chimeric reads, and 
+  produce gene-level read counts. The gold standard for RNA-seq alignment.
+
+capabilities:
+  - "Splice-aware alignment of RNA-seq reads"
+  - "Detect novel splice junctions"
+  - "Identify chimeric/fusion transcripts"
+  - "Generate gene-level read counts"
+  - "Support 2-pass alignment for improved sensitivity"
+  - "Output in SAM/BAM format"
+  - "Handle single-end and paired-end reads"
+  - "Support ENCODE standard parameters"
+  - "Quantification mode for downstream analysis"
+
+aliases:
+  - "star_aligner"
+  - "rna_aligner"
+  - "rnaseq_alignment"
+  - "splice_aligner"
+  - "transcriptome_mapper"
+
+trigger_phrases:
+  - "align rna-seq data"
+  - "map rna sequencing reads"
+  - "align transcriptome data"
+  - "run star alignment"
+  - "splice-aware alignment"
+  - "align reads with splice junctions"
+  - "map my rna-seq to genome"
+  - "align gene expression data"
+  - "detect fusion transcripts"
+  - "rna read mapping"
+  - "transcriptome alignment"
+  - "generate star index"
+
+examples:
+  - query: "Align my RNA-seq data to the human genome"
+    expected_behavior: "Runs STAR with human genome index, generates sorted BAM"
+    parameters:
+      reference: "GRCh38_STAR_index"
+      input_r1: "rnaseq_R1.fastq.gz"
+      input_r2: "rnaseq_R2.fastq.gz"
+      
+  - query: "Run 2-pass STAR alignment for better junction detection"
+    expected_behavior: "Performs 2-pass alignment with novel junction discovery"
+    parameters:
+      reference: "GRCh38_STAR_index"
+      input_r1: "sample_R1.fastq.gz"
+      input_r2: "sample_R2.fastq.gz"
+      two_pass_mode: "Basic"
+      
+  - query: "Align RNA-seq and get gene counts at the same time"
+    expected_behavior: "Runs STAR with quantMode for simultaneous counting"
+    parameters:
+      reference: "GRCh38_STAR_index"
+      input_r1: "sample_R1.fastq.gz"
+      input_r2: "sample_R2.fastq.gz"
+      quant_mode: "GeneCounts"
+      
+  - query: "Generate STAR index for my reference genome"
+    expected_behavior: "Creates STAR genome index with optional GTF annotation"
+    parameters:
+      reference_fasta: "genome.fa"
+      gtf: "annotations.gtf"
+      action: "genomeGenerate"
+
+parameters:
+  - name: "genome_dir"
+    type: "directory_path"
+    required: true
+    description: "Directory containing STAR genome index"
+    
+  - name: "input_r1"
+    type: "file_path"
+    required: true
+    description: "Input FASTQ file (or R1 for paired-end)"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "input_r2"
+    type: "file_path"
+    required: false
+    description: "Input R2 FASTQ file for paired-end mode"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "output_prefix"
+    type: "string"
+    required: false
+    default: "star_output"
+    description: "Prefix for output files"
+    
+  - name: "threads"
+    type: "integer"
+    required: false
+    default: 8
+    min: 1
+    max: 128
+    description: "Number of threads to use"
+    
+  - name: "out_sam_type"
+    type: "string"
+    required: false
+    default: "BAM SortedByCoordinate"
+    description: "Output format (BAM Unsorted, BAM SortedByCoordinate, SAM)"
+    
+  - name: "two_pass_mode"
+    type: "enum"
+    required: false
+    values: ["None", "Basic"]
+    default: "None"
+    description: "Enable 2-pass alignment for better junction detection"
+    
+  - name: "quant_mode"
+    type: "enum"
+    required: false
+    values: ["TranscriptomeSAM", "GeneCounts", "-"]
+    default: "-"
+    description: "Quantification mode for counts or transcriptome BAM"
+    
+  - name: "out_filter_type"
+    type: "enum"
+    required: false
+    default: "BySJout"
+    values: ["Normal", "BySJout"]
+    description: "Type of filtering (BySJout recommended)"
+    
+  - name: "out_filter_multimap_nmax"
+    type: "integer"
+    required: false
+    default: 20
+    description: "Maximum number of loci a read can map to"
+    
+  - name: "out_filter_mismatch_nmax"
+    type: "integer"
+    required: false
+    default: 10
+    description: "Maximum number of mismatches per pair"
+    
+  - name: "align_intron_min"
+    type: "integer"
+    required: false
+    default: 20
+    description: "Minimum intron size"
+    
+  - name: "align_intron_max"
+    type: "integer"
+    required: false
+    default: 1000000
+    description: "Maximum intron size"
+    
+  - name: "align_mates_gap_max"
+    type: "integer"
+    required: false
+    default: 1000000
+    description: "Maximum gap between two mates"
+    
+  - name: "chimeric_segment_min"
+    type: "integer"
+    required: false
+    default: 12
+    description: "Minimum length of chimeric segment"
+    
+  - name: "out_sam_unmapped"
+    type: "enum"
+    required: false
+    default: "Within"
+    values: ["None", "Within"]
+    description: "Output unmapped reads in SAM/BAM"
+    
+  - name: "out_sam_attributes"
+    type: "string"
+    required: false
+    default: "Standard"
+    description: "SAM attributes to output"
+    
+  - name: "read_files_command"
+    type: "string"
+    required: false
+    default: "zcat"
+    description: "Command to uncompress input files (zcat for .gz)"
+
+# For genome generation
+  - name: "genome_fasta"
+    type: "file_path"
+    required: false
+    description: "Reference genome FASTA for index generation"
+    
+  - name: "gtf"
+    type: "file_path"
+    required: false
+    description: "Gene annotation GTF file for index generation"
+    
+  - name: "sjdb_overhang"
+    type: "integer"
+    required: false
+    default: 100
+    description: "Read length - 1 for splice junction database"
+    
+  - name: "genome_sa_index_nbases"
+    type: "integer"
+    required: false
+    description: "Length of SA pre-indexing string (reduce for small genomes)"
+
+outputs:
+  - name: "aligned_bam"
+    type: "file"
+    format: "bam"
+    description: "Aligned reads in BAM format"
+    
+  - name: "splice_junctions"
+    type: "file"
+    format: "tab"
+    description: "SJ.out.tab file with splice junction information"
+    
+  - name: "log_final"
+    type: "file"
+    format: "txt"
+    description: "Final alignment statistics log"
+    
+  - name: "log_progress"
+    type: "file"
+    format: "txt"
+    description: "Progress log during alignment"
+    
+  - name: "gene_counts"
+    type: "file"
+    format: "tab"
+    description: "Gene counts (if quantMode=GeneCounts)"
+    
+  - name: "chimeric_junctions"
+    type: "file"
+    format: "tab"
+    description: "Chimeric junction information"
+
+related_skills:
+  - name: "featurecounts"
+    relationship: "follows"
+    description: "Count reads per gene from STAR output"
+    
+  - name: "deseq2"
+    relationship: "follows"
+    description: "Differential expression analysis"
+    
+  - name: "salmon"
+    relationship: "alternative"
+    description: "Quasi-mapping approach for quantification"
+    
+  - name: "kallisto"
+    relationship: "alternative"
+    description: "Pseudoalignment for fast quantification"
+    
+  - name: "hisat2"
+    relationship: "alternative"
+    description: "Alternative splice-aware aligner"
+    
+  - name: "trimmomatic"
+    relationship: "precedes"
+    description: "Trim reads before alignment"
+    
+  - name: "fastqc"
+    relationship: "precedes"
+    description: "QC before alignment"
+
+prerequisites:
+  tools:
+    - name: "samtools"
+      version: ">=1.10"
+      optional: false
+      purpose: "BAM file processing"
+      
+  reference_files:
+    - name: "STAR genome index"
+      required: true
+      note: "Generate with --runMode genomeGenerate"
+      
+    - name: "GTF annotation"
+      required: false
+      note: "Recommended for accurate splice junction detection"
+      
+  memory: "~32GB for human genome (more for 2-pass mode)"
+  disk_space: "~30GB for human genome index, ~3x input for output"
+
+limitations:
+  - "High memory requirements (~32GB for human genome)"
+  - "Index generation is time and memory intensive"
+  - "Not suitable for DNA alignment (use BWA)"
+  - "Cannot handle very long reads efficiently"
+  - "2-pass mode requires even more memory"
+
+best_practices:
+  - "Use 2-pass mode for novel junction discovery"
+  - "Match sjdbOverhang to read length - 1 when generating index"
+  - "Use ENCODE standard parameters for reproducibility"
+  - "Include GTF annotation when generating index for better results"
+  - "Use quantMode GeneCounts to get counts directly from STAR"
+  - "Filter output by BySJout for cleaner results"
+  - "Use sufficient threads (8-16) for reasonable runtime"
+
+interpretation:
+  success_criteria:
+    uniquely_mapped: ">= 70% for most samples"
+    multi_mapped: "< 20% typically"
+    unmapped: "< 10% typically"
+    
+  quality_metrics:
+    - metric: "Uniquely Mapped Reads"
+      good: ">= 75%"
+      acceptable: "60-75%"
+      poor: "< 60%"
+      
+    - metric: "Multi-mapped Reads"
+      good: "< 15%"
+      acceptable: "15-25%"
+      poor: "> 25%"
+      
+  common_issues:
+    - symptom: "Low unique mapping rate"
+      cause: "rRNA contamination, adapter contamination, or quality issues"
+      solution: "Check rRNA depletion QC, trim adapters, run FastQC"
+      
+    - symptom: "Many unmapped reads"
+      cause: "Wrong reference or contamination"
+      solution: "Verify reference genome matches sample species"
+      
+    - symptom: "Out of memory"
+      cause: "Insufficient RAM for genome index"
+      solution: "Use machine with >32GB RAM or limit shared memory"
+
+references:
+  documentation: "https://github.com/alexdobin/STAR/blob/master/doc/STARmanual.pdf"
+  publication: "https://doi.org/10.1093/bioinformatics/bts635"
+  source_code: "https://github.com/alexdobin/STAR"
+  citation: "Dobin A, et al. (2013) STAR: ultrafast universal RNA-seq aligner. Bioinformatics."
+
+metadata:
+  container: "biocontainers/star:2.7.10b--h9ee0642_0"
+  nextflow_module: "nf-core/star/align"
+  bioconda_package: "star"
+  typical_runtime: "30-60 minutes per sample for human RNA-seq"
+  scalability: "Good multi-threading, parallelizable per sample"

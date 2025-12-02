@@ -1,0 +1,291 @@
+# BioPipelines Skill Documentation
+# Tool: BWA (Burrows-Wheeler Aligner)
+# ===========================================
+
+name: "bwa"
+display_name: "BWA (Burrows-Wheeler Aligner)"
+version: "1.0.0"
+category: "alignment"
+subcategory: "short_read_alignment"
+
+description: |
+  BWA is a software package for mapping low-divergent sequences against a large 
+  reference genome. It consists of three algorithms: BWA-backtrack, BWA-SW and 
+  BWA-MEM. BWA-MEM is the recommended algorithm for high-quality queries.
+
+capabilities:
+  - "Align short reads to reference genome"
+  - "Support single-end and paired-end reads"
+  - "Handle reads from 70bp to 1Mbp"
+  - "Perform split-read alignment for structural variants"
+  - "Generate SAM/BAM output format"
+  - "Index reference genomes"
+  - "Support chimeric alignment for fusion detection"
+  - "Mark supplementary alignments"
+
+aliases:
+  - "burrows_wheeler"
+  - "bwa_mem"
+  - "bwa_mem2"
+  - "read_alignment"
+  - "dna_alignment"
+  - "short_read_mapper"
+
+trigger_phrases:
+  - "align reads to reference genome"
+  - "map my reads"
+  - "align dna sequences"
+  - "run bwa alignment"
+  - "map fastq to reference"
+  - "align whole genome sequencing data"
+  - "align paired end reads"
+  - "map short reads"
+  - "dna read mapping"
+  - "align exome data"
+  - "run read alignment"
+  - "map my sequencing data"
+
+examples:
+  - query: "Align my paired-end WGS reads to the human genome"
+    expected_behavior: "Runs BWA-MEM with human reference, generates sorted BAM"
+    parameters:
+      reference: "GRCh38"
+      input_r1: "sample_R1.fastq.gz"
+      input_r2: "sample_R2.fastq.gz"
+      algorithm: "mem"
+      
+  - query: "Map my exome sequencing data"
+    expected_behavior: "Aligns reads with appropriate settings for targeted sequencing"
+    parameters:
+      reference: "hg38.fa"
+      input_r1: "exome_R1.fastq.gz"
+      input_r2: "exome_R2.fastq.gz"
+      
+  - query: "I need to align single-end reads to a custom reference"
+    expected_behavior: "Runs BWA-MEM in single-end mode"
+    parameters:
+      reference: "custom_genome.fa"
+      input_r1: "reads.fastq.gz"
+      
+  - query: "Index my reference genome for alignment"
+    expected_behavior: "Creates BWA index files for the reference"
+    parameters:
+      reference: "genome.fasta"
+      action: "index"
+
+parameters:
+  - name: "reference"
+    type: "file_path"
+    required: true
+    description: "Reference genome FASTA file (will be indexed if not already)"
+    file_types: [".fa", ".fasta", ".fa.gz", ".fasta.gz"]
+    
+  - name: "input_r1"
+    type: "file_path"
+    required: true
+    description: "Input FASTQ file (or R1 for paired-end)"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "input_r2"
+    type: "file_path"
+    required: false
+    description: "Input R2 FASTQ file for paired-end mode"
+    file_types: [".fastq", ".fastq.gz", ".fq", ".fq.gz"]
+    
+  - name: "output_file"
+    type: "file_path"
+    required: false
+    default: "aligned.bam"
+    description: "Output BAM file name"
+    
+  - name: "algorithm"
+    type: "enum"
+    required: false
+    default: "mem"
+    values: ["mem", "aln", "bwasw", "mem2"]
+    description: "BWA algorithm to use (mem recommended for most cases)"
+    
+  - name: "threads"
+    type: "integer"
+    required: false
+    default: 8
+    min: 1
+    max: 128
+    description: "Number of threads to use"
+    
+  - name: "read_group"
+    type: "string"
+    required: false
+    description: "Read group header line (@RG) to add to output"
+    example: "@RG\\tID:sample1\\tSM:sample1\\tPL:ILLUMINA"
+    
+  - name: "min_seed_length"
+    type: "integer"
+    required: false
+    default: 19
+    description: "Minimum seed length for BWA-MEM"
+    
+  - name: "match_score"
+    type: "integer"
+    required: false
+    default: 1
+    description: "Score for a sequence match"
+    
+  - name: "mismatch_penalty"
+    type: "integer"
+    required: false
+    default: 4
+    description: "Penalty for a mismatch"
+    
+  - name: "gap_open_penalty"
+    type: "string"
+    required: false
+    default: "6,6"
+    description: "Gap open penalties for deletions and insertions"
+    
+  - name: "gap_extension_penalty"
+    type: "string"
+    required: false
+    default: "1,1"
+    description: "Gap extension penalties"
+    
+  - name: "mark_shorter_split"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Mark shorter split hits as secondary"
+    
+  - name: "soft_clipping"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Use soft clipping for supplementary alignments"
+    
+  - name: "sort_output"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Sort output BAM file by coordinate"
+    
+  - name: "index_output"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Index the output BAM file"
+
+outputs:
+  - name: "bam_file"
+    type: "file"
+    format: "bam"
+    description: "Aligned reads in BAM format"
+    
+  - name: "bai_file"
+    type: "file"
+    format: "bai"
+    description: "BAM index file (if index_output=true)"
+    
+  - name: "alignment_stats"
+    type: "file"
+    format: "txt"
+    description: "Alignment statistics from samtools flagstat"
+
+related_skills:
+  - name: "samtools"
+    relationship: "follows"
+    description: "Process and manipulate BAM files"
+    
+  - name: "gatk"
+    relationship: "follows"
+    description: "Variant calling from aligned reads"
+    
+  - name: "picard"
+    relationship: "follows"
+    description: "Mark duplicates and collect metrics"
+    
+  - name: "trimmomatic"
+    relationship: "precedes"
+    description: "Trim reads before alignment"
+    
+  - name: "star"
+    relationship: "alternative"
+    description: "Use for RNA-seq alignment instead"
+    
+  - name: "bowtie2"
+    relationship: "alternative"
+    description: "Alternative short-read aligner"
+    
+  - name: "minimap2"
+    relationship: "alternative"
+    description: "Better for long reads"
+
+prerequisites:
+  tools:
+    - name: "samtools"
+      version: ">=1.10"
+      optional: false
+      purpose: "BAM file processing"
+      
+  reference_files:
+    - name: "Reference genome FASTA"
+      required: true
+      
+    - name: "BWA index files"
+      required: false
+      note: "Will be created if not present"
+      
+  memory: "Reference genome size + ~5GB for human genome"
+  disk_space: "~5x input FASTQ size for BAM output"
+
+limitations:
+  - "Not optimized for long reads (>1000bp) - use minimap2"
+  - "Not suitable for RNA-seq (lacks splice awareness) - use STAR or HISAT2"
+  - "Memory intensive for large genomes"
+  - "Indexing large genomes requires significant time and memory"
+  - "Cannot directly align to multiple references"
+
+best_practices:
+  - "Use BWA-MEM for reads >70bp (most modern sequencing)"
+  - "Always add read group information for downstream analysis"
+  - "Sort and index output BAM for efficient access"
+  - "Use appropriate number of threads (8-16 typically optimal)"
+  - "Pre-index reference genome to save time on multiple runs"
+  - "For variant calling, follow GATK best practices pipeline"
+  - "Mark duplicates after alignment with Picard or samtools"
+
+interpretation:
+  success_criteria:
+    mapping_rate: ">= 95% for most samples"
+    properly_paired: ">= 90% for paired-end data"
+    
+  quality_metrics:
+    - metric: "Mapping Rate"
+      good: ">= 95%"
+      acceptable: "85-95%"
+      poor: "< 85%"
+      
+    - metric: "Properly Paired"
+      good: ">= 90%"
+      acceptable: "80-90%"
+      poor: "< 80%"
+      
+  common_issues:
+    - symptom: "Low mapping rate"
+      cause: "Contamination, wrong reference, or low quality reads"
+      solution: "Check sample identity and run QC"
+      
+    - symptom: "Many unmapped reads"
+      cause: "Adapters not trimmed or reference mismatch"
+      solution: "Verify trimming was done and reference is correct"
+
+references:
+  documentation: "https://bio-bwa.sourceforge.net/bwa.shtml"
+  publication: "https://doi.org/10.1093/bioinformatics/btp324"
+  source_code: "https://github.com/lh3/bwa"
+  citation: "Li H. and Durbin R. (2009) Fast and accurate short read alignment with Burrows-Wheeler Transform. Bioinformatics."
+
+metadata:
+  container: "biocontainers/bwa:0.7.17--h5bf99c6_8"
+  nextflow_module: "nf-core/bwa/mem"
+  bioconda_package: "bwa"
+  typical_runtime: "1-4 hours for 30x human WGS"
+  scalability: "Good multi-threading, can be parallelized by chromosome"

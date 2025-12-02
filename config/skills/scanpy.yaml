@@ -1,0 +1,361 @@
+# BioPipelines Skill Documentation
+# Tool: Scanpy (Single-Cell Analysis)
+# ===========================================
+
+name: "scanpy"
+display_name: "Scanpy"
+version: "1.0.0"
+category: "single_cell"
+subcategory: "scrna_seq_analysis"
+
+description: |
+  Scanpy is a Python-based toolkit for analyzing single-cell RNA sequencing data. 
+  It provides efficient data structures and algorithms for preprocessing, visualization, 
+  clustering, trajectory inference, and differential expression in scRNA-seq data.
+
+capabilities:
+  - "Read and preprocess scRNA-seq count matrices"
+  - "Perform quality control filtering"
+  - "Normalize and log-transform data"
+  - "Identify highly variable genes"
+  - "Perform dimensionality reduction (PCA, UMAP, t-SNE)"
+  - "Cluster cells using Leiden or Louvain algorithms"
+  - "Identify marker genes for clusters"
+  - "Differential expression between groups"
+  - "Trajectory/pseudotime analysis"
+  - "Batch correction and integration"
+  - "Interactive visualization"
+  - "Cell type annotation"
+
+aliases:
+  - "single_cell_analysis"
+  - "scrna_analysis"
+  - "scrnaseq"
+  - "cell_clustering"
+  - "single_cell_rnaseq"
+
+trigger_phrases:
+  - "analyze single cell data"
+  - "scRNA-seq analysis"
+  - "cluster my cells"
+  - "single cell clustering"
+  - "run scanpy"
+  - "identify cell types"
+  - "single cell preprocessing"
+  - "find marker genes"
+  - "umap visualization"
+  - "single cell differential expression"
+  - "trajectory analysis"
+  - "pseudotime analysis"
+  - "cell type annotation"
+
+examples:
+  - query: "Analyze my single-cell RNA-seq data and identify cell clusters"
+    expected_behavior: "Full scanpy pipeline: QC, normalize, cluster, visualize"
+    parameters:
+      input_file: "filtered_feature_bc_matrix.h5"
+      min_genes: 200
+      min_cells: 3
+      n_top_genes: 2000
+      resolution: 0.5
+      
+  - query: "Find marker genes for each cluster"
+    expected_behavior: "Runs rank_genes_groups for differential expression"
+    parameters:
+      adata: "clustered.h5ad"
+      groupby: "leiden"
+      method: "wilcoxon"
+      
+  - query: "Create a UMAP visualization of my single-cell data"
+    expected_behavior: "Computes UMAP and generates visualization"
+    parameters:
+      adata: "preprocessed.h5ad"
+      color: ["leiden", "n_genes"]
+      
+  - query: "Integrate multiple single-cell batches"
+    expected_behavior: "Performs batch correction using bbknn or harmony"
+    parameters:
+      adata_list: ["batch1.h5ad", "batch2.h5ad"]
+      batch_key: "sample"
+      method: "harmony"
+
+parameters:
+  # Input
+  - name: "input_file"
+    type: "file_path"
+    required: true
+    description: "Input file (10X h5, h5ad, or count matrix)"
+    file_types: [".h5", ".h5ad", ".csv", ".mtx"]
+    
+  - name: "input_format"
+    type: "enum"
+    required: false
+    values: ["10x_h5", "10x_mtx", "h5ad", "csv", "loom"]
+    default: "10x_h5"
+    description: "Input file format"
+    
+  # QC parameters
+  - name: "min_genes"
+    type: "integer"
+    required: false
+    default: 200
+    description: "Minimum genes per cell"
+    
+  - name: "max_genes"
+    type: "integer"
+    required: false
+    default: 5000
+    description: "Maximum genes per cell"
+    
+  - name: "min_cells"
+    type: "integer"
+    required: false
+    default: 3
+    description: "Minimum cells per gene"
+    
+  - name: "max_mito_pct"
+    type: "float"
+    required: false
+    default: 20
+    description: "Maximum mitochondrial gene percentage"
+    
+  # Normalization
+  - name: "target_sum"
+    type: "integer"
+    required: false
+    default: 10000
+    description: "Target sum for normalization"
+    
+  # HVG selection
+  - name: "n_top_genes"
+    type: "integer"
+    required: false
+    default: 2000
+    description: "Number of highly variable genes to select"
+    
+  - name: "hvg_flavor"
+    type: "enum"
+    required: false
+    values: ["seurat", "seurat_v3", "cell_ranger"]
+    default: "seurat"
+    description: "Method for HVG selection"
+    
+  # Dimensionality reduction
+  - name: "n_pcs"
+    type: "integer"
+    required: false
+    default: 50
+    description: "Number of principal components"
+    
+  - name: "n_neighbors"
+    type: "integer"
+    required: false
+    default: 15
+    description: "Number of neighbors for graph construction"
+    
+  # Clustering
+  - name: "resolution"
+    type: "float"
+    required: false
+    default: 0.5
+    min: 0.1
+    max: 2.0
+    description: "Clustering resolution (higher = more clusters)"
+    
+  - name: "clustering_algorithm"
+    type: "enum"
+    required: false
+    values: ["leiden", "louvain"]
+    default: "leiden"
+    description: "Clustering algorithm"
+    
+  # Differential expression
+  - name: "de_method"
+    type: "enum"
+    required: false
+    values: ["wilcoxon", "t-test", "logreg"]
+    default: "wilcoxon"
+    description: "Method for marker gene identification"
+    
+  - name: "n_genes_report"
+    type: "integer"
+    required: false
+    default: 25
+    description: "Number of marker genes to report per cluster"
+    
+  # Batch correction
+  - name: "batch_key"
+    type: "string"
+    required: false
+    description: "Column name for batch information"
+    
+  - name: "batch_correction"
+    type: "enum"
+    required: false
+    values: ["none", "harmony", "bbknn", "scanorama", "combat"]
+    default: "none"
+    description: "Batch correction method"
+    
+  # Output
+  - name: "output_dir"
+    type: "directory_path"
+    required: false
+    default: "./scanpy_output"
+    description: "Directory for output files"
+
+outputs:
+  - name: "h5ad_file"
+    type: "file"
+    format: "h5ad"
+    description: "AnnData object with all results"
+    
+  - name: "umap_plot"
+    type: "file"
+    format: "png/pdf"
+    description: "UMAP visualization"
+    
+  - name: "cluster_markers"
+    type: "file"
+    format: "csv"
+    description: "Marker genes for each cluster"
+    
+  - name: "qc_plots"
+    type: "file"
+    format: "png/pdf"
+    description: "QC violin plots and scatter plots"
+    
+  - name: "cluster_composition"
+    type: "file"
+    format: "csv"
+    description: "Cell counts per cluster"
+    
+  - name: "pca_variance"
+    type: "file"
+    format: "csv"
+    description: "PCA variance explained"
+    
+  - name: "dotplot"
+    type: "file"
+    format: "png/pdf"
+    description: "Dot plot of marker genes"
+    
+  - name: "heatmap"
+    type: "file"
+    format: "png/pdf"
+    description: "Heatmap of top markers"
+
+related_skills:
+  - name: "cellranger"
+    relationship: "precedes"
+    description: "Generate count matrices from 10X data"
+    
+  - name: "seurat"
+    relationship: "alternative"
+    description: "R-based scRNA-seq analysis"
+    
+  - name: "scvi_tools"
+    relationship: "extension"
+    description: "Deep learning models for scRNA-seq"
+    
+  - name: "cellxgene"
+    relationship: "follows"
+    description: "Interactive data exploration"
+    
+  - name: "celltypist"
+    relationship: "follows"
+    description: "Automated cell type annotation"
+    
+  - name: "scrublet"
+    relationship: "companion"
+    description: "Doublet detection"
+    
+  - name: "scvelo"
+    relationship: "extension"
+    description: "RNA velocity analysis"
+
+prerequisites:
+  tools:
+    - name: "python"
+      version: ">=3.8"
+      optional: false
+      
+    - name: "scanpy"
+      version: ">=1.9"
+      optional: false
+      
+  input_requirements:
+    - "Count matrix from 10X, Drop-seq, or similar"
+    - "Gene names should be unique"
+    
+  memory: "Scales with number of cells (10GB for ~100k cells)"
+
+limitations:
+  - "Memory intensive for very large datasets"
+  - "Clustering is sensitive to resolution parameter"
+  - "Cell type annotation requires manual curation or reference"
+  - "Batch effects can confound analysis"
+  - "Not designed for spatial transcriptomics (use squidpy)"
+
+best_practices:
+  - "Remove doublets before main analysis"
+  - "Filter cells with high mitochondrial content"
+  - "Use Leiden clustering (better than Louvain)"
+  - "Try multiple resolutions to find optimal clustering"
+  - "Validate clusters with known marker genes"
+  - "Use batch correction when integrating datasets"
+  - "Save h5ad files at key steps for reproducibility"
+  - "Consider cell cycle regression for proliferating cells"
+
+interpretation:
+  success_criteria:
+    cells_after_qc: "Reasonable percentage retained (>50%)"
+    clusters: "Biologically meaningful number"
+    marker_specificity: "Clear markers for each cluster"
+    
+  quality_metrics:
+    - metric: "Cells Passing QC"
+      good: ">60% of input cells"
+      acceptable: "40-60%"
+      poor: "<40%"
+      
+    - metric: "Genes per Cell (median)"
+      good: "1000-4000"
+      acceptable: "500-1000 or 4000-6000"
+      poor: "<500"
+      
+    - metric: "UMIs per Cell (median)"
+      good: "2000-20000"
+      acceptable: "1000-2000"
+      poor: "<1000"
+      
+  common_issues:
+    - symptom: "All cells cluster together"
+      cause: "Over-filtering, wrong normalization, or batch effects"
+      solution: "Check QC parameters, examine batch structure"
+      
+    - symptom: "Too many clusters"
+      cause: "Resolution too high or technical noise"
+      solution: "Lower resolution, regress out confounders"
+      
+    - symptom: "Clusters split by batch"
+      cause: "Batch effects dominating"
+      solution: "Apply batch correction (harmony, bbknn)"
+      
+    - symptom: "No clear marker genes"
+      cause: "Clusters not biologically meaningful"
+      solution: "Adjust resolution, check data quality"
+
+references:
+  documentation: "https://scanpy.readthedocs.io/"
+  tutorials: "https://scanpy-tutorials.readthedocs.io/"
+  publication: "https://doi.org/10.1186/s13059-017-1382-0"
+  source_code: "https://github.com/scverse/scanpy"
+  best_practices: "https://www.sc-best-practices.org/"
+  citation: "Wolf FA, Angerer P, Theis FJ. (2018) SCANPY: large-scale single-cell gene expression data analysis. Genome Biology."
+
+metadata:
+  container: "biocontainers/scanpy:1.9.3"
+  nextflow_module: "nf-core/scrnaseq"
+  conda_package: "scanpy"
+  typical_runtime: "30 min to hours depending on cell count"
+  scalability: "Good to millions of cells with proper chunking"

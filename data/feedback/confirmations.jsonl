@@ -61,3 +61,7 @@
 {"timestamp": "2025-12-02T07:38:26.895577", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-02T07:38:28.250375", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-02T07:38:30.823838", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T08:21:42.070757", "query": "What's the best pizza recipe?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T08:22:00.349969", "query": "What's a good movie to watch tonight?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T08:23:21.522079", "query": "What's the best pizza recipe?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T08:23:39.709675", "query": "What's a good movie to watch tonight?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}

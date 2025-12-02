@@ -320,6 +320,17 @@ from .out_of_scope import (
     check_query_scope,
 )
 
+# Skill Documentation System (Claude Scientific Skills Integration)
+from .skill_loader import (
+    SkillLoader,
+    Skill,
+    SkillMatch,
+    get_skill_loader,
+    reset_skill_loader,
+    find_skills,
+    get_skill_help_text,
+)
+
 # Chat Agent Integration (Professional Agent Phase 8)
 from .chat_agent import (
     ChatAgent,
@@ -599,6 +610,15 @@ __all__ = [
     "get_out_of_scope_handler",
     "reset_out_of_scope_handler",
     "check_query_scope",
+    
+    # Skill Documentation System (Claude Scientific Skills Integration)
+    "SkillLoader",
+    "Skill",
+    "SkillMatch",
+    "get_skill_loader",
+    "reset_skill_loader",
+    "find_skills",
+    "get_skill_help_text",
     
     # Chat Agent Integration (Professional Agent Phase 8)
     "ChatAgent",

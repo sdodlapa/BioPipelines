@@ -1,0 +1,256 @@
+# BioPipelines Skill Documentation Schema
+# ===========================================
+# This schema defines the structure for tool skill documentation.
+# Inspired by Claude Scientific Skills SKILL.md format but adapted for YAML.
+#
+# Each skill file should follow this structure to enable:
+# - Automatic skill loading and discovery
+# - Intelligent tool selection by the ChatAgent
+# - User-facing help generation
+# - Parameter validation
+
+# Schema Version
+schema_version: "1.0.0"
+
+# Field Definitions
+# -----------------
+
+# Required Fields:
+required_fields:
+  - name           # Unique identifier for the skill
+  - display_name   # Human-readable name
+  - version        # Skill documentation version
+  - category       # Primary category
+  - description    # Brief description (1-2 sentences)
+  - capabilities   # What the tool can do
+
+# Optional Fields:
+optional_fields:
+  - subcategory    # More specific categorization
+  - aliases        # Alternative names/terms
+  - trigger_phrases # Phrases that should invoke this skill
+  - examples       # Example queries and expected behavior
+  - parameters     # Input parameters with types and descriptions
+  - outputs        # Expected outputs
+  - related_skills # Links to related tools
+  - prerequisites  # Required tools, databases, or conditions
+  - limitations    # What the tool cannot do
+  - best_practices # Tips for optimal use
+  - references     # Documentation links, papers
+
+# Category Definitions
+# --------------------
+categories:
+  - id: quality_control
+    display_name: "Quality Control"
+    description: "Tools for assessing data quality"
+    icon: "🔍"
+    
+  - id: alignment
+    display_name: "Alignment & Mapping"
+    description: "Tools for sequence alignment and read mapping"
+    icon: "🎯"
+    
+  - id: variant_calling
+    display_name: "Variant Calling"
+    description: "Tools for detecting genetic variants"
+    icon: "🧬"
+    
+  - id: expression_analysis
+    display_name: "Expression Analysis"
+    description: "Tools for gene expression quantification and analysis"
+    icon: "📊"
+    
+  - id: epigenomics
+    display_name: "Epigenomics"
+    description: "Tools for methylation and chromatin analysis"
+    icon: "🔬"
+    
+  - id: assembly
+    display_name: "Genome Assembly"
+    description: "Tools for de novo genome assembly"
+    icon: "🧩"
+    
+  - id: annotation
+    display_name: "Annotation"
+    description: "Tools for functional annotation"
+    icon: "🏷️"
+    
+  - id: structural_variants
+    display_name: "Structural Variants"
+    description: "Tools for SV detection and analysis"
+    icon: "🔀"
+    
+  - id: metagenomics
+    display_name: "Metagenomics"
+    description: "Tools for microbiome and metagenome analysis"
+    icon: "🦠"
+    
+  - id: single_cell
+    display_name: "Single-Cell"
+    description: "Tools for single-cell RNA-seq analysis"
+    icon: "🔬"
+    
+  - id: long_read
+    display_name: "Long-Read Sequencing"
+    description: "Tools for PacBio and Oxford Nanopore data"
+    icon: "📏"
+    
+  - id: workflow
+    display_name: "Workflow Management"
+    description: "Pipeline orchestration and workflow generation"
+    icon: "⚙️"
+    
+  - id: visualization
+    display_name: "Visualization"
+    description: "Tools for data visualization and reporting"
+    icon: "📈"
+    
+  - id: utilities
+    display_name: "Utilities"
+    description: "General-purpose bioinformatics utilities"
+    icon: "🛠️"
+
+# Example Skill Template
+# ----------------------
+# Below is a template showing how a skill file should be structured:
+
+example_template:
+  # === REQUIRED FIELDS ===
+  name: "tool_name"
+  display_name: "Tool Display Name"
+  version: "1.0.0"
+  category: "quality_control"  # Must be one of the defined categories
+  
+  description: |
+    Brief description of what this tool does and why you would use it.
+    Should be 1-3 sentences.
+  
+  capabilities:
+    - "First capability - what specific task this enables"
+    - "Second capability - another specific feature"
+    - "Third capability - additional functionality"
+  
+  # === OPTIONAL FIELDS ===
+  subcategory: "read_quality"  # More specific categorization
+  
+  aliases:
+    - "alternative_name"
+    - "common_abbreviation"
+  
+  trigger_phrases:
+    - "check quality of my reads"
+    - "run quality control"
+    - "assess sequencing quality"
+    - "generate QC report"
+  
+  examples:
+    - query: "I need to check the quality of my FASTQ files"
+      expected_behavior: "Suggests running this tool on the FASTQ files"
+      parameters:
+        input_type: "fastq"
+        output_format: "html"
+    
+    - query: "Run QC on my RNA-seq data"
+      expected_behavior: "Runs quality control with RNA-seq specific parameters"
+      parameters:
+        input_type: "fastq"
+        analysis_type: "rna-seq"
+  
+  parameters:
+    - name: "input_files"
+      type: "file_path[]"
+      required: true
+      description: "Input FASTQ files to analyze"
+      file_types:
+        - ".fastq"
+        - ".fastq.gz"
+        - ".fq"
+        - ".fq.gz"
+    
+    - name: "output_dir"
+      type: "directory_path"
+      required: false
+      default: "./qc_output"
+      description: "Directory for output files"
+    
+    - name: "threads"
+      type: "integer"
+      required: false
+      default: 4
+      min: 1
+      max: 64
+      description: "Number of threads to use"
+  
+  outputs:
+    - name: "html_report"
+      type: "file"
+      format: "html"
+      description: "Interactive quality report"
+    
+    - name: "summary_stats"
+      type: "file"
+      format: "json"
+      description: "JSON file with quality metrics"
+  
+  related_skills:
+    - "multiqc"       # For aggregating reports
+    - "trimmomatic"   # For read trimming
+    - "fastp"         # Alternative QC tool
+  
+  prerequisites:
+    tools:
+      - name: "java"
+        version: ">=11"
+        optional: false
+    
+    databases: []
+    
+    conditions:
+      - "Input files must be in FASTQ format"
+  
+  limitations:
+    - "Does not perform read trimming (use trimmomatic or fastp)"
+    - "Single-threaded for per-file analysis"
+    - "Memory usage scales with file size"
+  
+  best_practices:
+    - "Run on raw data before alignment"
+    - "Use with MultiQC to aggregate multiple samples"
+    - "Check for adapter contamination before proceeding"
+  
+  references:
+    documentation: "https://www.bioinformatics.babraham.ac.uk/projects/fastqc/"
+    publication: null
+    source_code: "https://github.com/s-andrews/FastQC"
+
+# Validation Rules
+# ----------------
+validation:
+  name:
+    pattern: "^[a-z][a-z0-9_]*$"  # lowercase with underscores
+    max_length: 50
+  
+  display_name:
+    max_length: 100
+  
+  version:
+    pattern: "^\\d+\\.\\d+\\.\\d+$"  # Semantic versioning
+  
+  category:
+    must_exist_in: categories
+  
+  description:
+    max_length: 500
+  
+  capabilities:
+    min_items: 1
+    max_items: 10
+  
+  trigger_phrases:
+    min_items: 3
+    max_items: 20
+  
+  examples:
+    min_items: 2
+    max_items: 10

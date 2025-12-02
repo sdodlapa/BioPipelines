@@ -1,0 +1,324 @@
+# BioPipelines Skill Documentation
+# Tool: DESeq2
+# ===========================================
+
+name: "deseq2"
+display_name: "DESeq2"
+version: "1.0.0"
+category: "expression_analysis"
+subcategory: "differential_expression"
+
+description: |
+  DESeq2 is a method for differential gene expression analysis based on the negative 
+  binomial distribution. It provides statistical routines for determining differential 
+  expression in RNA-seq data, including normalization, variance estimation, and testing.
+
+capabilities:
+  - "Perform differential gene expression analysis"
+  - "Normalize count data with size factor estimation"
+  - "Estimate gene-wise dispersion"
+  - "Apply shrinkage estimation for fold changes"
+  - "Generate MA and volcano plots"
+  - "Support multi-factor experimental designs"
+  - "Handle batch effects in design formula"
+  - "Perform variance stabilizing transformation"
+  - "Support time series analysis"
+  - "Provide regularized log transformation"
+
+aliases:
+  - "differential_expression"
+  - "dge_analysis"
+  - "rna_seq_analysis"
+  - "gene_expression_analysis"
+  - "deseq"
+
+trigger_phrases:
+  - "differential expression analysis"
+  - "compare gene expression"
+  - "find differentially expressed genes"
+  - "run deseq2"
+  - "analyze rna-seq counts"
+  - "which genes are up-regulated"
+  - "which genes are down-regulated"
+  - "compare treatment vs control"
+  - "gene expression differences"
+  - "dge analysis"
+  - "differential gene expression"
+  - "compare conditions"
+
+examples:
+  - query: "Find differentially expressed genes between treatment and control"
+    expected_behavior: "Runs DESeq2 with treatment vs control comparison"
+    parameters:
+      count_matrix: "counts.csv"
+      sample_info: "metadata.csv"
+      design: "~ condition"
+      contrast: ["condition", "treatment", "control"]
+      
+  - query: "Run differential expression with batch correction"
+    expected_behavior: "DESeq2 analysis accounting for batch effects"
+    parameters:
+      count_matrix: "counts.csv"
+      sample_info: "metadata.csv"
+      design: "~ batch + condition"
+      contrast: ["condition", "treatment", "control"]
+      
+  - query: "Compare gene expression across multiple conditions"
+    expected_behavior: "Multi-group comparison with pairwise contrasts"
+    parameters:
+      count_matrix: "counts.csv"
+      sample_info: "metadata.csv"
+      design: "~ group"
+      
+  - query: "Normalize my RNA-seq counts"
+    expected_behavior: "Returns normalized count matrix"
+    parameters:
+      count_matrix: "counts.csv"
+      sample_info: "metadata.csv"
+      output_type: "normalized_counts"
+
+parameters:
+  - name: "count_matrix"
+    type: "file_path"
+    required: true
+    description: "Gene count matrix (genes as rows, samples as columns)"
+    file_types: [".csv", ".tsv", ".txt"]
+    
+  - name: "sample_info"
+    type: "file_path"
+    required: true
+    description: "Sample metadata with experimental conditions"
+    file_types: [".csv", ".tsv", ".txt"]
+    
+  - name: "design"
+    type: "string"
+    required: true
+    description: "R formula specifying the design (e.g., '~ condition')"
+    example: "~ batch + condition"
+    
+  - name: "contrast"
+    type: "string[]"
+    required: false
+    description: "Contrast for comparison: [factor, numerator, denominator]"
+    example: ["condition", "treatment", "control"]
+    
+  - name: "output_dir"
+    type: "directory_path"
+    required: false
+    default: "./deseq2_results"
+    description: "Directory for output files"
+    
+  - name: "alpha"
+    type: "float"
+    required: false
+    default: 0.05
+    min: 0
+    max: 1
+    description: "Significance threshold for adjusted p-value"
+    
+  - name: "lfc_threshold"
+    type: "float"
+    required: false
+    default: 0
+    description: "Log2 fold change threshold for significance"
+    
+  - name: "min_count"
+    type: "integer"
+    required: false
+    default: 10
+    description: "Minimum count sum across samples to keep a gene"
+    
+  - name: "shrinkage"
+    type: "enum"
+    required: false
+    default: "apeglm"
+    values: ["apeglm", "ashr", "normal", "none"]
+    description: "LFC shrinkage method"
+    
+  - name: "fit_type"
+    type: "enum"
+    required: false
+    default: "parametric"
+    values: ["parametric", "local", "mean"]
+    description: "Dispersion fitting type"
+    
+  - name: "independent_filtering"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Apply independent filtering for multiple testing"
+    
+  - name: "cooks_cutoff"
+    type: "boolean"
+    required: false
+    default: true
+    description: "Apply Cook's distance filtering for outliers"
+
+outputs:
+  - name: "results_table"
+    type: "file"
+    format: "csv"
+    description: "Table of all genes with statistics (baseMean, log2FC, pvalue, padj)"
+    
+  - name: "significant_genes"
+    type: "file"
+    format: "csv"
+    description: "Filtered table of significant DEGs"
+    
+  - name: "normalized_counts"
+    type: "file"
+    format: "csv"
+    description: "Normalized count matrix"
+    
+  - name: "vst_counts"
+    type: "file"
+    format: "csv"
+    description: "Variance stabilized transformed counts"
+    
+  - name: "rlog_counts"
+    type: "file"
+    format: "csv"
+    description: "Regularized log transformed counts"
+    
+  - name: "ma_plot"
+    type: "file"
+    format: "pdf"
+    description: "MA plot showing log fold change vs mean expression"
+    
+  - name: "volcano_plot"
+    type: "file"
+    format: "pdf"
+    description: "Volcano plot of -log10(pvalue) vs log2FC"
+    
+  - name: "pca_plot"
+    type: "file"
+    format: "pdf"
+    description: "PCA plot of samples"
+    
+  - name: "heatmap"
+    type: "file"
+    format: "pdf"
+    description: "Heatmap of top differentially expressed genes"
+    
+  - name: "dispersion_plot"
+    type: "file"
+    format: "pdf"
+    description: "Plot of dispersion estimates"
+
+related_skills:
+  - name: "star"
+    relationship: "precedes"
+    description: "Align RNA-seq reads before counting"
+    
+  - name: "featurecounts"
+    relationship: "precedes"
+    description: "Generate count matrix from aligned reads"
+    
+  - name: "salmon"
+    relationship: "precedes"
+    description: "Quantify transcripts for input"
+    
+  - name: "edger"
+    relationship: "alternative"
+    description: "Alternative differential expression method"
+    
+  - name: "limma"
+    relationship: "alternative"
+    description: "Alternative for microarray or RNA-seq"
+    
+  - name: "clusterprofiler"
+    relationship: "follows"
+    description: "Gene set enrichment analysis of DEGs"
+    
+  - name: "gprofiler"
+    relationship: "follows"
+    description: "Functional enrichment analysis"
+
+prerequisites:
+  tools:
+    - name: "R"
+      version: ">=4.0"
+      optional: false
+      
+    - name: "DESeq2 R package"
+      version: ">=1.30"
+      optional: false
+      
+  input_requirements:
+    - "Raw count data (not normalized)"
+    - "At least 2 replicates per condition"
+    - "Sample metadata matching count matrix columns"
+    
+  memory: "Scales with number of genes and samples"
+
+limitations:
+  - "Requires raw counts, not FPKM/TPM"
+  - "Works best with >= 3 replicates per condition"
+  - "Not designed for single-cell RNA-seq (use specialized tools)"
+  - "Cannot handle paired samples without proper design"
+  - "May be underpowered with <3 samples per group"
+
+best_practices:
+  - "Use raw, unnormalized counts as input"
+  - "Include batch effects in design formula if present"
+  - "Use at least 3 biological replicates per condition"
+  - "Apply pre-filtering to remove low-count genes"
+  - "Use apeglm shrinkage for LFC estimation"
+  - "Check dispersion estimates plot for quality"
+  - "Examine PCA plot for batch effects and outliers"
+  - "Report adjusted p-values, not raw p-values"
+  - "Consider effect size (LFC) in addition to significance"
+
+interpretation:
+  success_criteria:
+    dispersion_fit: "Dispersion trend follows expected curve"
+    pca_clustering: "Samples cluster by condition, not batch"
+    
+  quality_metrics:
+    - metric: "Dispersion Estimates"
+      good: "Gene-wise estimates cluster around fitted line"
+      poor: "Large scatter or poor fit"
+      
+    - metric: "P-value Distribution"
+      good: "Uniform distribution with enrichment near 0"
+      poor: "Skewed or multi-modal distribution"
+      
+  result_interpretation:
+    - column: "baseMean"
+      description: "Average normalized count across all samples"
+      
+    - column: "log2FoldChange"
+      description: "Log2 ratio of expression (positive = higher in numerator)"
+      
+    - column: "pvalue"
+      description: "Raw p-value from Wald test"
+      
+    - column: "padj"
+      description: "Benjamini-Hochberg adjusted p-value"
+      
+  common_issues:
+    - symptom: "No significant genes"
+      cause: "Low power, high variability, or subtle differences"
+      solution: "Add replicates, check for batch effects, verify sample labels"
+      
+    - symptom: "All/most genes significant"
+      cause: "Sample swap, contamination, or wrong comparison"
+      solution: "Verify sample metadata and experimental design"
+      
+    - symptom: "Poor dispersion fit"
+      cause: "Outlier samples or heterogeneous data"
+      solution: "Remove outliers, use fitType='local'"
+
+references:
+  documentation: "https://bioconductor.org/packages/DESeq2/"
+  vignette: "https://bioconductor.org/packages/release/bioc/vignettes/DESeq2/inst/doc/DESeq2.html"
+  publication: "https://doi.org/10.1186/s13059-014-0550-8"
+  source_code: "https://github.com/mikelove/DESeq2"
+  citation: "Love MI, Huber W, Anders S (2014) Moderated estimation of fold change and dispersion for RNA-seq data with DESeq2. Genome Biology."
+
+metadata:
+  container: "bioconductor/bioconductor_docker:RELEASE_3_17"
+  nextflow_module: "nf-core/deseq2"
+  bioconda_package: "bioconductor-deseq2"
+  typical_runtime: "Minutes for typical dataset"
+  scalability: "Scales well with number of samples"
