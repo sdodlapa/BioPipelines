@@ -17,6 +17,7 @@ Architecture:
 """
 
 import logging
+import re
 import time
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -28,6 +29,16 @@ from .arbiter import IntentArbiter, ArbiterResult, ParserVote
 from .semantic import SemanticIntentClassifier
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class SubQueryResult:
+    """Result for a single sub-question in a compound query."""
+    query: str
+    intent: IntentType
+    confidence: float
+    slots: Dict[str, Any] = field(default_factory=dict)
+    entities: List[Entity] = field(default_factory=list)
 
 
 @dataclass
@@ -49,6 +60,10 @@ class UnifiedParseResult:
     slots: Dict[str, Any] = field(default_factory=dict)
     matched_pattern: Optional[str] = None
     raw_query: str = ""
+    
+    # Multi-question support
+    sub_queries: List[SubQueryResult] = field(default_factory=list)
+    is_compound: bool = False
     
     # Arbiter-specific fields
     arbiter_result: Optional[ArbiterResult] = None
@@ -333,6 +348,148 @@ class UnifiedIntentParser:
             "by_method": {},
         }
     
+    # =========================================================================
+    # Multi-Question Handling: Detection and Splitting
+    # =========================================================================
+    
+    def _split_compound_query(self, query: str) -> List[str]:
+        """
+        Split a compound query into individual questions.
+        
+        Handles various question boundary patterns:
+        - Explicit question marks: "What files? Did we run pipelines?"
+        - Conjunctions: "Show files and also check status"
+        - Numbered lists: "1) list files 2) run pipeline"
+        - Semicolons: "list files; check status"
+        
+        Returns:
+            List of individual questions. Single-element list if not compound.
+        """
+        # Normalize whitespace
+        query = " ".join(query.split())
+        
+        # Strategy 1: Split on question marks (keeping the question content)
+        # "What files do we have? Did we run any pipelines?" → 2 questions
+        if "?" in query:
+            # Split but keep non-empty parts
+            parts = re.split(r'\?\s*', query)
+            questions = [p.strip() + "?" for p in parts if p.strip()]
+            # Handle trailing text after last ?
+            if not query.rstrip().endswith("?") and questions:
+                questions[-1] = questions[-1].rstrip("?")
+            if len(questions) > 1:
+                logger.debug(f"Split on '?': {questions}")
+                return questions
+        
+        # Strategy 2: Split on conjunctive phrases that indicate new requests
+        # "List files and also show me the status" → 2 requests
+        conjunctive_patterns = [
+            r'\s+and\s+(?:also|then|please|can you)\s+',  # "and also", "and then"
+            r'\s+also(?:\s+can you|\s+please)?\s+',  # "also can you"
+            r'[;]\s*',  # Semicolon separator
+            r'\s+then\s+(?:can you|please)?\s+',  # "then can you"
+        ]
+        
+        for pattern in conjunctive_patterns:
+            parts = re.split(pattern, query, flags=re.IGNORECASE)
+            if len(parts) > 1:
+                questions = [p.strip() for p in parts if p.strip()]
+                if len(questions) > 1:
+                    logger.debug(f"Split on conjunctive: {questions}")
+                    return questions
+        
+        # Strategy 3: Numbered lists
+        # "1) list files 2) check status" or "1. list files 2. check status"
+        numbered_pattern = r'\d+[).]\s*'
+        if re.search(numbered_pattern, query):
+            parts = re.split(numbered_pattern, query)
+            questions = [p.strip() for p in parts if p.strip()]
+            if len(questions) > 1:
+                logger.debug(f"Split on numbers: {questions}")
+                return questions
+        
+        # No split detected - return single query
+        return [query]
+    
+    def _parse_sub_query(
+        self, 
+        query: str, 
+        context: Optional[Dict[str, Any]] = None
+    ) -> SubQueryResult:
+        """
+        Parse a single sub-query (lightweight, no LLM).
+        
+        Used for parsing individual parts of a compound query.
+        """
+        pattern_result = self.pattern_parser.parse(query, context)
+        
+        return SubQueryResult(
+            query=query,
+            intent=pattern_result.primary_intent,
+            confidence=pattern_result.confidence,
+            slots=pattern_result.slots,
+            entities=pattern_result.entities,
+        )
+    
+    def parse_compound(
+        self,
+        query: str,
+        context: Optional[Dict[str, Any]] = None
+    ) -> UnifiedParseResult:
+        """
+        Parse a potentially compound query with multiple questions.
+        
+        Returns a UnifiedParseResult with:
+        - primary_intent: The first/main question's intent
+        - sub_queries: List of all parsed sub-questions
+        - is_compound: True if multiple questions detected
+        
+        Example:
+            query = "How many scRNA-seq files? Did we run any pipelines?"
+            result = parser.parse_compound(query)
+            result.is_compound  # True
+            result.sub_queries  # [SubQueryResult(...), SubQueryResult(...)]
+        """
+        sub_query_texts = self._split_compound_query(query)
+        
+        if len(sub_query_texts) == 1:
+            # Not compound - use standard parse
+            result = self.parse(query, context)
+            result.is_compound = False
+            return result
+        
+        # Parse each sub-query
+        sub_results = []
+        all_entities = []
+        
+        for sq_text in sub_query_texts:
+            sq_result = self._parse_sub_query(sq_text, context)
+            sub_results.append(sq_result)
+            all_entities.extend(sq_result.entities)
+        
+        # Primary result is the first question (usually the main intent)
+        primary = sub_results[0]
+        
+        # Collect all unique sub-intents
+        sub_intents = [sr.intent for sr in sub_results[1:] if sr.intent != primary.intent]
+        
+        logger.info(
+            f"Compound query detected: {len(sub_results)} sub-questions, "
+            f"primary={primary.intent.name}, sub_intents={[i.name for i in sub_intents]}"
+        )
+        
+        return UnifiedParseResult(
+            primary_intent=primary.intent,
+            confidence=primary.confidence,
+            entities=all_entities,
+            sub_intents=sub_intents,
+            slots=primary.slots,
+            raw_query=query,
+            sub_queries=sub_results,
+            is_compound=True,
+            method="compound_split",
+        )
+
     # =========================================================================
     # Ensemble Methods: Parallel Execution, Normalization, Entity-Aware Voting
     # =========================================================================
