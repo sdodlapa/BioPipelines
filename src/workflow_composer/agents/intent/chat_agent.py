@@ -786,8 +786,46 @@ class ChatAgent:
         handoff_request = None
         suggestions: List[str] = []
         state_transition = None
+        content_lower = message.content.lower()
         
-        # Step 1: Scope Detection
+        # Step 0: Quick intent detection - handle greetings/farewells directly
+        quick_intent = self._detect_intent(message.content, context)
+        
+        if quick_intent == "greeting":
+            return self._create_response(
+                "Hello! I'm your bioinformatics workflow assistant. I can help you with:\n"
+                "- Creating RNA-seq, ChIP-seq, and other analysis workflows\n"
+                "- Searching for datasets in public repositories\n"
+                "- Running quality control on sequencing data\n"
+                "- Explaining bioinformatics concepts\n\n"
+                "What would you like to work on today?",
+                message,
+                session,
+                intent_detected="greeting"
+            )
+        
+        if quick_intent == "farewell":
+            return self._create_response(
+                "You're welcome! Feel free to come back anytime you need help "
+                "with bioinformatics workflows or analyses. Good luck with your research!",
+                message,
+                session,
+                intent_detected="farewell"
+            )
+        
+        # Step 0.5: Check if this is a tool query - delegate to UnifiedAgent
+        if self._is_tool_query(message.content, quick_intent):
+            unified_result = self._execute_via_unified_agent_sync(message.content)
+            if unified_result:
+                return self._create_response(
+                    unified_result.get("message", ""),
+                    message,
+                    session,
+                    intent_detected=quick_intent or "tool_execution",
+                    unified_result=unified_result
+                )
+        
+        # Step 1: Scope Detection (only for non-tool, non-greeting queries)
         if self._scope_handler:
             scope_result, deflection = self._scope_handler.handle_query(
                 message.content,
@@ -934,7 +972,8 @@ class ChatAgent:
         state_transition: Optional[str] = None,
         requires_handoff: bool = False,
         handoff_request: Optional[HandoffRequest] = None,
-        suggestions: Optional[List[str]] = None
+        suggestions: Optional[List[str]] = None,
+        unified_result: Optional[Dict[str, Any]] = None
     ) -> AgentResponse:
         """Create an agent response."""
         response_message = Message(
@@ -945,6 +984,16 @@ class ChatAgent:
             user_id="agent"
         )
         
+        # Extract suggestions from unified_result if available
+        final_suggestions = suggestions or []
+        entities_extracted = None
+        if unified_result:
+            if unified_result.get("suggestions"):
+                final_suggestions = unified_result["suggestions"]
+            # Store tool execution data as entities
+            if unified_result.get("data"):
+                entities_extracted = unified_result["data"]
+        
         return AgentResponse(
             message=response_message,
             intent_detected=intent_detected,
@@ -952,7 +1001,8 @@ class ChatAgent:
             state_transition=state_transition,
             requires_handoff=requires_handoff,
             handoff_request=handoff_request,
-            suggestions=suggestions or []
+            suggestions=final_suggestions,
+            entities_extracted=entities_extracted
         )
     
     def _determine_event(
@@ -979,8 +1029,21 @@ class ChatAgent:
     ) -> str:
         """Detect intent from message content."""
         content_lower = content.lower()
+        words = content_lower.split()
         
-        # Simple rule-based intent detection
+        # Check for greetings first (common conversation starters)
+        # More lenient - if message starts with greeting words
+        greeting_words = ["hello", "hi", "hey", "good morning", "good afternoon", "good evening"]
+        if any(content_lower.startswith(word) for word in greeting_words) or \
+           (len(words) >= 1 and words[0] in ["hello", "hi", "hey"]):
+            return "greeting"
+        
+        # Check for farewells (including thanks)
+        farewell_words = ["bye", "goodbye", "thanks", "thank you", "see you", "take care"]
+        if any(word in content_lower for word in farewell_words):
+            return "farewell"
+        
+        # Simple rule-based intent detection for tool operations
         if any(word in content_lower for word in ["create", "build", "run", "generate"]):
             if "workflow" in content_lower or "pipeline" in content_lower:
                 return "create_workflow"
@@ -990,12 +1053,6 @@ class ChatAgent:
         
         if any(word in content_lower for word in ["status", "check", "progress"]):
             return "check_status"
-        
-        if any(word in content_lower for word in ["hello", "hi", "hey"]):
-            return "greeting"
-        
-        if any(word in content_lower for word in ["bye", "goodbye", "thanks"]):
-            return "farewell"
         
         return "unknown"
     
@@ -1038,6 +1095,8 @@ class ChatAgent:
         - Job submission/status
         - Reference downloads
         - Error diagnosis
+        - Educational explanations about bioinformatics
+        - Analysis questions
         """
         content_lower = content.lower()
         
@@ -1052,16 +1111,31 @@ class ChatAgent:
             # Reference operations
             "reference", "genome", "index",
             # Analysis operations
-            "analyze", "results", "visualize",
+            "analyze", "results", "visualize", "analysis",
             # Diagnosis
             "error", "diagnose", "debug", "fix",
+            # Educational / explanation
+            "explain", "what is", "what's", "how do", "how to", "what does",
+            # Bioinformatics-specific terms (expanded)
+            "rna-seq", "rnaseq", "rna seq", "chip-seq", "chipseq", "chip seq",
+            "dna-seq", "dnaseq", "methylation", "bisulfite", "metagenomics",
+            "fastq", "fastqc", "bam", "sam", "vcf", "bed", "gtf", "gff",
+            "deseq", "deseq2", "edger", "star", "hisat", "bowtie", "bwa",
+            "salmon", "kallisto", "featurecounts", "htseq",
+            "quality control", "qc", "trimming", "alignment", "mapping",
+            "differential expression", "de analysis", "peak calling",
+            "variant calling", "snp", "mutation", "gatk",
+            "transcriptome", "genome assembly", "annotation",
+            # Organism/sample mentions
+            "mouse", "human", "sample", "replicate", "condition",
+            "expression", "gene", "transcript", "protein",
         ]
         
         if any(kw in content_lower for kw in tool_keywords):
             return True
         
         # Check intent
-        tool_intents = ["create_workflow", "check_status", "scan_data", "submit_job"]
+        tool_intents = ["create_workflow", "check_status", "scan_data", "submit_job", "explain"]
         if intent and intent in tool_intents:
             return True
         

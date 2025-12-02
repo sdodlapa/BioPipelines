@@ -31,3 +31,33 @@
 {"timestamp": "2025-12-02T07:17:10.095988", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-02T07:17:11.993950", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-02T07:17:14.463203", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:28:08.186944", "query": "What's the best pizza recipe?", "intent": "META_UNKNOWN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:28:13.206543", "query": "What's a good movie to watch tonight?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:31:04.061053", "query": "What's the best pizza recipe?", "intent": "META_UNKNOWN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:31:08.914540", "query": "What's a good movie to watch tonight?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:25.016096", "query": "What's the best pizza recipe?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:29.573374", "query": "What's a good movie to watch tonight?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:41.745436", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:42.994223", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:45.086377", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:48.431476", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:50.666078", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:52.316544", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:32:54.707752", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:34:22.014617", "query": "Can you search for mouse liver RNA-seq datasets?", "intent": "DATA_SEARCH", "confidence": 1.0332551808576211, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:34:22.038219", "query": "Explain what DESeq2 does", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:34:22.756832", "query": "What's the weather like today?", "intent": "META_UNKNOWN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:36:07.797695", "query": "Explain what DESeq2 does", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:36:08.477801", "query": "What's the weather like today?", "intent": "META_UNKNOWN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:36:09.682808", "query": "How about peak calling in ChIP-seq?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:36:47.569598", "query": "What's the best pizza recipe?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:36:51.220602", "query": "What's a good movie to watch tonight?", "intent": "META_UNKNOWN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:01.692614", "query": "What's the best pizza recipe?", "intent": "META_UNKNOWN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:04.963583", "query": "What's a good movie to watch tonight?", "intent": "META_UNKNOWN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:17.314917", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:18.595036", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:20.752840", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:24.385582", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:26.895577", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:28.250375", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-02T07:38:30.823838", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
