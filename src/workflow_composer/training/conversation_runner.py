@@ -140,17 +140,28 @@ class ConversationRunner:
         
         self.components = {}
         
+        # Get project paths
+        project_root = Path(__file__).parent.parent.parent.parent
+        catalog_path = project_root / "data" / "tool_catalog"
+        
         try:
-            from ..core.query_parser import QueryParser
-            self.components['query_parser'] = QueryParser()
-            logger.info("Loaded QueryParser")
+            from ..core.query_parser import IntentParser, AnalysisType, ParsedIntent
+            # IntentParser needs an LLM, but we can use it without for pattern matching
+            self.components['intent_parser_class'] = IntentParser
+            self.components['AnalysisType'] = AnalysisType
+            self.components['ParsedIntent'] = ParsedIntent
+            logger.info("Loaded IntentParser classes")
         except Exception as e:
-            logger.warning(f"Could not load QueryParser: {e}")
+            logger.warning(f"Could not load IntentParser: {e}")
         
         try:
             from ..core.tool_selector import ToolSelector
-            self.components['tool_selector'] = ToolSelector()
-            logger.info("Loaded ToolSelector")
+            # ToolSelector needs catalog_path
+            if catalog_path.exists():
+                self.components['tool_selector'] = ToolSelector(str(catalog_path))
+                logger.info("Loaded ToolSelector")
+            else:
+                logger.warning(f"Tool catalog not found at {catalog_path}")
         except Exception as e:
             logger.warning(f"Could not load ToolSelector: {e}")
         
@@ -175,6 +186,334 @@ class ConversationRunner:
         except Exception as e:
             logger.warning(f"Could not load Orchestrator: {e}")
     
+    def _parse_intent_simple(self, message: str) -> Optional[Dict[str, Any]]:
+        """Simple pattern-based intent parsing for training data collection."""
+        
+        message_lower = message.lower()
+        
+        # Analysis type patterns - map to config/analysis_definitions.yaml keys
+        analysis_patterns = {
+            # RNA-seq variants
+            'rna_seq_differential_expression': ['differential expression', 'deseq', 'edger', 'degs', 'de analysis'],
+            'rna_seq_basic': ['rna-seq', 'rnaseq', 'rna seq', 'transcriptom', 'gene expression'],
+            'rna_seq_de_novo_assembly': ['de novo assembly', 'transcriptome assembly', 'trinity'],
+            
+            # ChIP-seq
+            'chip_seq_peak_calling': ['chip-seq', 'chipseq', 'chip seq', 'histone', 'transcription factor', 'peak calling', 'h3k'],
+            
+            # ATAC-seq
+            'atac_seq': ['atac-seq', 'atacseq', 'atac seq', 'chromatin accessibility', 'open chromatin'],
+            
+            # Variant calling
+            'wgs_variant_calling': ['germline variant', 'snp', 'snv', 'wgs', 'whole genome', 'haplotypecaller'],
+            'somatic_variant_calling': ['somatic', 'tumor', 'cancer', 'mutect', 'strelka'],
+            'structural_variant_detection': ['structural variant', 'sv', 'cnv', 'copy number', 'manta', 'delly'],
+            
+            # Metagenomics
+            'metagenomics_profiling': ['16s', 'microbiome', 'taxonom', 'amplicon', 'kraken', 'metaphlan'],
+            'metagenomics_assembly': ['metagenom', 'metagenomic assembly', 'megahit'],
+            
+            # Methylation
+            'bisulfite_seq_methylation': ['methylation', 'bisulfite', 'dmr', 'cpg', 'epigenom', 'wgbs', 'rrbs'],
+            
+            # Hi-C
+            'hic_chromatin_interaction': ['hi-c', 'hic', 'chromatin interaction', '3d genome', 'tad', 'compartment'],
+            
+            # Single cell
+            'single_cell_rna_seq': ['single-cell', 'single cell', 'scrna', '10x', 'cellranger'],
+            'multi_modal_scrna': ['multiome', 'cite-seq', 'multimodal single cell'],
+            
+            # Spatial
+            'spatial_transcriptomics': ['spatial transcriptom', 'spatial rna'],
+            'spatial_visium': ['visium', '10x visium'],
+            'spatial_xenium': ['xenium'],
+            
+            # Long read
+            'long_read_rna_seq': ['nanopore rna', 'long read rna', 'direct rna'],
+            'long_read_isoseq': ['isoseq', 'iso-seq', 'pacbio rna', 'isoform'],
+            'long_read_assembly': ['nanopore assembly', 'pacbio assembly', 'long read assembly', 'flye', 'canu'],
+        }
+        
+        detected_type = None
+        confidence = 0.0
+        
+        for analysis_type, patterns in analysis_patterns.items():
+            for pattern in patterns:
+                if pattern in message_lower:
+                    detected_type = analysis_type
+                    confidence = 0.85
+                    break
+            if detected_type:
+                break
+        
+        if not detected_type:
+            # Generic analysis detection with looser matching
+            if 'rna' in message_lower:
+                detected_type = 'rna_seq_basic'
+                confidence = 0.5
+            elif 'chip' in message_lower:
+                detected_type = 'chip_seq_peak_calling'
+                confidence = 0.5
+            elif 'variant' in message_lower or 'mutation' in message_lower:
+                detected_type = 'wgs_variant_calling'
+                confidence = 0.5
+            elif any(word in message_lower for word in ['analyze', 'analysis', 'pipeline', 'workflow']):
+                detected_type = 'generic'
+                confidence = 0.4
+        
+        if not detected_type:
+            return None
+        
+        # Extract organism
+        organism = None
+        organism_patterns = {
+            'human': ['human', 'homo sapiens', 'hg38', 'grch38', 'patient', 'clinical'],
+            'mouse': ['mouse', 'mus musculus', 'mm10', 'murine'],
+            'arabidopsis': ['arabidopsis', 'plant', 'tair'],
+            'zebrafish': ['zebrafish', 'danio rerio'],
+            'drosophila': ['drosophila', 'fruit fly', 'fly'],
+            'yeast': ['yeast', 'saccharomyces', 'cerevisiae'],
+            'e_coli': ['e. coli', 'e coli', 'escherichia'],
+        }
+        
+        for org, patterns in organism_patterns.items():
+            for pattern in patterns:
+                if pattern in message_lower:
+                    organism = org
+                    break
+            if organism:
+                break
+        
+        return {
+            'analysis_type': detected_type,
+            'organism': organism,
+            'confidence': confidence,
+            'raw_query': message,
+        }
+    
+    def _generate_simple_workflow(self, intent: Dict[str, Any], tools: List[str]) -> str:
+        """Generate a simple Nextflow workflow template for training data."""
+        
+        analysis_type = intent.get('analysis_type', 'generic')
+        
+        # Workflow templates by analysis type
+        templates = {
+            'rna_seq': '''
+// RNA-seq Analysis Workflow
+nextflow.enable.dsl=2
+
+params.reads = "data/*_{R1,R2}.fastq.gz"
+params.genome = "references/genome.fa"
+params.gtf = "references/genes.gtf"
+params.outdir = "results"
+
+process FASTQC {{
+    input:
+    tuple val(sample_id), path(reads)
+    
+    output:
+    path("*_fastqc.*")
+    
+    script:
+    \"\"\"
+    fastqc -t 4 ${{reads}}
+    \"\"\"
+}}
+
+process STAR_ALIGN {{
+    input:
+    tuple val(sample_id), path(reads)
+    path genome_index
+    
+    output:
+    tuple val(sample_id), path("*.bam")
+    
+    script:
+    \"\"\"
+    STAR --genomeDir ${{genome_index}} \\
+         --readFilesIn ${{reads[0]}} ${{reads[1]}} \\
+         --outFileNamePrefix ${{sample_id}} \\
+         --outSAMtype BAM SortedByCoordinate
+    \"\"\"
+}}
+
+process FEATURECOUNTS {{
+    input:
+    tuple val(sample_id), path(bam)
+    path gtf
+    
+    output:
+    path("*.counts.txt")
+    
+    script:
+    \"\"\"
+    featureCounts -T 4 -p -a ${{gtf}} -o ${{sample_id}}.counts.txt ${{bam}}
+    \"\"\"
+}}
+
+workflow {{
+    reads_ch = Channel.fromFilePairs(params.reads)
+    
+    FASTQC(reads_ch)
+    STAR_ALIGN(reads_ch, params.genome)
+    FEATURECOUNTS(STAR_ALIGN.out, params.gtf)
+}}
+''',
+            'chip_seq': '''
+// ChIP-seq Analysis Workflow
+nextflow.enable.dsl=2
+
+params.reads = "data/*_{R1,R2}.fastq.gz"
+params.genome = "references/genome.fa"
+params.outdir = "results"
+
+process FASTQC {{
+    input:
+    tuple val(sample_id), path(reads)
+    
+    output:
+    path("*_fastqc.*")
+    
+    script:
+    \"\"\"
+    fastqc -t 4 ${{reads}}
+    \"\"\"
+}}
+
+process BWA_ALIGN {{
+    input:
+    tuple val(sample_id), path(reads)
+    path genome
+    
+    output:
+    tuple val(sample_id), path("*.bam")
+    
+    script:
+    \"\"\"
+    bwa mem -t 8 ${{genome}} ${{reads[0]}} ${{reads[1]}} | samtools sort -o ${{sample_id}}.bam
+    \"\"\"
+}}
+
+process MACS2_CALLPEAK {{
+    input:
+    tuple val(sample_id), path(bam)
+    
+    output:
+    path("*.narrowPeak")
+    
+    script:
+    \"\"\"
+    macs2 callpeak -t ${{bam}} -f BAMPE -g hs -n ${{sample_id}} --outdir .
+    \"\"\"
+}}
+
+workflow {{
+    reads_ch = Channel.fromFilePairs(params.reads)
+    
+    FASTQC(reads_ch)
+    BWA_ALIGN(reads_ch, params.genome)
+    MACS2_CALLPEAK(BWA_ALIGN.out)
+}}
+''',
+            'variant_calling': '''
+// Variant Calling Workflow
+nextflow.enable.dsl=2
+
+params.reads = "data/*_{R1,R2}.fastq.gz"
+params.genome = "references/genome.fa"
+params.dbsnp = "references/dbsnp.vcf.gz"
+params.outdir = "results"
+
+process BWA_ALIGN {{
+    input:
+    tuple val(sample_id), path(reads)
+    path genome
+    
+    output:
+    tuple val(sample_id), path("*.bam"), path("*.bai")
+    
+    script:
+    \"\"\"
+    bwa mem -t 8 -R "@RG\\\\tID:${{sample_id}}\\\\tSM:${{sample_id}}" ${{genome}} ${{reads[0]}} ${{reads[1]}} | \\
+    samtools sort -o ${{sample_id}}.bam
+    samtools index ${{sample_id}}.bam
+    \"\"\"
+}}
+
+process MARK_DUPLICATES {{
+    input:
+    tuple val(sample_id), path(bam), path(bai)
+    
+    output:
+    tuple val(sample_id), path("*.dedup.bam"), path("*.dedup.bai")
+    
+    script:
+    \"\"\"
+    gatk MarkDuplicates -I ${{bam}} -O ${{sample_id}}.dedup.bam -M metrics.txt
+    samtools index ${{sample_id}}.dedup.bam
+    \"\"\"
+}}
+
+process HAPLOTYPECALLER {{
+    input:
+    tuple val(sample_id), path(bam), path(bai)
+    path genome
+    
+    output:
+    tuple val(sample_id), path("*.vcf.gz")
+    
+    script:
+    \"\"\"
+    gatk HaplotypeCaller -R ${{genome}} -I ${{bam}} -O ${{sample_id}}.vcf.gz
+    \"\"\"
+}}
+
+workflow {{
+    reads_ch = Channel.fromFilePairs(params.reads)
+    
+    BWA_ALIGN(reads_ch, params.genome)
+    MARK_DUPLICATES(BWA_ALIGN.out)
+    HAPLOTYPECALLER(MARK_DUPLICATES.out, params.genome)
+}}
+''',
+        }
+        
+        # Return template or generate generic
+        if analysis_type in templates:
+            return templates[analysis_type].strip()
+        
+        # Generic workflow with provided tools
+        tool_processes = []
+        for tool in (tools or ['FASTQC', 'ALIGN', 'PROCESS']):
+            tool_processes.append(f'''
+process {tool.upper().replace("-", "_")} {{
+    input:
+    path(input_file)
+    
+    output:
+    path("*.out")
+    
+    script:
+    \"\"\"
+    echo "Running {tool}"
+    \"\"\"
+}}''')
+        
+        return f'''
+// {analysis_type.replace("_", " ").title()} Analysis Workflow
+nextflow.enable.dsl=2
+
+params.input = "data/*"
+params.outdir = "results"
+
+{"".join(tool_processes)}
+
+workflow {{
+    input_ch = Channel.fromPath(params.input)
+    // Add workflow logic here
+}}
+'''.strip()
+
     async def process_turn(
         self,
         user_message: str,
@@ -191,27 +530,23 @@ class ConversationRunner:
         start_time = time.time()
         
         try:
-            # Step 1: Parse intent
-            if 'query_parser' in self.components:
-                try:
-                    intent = self.components['query_parser'].parse(user_message)
-                    result.intent_parsed = {
-                        'analysis_type': intent.analysis_type.value if hasattr(intent, 'analysis_type') else str(intent),
-                        'organism': getattr(intent, 'organism', None),
-                        'parameters': getattr(intent, 'parameters', {}),
-                    }
-                    result.intent_confidence = getattr(intent, 'confidence', 0.5)
-                except Exception as e:
-                    result.warnings.append(f"Intent parsing issue: {str(e)}")
+            # Step 1: Parse intent - use simple pattern-based approach
+            intent_parsed = self._parse_intent_simple(user_message)
+            if intent_parsed:
+                result.intent_parsed = intent_parsed
+                result.intent_confidence = intent_parsed.get('confidence', 0.6)
             
-            # Step 2: Select tools
+            # Step 2: Select tools using find_tools_for_analysis
             if 'tool_selector' in self.components and result.intent_parsed:
                 try:
-                    tools = self.components['tool_selector'].select_tools(result.intent_parsed)
-                    result.tools_selected = [
-                        t.name if hasattr(t, 'name') else str(t) 
-                        for t in (tools or [])
-                    ][:10]
+                    analysis_type = result.intent_parsed.get('analysis_type', '')
+                    tools_dict = self.components['tool_selector'].find_tools_for_analysis(analysis_type)
+                    # Flatten the dict of categories to list of tools
+                    all_tools = []
+                    for category, tool_list in tools_dict.items():
+                        for t in tool_list:
+                            all_tools.append(t.name if hasattr(t, 'name') else str(t))
+                    result.tools_selected = all_tools[:10]
                 except Exception as e:
                     result.warnings.append(f"Tool selection issue: {str(e)}")
             
@@ -236,10 +571,10 @@ class ConversationRunner:
                 except Exception as e:
                     result.warnings.append(f"Composer issue: {str(e)}")
             
-            # Step 4: Generate workflow if not done yet
-            if not result.workflow_generated and 'workflow_generator' in self.components:
+            # Step 4: Generate workflow if not done yet - use simpler approach
+            if not result.workflow_generated and result.intent_parsed:
                 try:
-                    workflow = self.components['workflow_generator'].generate(result.intent_parsed)
+                    workflow = self._generate_simple_workflow(result.intent_parsed, result.tools_selected)
                     result.workflow_generated = workflow or ""
                 except Exception as e:
                     result.warnings.append(f"Workflow generation issue: {str(e)}")
