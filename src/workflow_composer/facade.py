@@ -410,34 +410,119 @@ class BioPipelines:
         result = {
             "llm_available": False,
             "llm_provider": None,
+            "llm_model": None,
             "tools_available": False,
             "tool_count": 0,
             "orchestrator_available": False,
+            "supervisor_available": False,
+            "local_llm_available": False,
+            "cloud_llm_available": False,
         }
         
-        # Check LLM/orchestrator
+        # Check orchestrator and LLM providers
         try:
             orch = self.orchestrator
             if orch:
                 result["orchestrator_available"] = True
-                # Try to get provider info
-                if hasattr(orch, '_local_provider') and orch._local_provider:
+                
+                # Check local provider availability using the proper API
+                if hasattr(orch, 'local') and orch.local:
+                    try:
+                        if hasattr(orch, 'is_local_available'):
+                            result["local_llm_available"] = orch.is_local_available
+                        elif hasattr(orch.local, 'is_available'):
+                            result["local_llm_available"] = orch.local.is_available()
+                        
+                        if result["local_llm_available"]:
+                            result["llm_available"] = True
+                            result["llm_provider"] = "local"
+                            # Get model name if available
+                            if hasattr(orch.local, 'model'):
+                                result["llm_model"] = orch.local.model
+                            elif hasattr(orch.local, 'default_model'):
+                                result["llm_model"] = orch.local.default_model
+                    except Exception:
+                        pass
+                
+                # Check cloud provider availability
+                if hasattr(orch, 'cloud') and orch.cloud:
+                    try:
+                        if hasattr(orch, 'is_cloud_available'):
+                            result["cloud_llm_available"] = orch.is_cloud_available
+                        elif hasattr(orch.cloud, 'is_available'):
+                            result["cloud_llm_available"] = orch.cloud.is_available()
+                        
+                        if result["cloud_llm_available"] and not result["llm_available"]:
+                            result["llm_available"] = True
+                            result["llm_provider"] = "cloud"
+                            if hasattr(orch.cloud, 'default_model'):
+                                result["llm_model"] = orch.cloud.default_model
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.debug(f"Orchestrator health check failed: {e}")
+        
+        # Check composer LLM (fallback detection)
+        if not result["llm_available"]:
+            try:
+                self._ensure_initialized()
+                if self._composer and hasattr(self._composer, 'llm') and self._composer.llm:
                     result["llm_available"] = True
-                    result["llm_provider"] = "local"
-                elif hasattr(orch, '_cloud_provider') and orch._cloud_provider:
-                    result["llm_available"] = True
-                    result["llm_provider"] = "cloud"
+                    result["llm_provider"] = str(type(self._composer.llm).__name__).replace("Adapter", "").lower()
+                    if hasattr(self._composer.llm, 'model'):
+                        result["llm_model"] = self._composer.llm.model
+            except Exception:
+                pass
+        
+        # Also check composer LLM even if orchestrator found something
+        try:
+            self._ensure_initialized()
+            if self._composer and hasattr(self._composer, 'llm') and self._composer.llm:
+                llm_type = str(type(self._composer.llm).__name__).replace("Adapter", "").lower()
+                if llm_type == "vllm":
+                    result["local_llm_available"] = True
+                    # Prefer local/vLLM as primary when available
+                    result["llm_provider"] = "vllm"
+                    if hasattr(self._composer.llm, 'model'):
+                        result["llm_model"] = self._composer.llm.model
         except Exception:
             pass
+        
+        # Check supervisor availability
+        try:
+            from .agents.specialists import SupervisorAgent
+            result["supervisor_available"] = True
+        except ImportError:
+            result["supervisor_available"] = False
         
         # Check agent/tools
         try:
             agent = self.agent
-            if agent and hasattr(agent, '_tools') and agent._tools:
-                result["tools_available"] = True
-                result["tool_count"] = len(agent._tools.tools) if hasattr(agent._tools, 'tools') else 0
-        except Exception:
-            pass
+            if agent:
+                # Check for tools in different possible locations
+                tools_found = False
+                tool_count = 0
+                
+                if hasattr(agent, '_tools') and agent._tools:
+                    if hasattr(agent._tools, 'tools'):
+                        tool_count = len(agent._tools.tools)
+                        tools_found = True
+                    elif hasattr(agent._tools, '_registry'):
+                        tool_count = len(agent._tools._registry)
+                        tools_found = True
+                
+                if not tools_found and hasattr(agent, 'tools'):
+                    if isinstance(agent.tools, dict):
+                        tool_count = len(agent.tools)
+                        tools_found = True
+                    elif hasattr(agent.tools, '__len__'):
+                        tool_count = len(agent.tools)
+                        tools_found = True
+                
+                result["tools_available"] = tools_found or tool_count > 0
+                result["tool_count"] = tool_count
+        except Exception as e:
+            logger.debug(f"Agent tools health check failed: {e}")
         
         return result
     

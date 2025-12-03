@@ -315,6 +315,21 @@ TOOL_PERMISSION_MAPPING = {
     ToolName.RUN_COMMAND: "execute",
     ToolName.GET_DATASET_DETAILS: "read",  # New: dataset details is read-only
     
+    # Database clients (Phase 2) - all read-only
+    ToolName.SEARCH_UNIPROT: "read",
+    ToolName.GET_PROTEIN: "read",
+    ToolName.SEARCH_STRING: "read",
+    ToolName.GET_INTERACTIONS: "read",
+    ToolName.GET_ENRICHMENT: "read",
+    ToolName.SEARCH_KEGG: "read",
+    ToolName.GET_PATHWAY: "read",
+    ToolName.SEARCH_REACTOME: "read",
+    ToolName.ANALYZE_GENES: "read",
+    ToolName.SEARCH_PUBMED: "read",
+    ToolName.GET_ARTICLE: "read",
+    ToolName.SEARCH_CLINVAR: "read",
+    ToolName.GET_VARIANTS: "read",
+    
     # Write/execute tools (may need approval)
     ToolName.DOWNLOAD_DATASET: "write",
     ToolName.DOWNLOAD_REFERENCE: "write",

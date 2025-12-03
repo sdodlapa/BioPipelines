@@ -77,6 +77,10 @@ from .nf_core_indexer import (
     NFCoreIndexer,
     NFCoreModule,
 )
+from .tool_catalog_indexer import (
+    ToolCatalogIndexer,
+    index_tool_catalog,
+)
 
 __all__ = [
     # Layer 1: Memory
@@ -108,4 +112,7 @@ __all__ = [
     "ErrorSolution",
     "NFCoreIndexer",
     "NFCoreModule",
+    # Tool Catalog Indexer
+    "ToolCatalogIndexer",
+    "index_tool_catalog",
 ]
