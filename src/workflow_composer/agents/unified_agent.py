@@ -1112,13 +1112,15 @@ class UnifiedAgent:
                 try:
                     slot_check = self.slot_prompter.check_slots(detected_intent, hybrid_params or {})
                     if slot_check.needs_prompting:
-                        logger.info(f"Missing required slots for intent '{detected_intent}': {slot_check.missing_slots}")
+                        # Use missing_required (the correct attribute)
+                        missing = slot_check.missing_required
+                        logger.info(f"Missing required slots for intent '{detected_intent}': {missing}")
                         return AgentResponse(
                             success=True,
                             message=slot_check.prompt,
                             response_type=ResponseType.QUESTION,
                             task_type=task_type,
-                            suggestions=[f"Provide {slot}" for slot in slot_check.missing_slots[:3]],
+                            suggestions=[f"Provide {slot}" for slot in missing[:3]],
                         )
                 except Exception as e:
                     logger.warning(f"Slot prompting check failed: {e}")

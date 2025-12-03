@@ -284,9 +284,18 @@ def get_job_status_impl(
         
         if use_monitor:
             monitor = WorkflowMonitor(workflow_dir or ".")
-            status = monitor.get_workflow_status()
+            # Use scan_workflow to get execution info
+            execution = monitor.scan_workflow(workflow_dir or ".")
             
-            if status:
+            if execution:
+                status = {
+                    'run_name': execution.name,
+                    'status': execution.status.value if execution.status else 'Unknown',
+                    'start_time': str(execution.start_time) if execution.start_time else 'N/A',
+                    'duration': str(execution.duration) if execution.duration else 'N/A',
+                    'completed': len([t for t in execution.tasks if t.status == 'COMPLETED']),
+                    'total': len(execution.tasks),
+                }
                 results["nextflow"] = status
                 
                 # Format Nextflow status

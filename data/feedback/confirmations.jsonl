@@ -441,3 +441,40 @@
 {"timestamp": "2025-12-03T05:14:11.077905", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T05:14:12.417976", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T05:14:14.612211", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:19:53.064465", "query": "Create an RNA-seq differential expression workflow", "intent": "WORKFLOW_CREATE", "confidence": 0.6089517770661559, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:19:56.182382", "query": "show me the logs", "intent": "JOB_LOGS", "confidence": 0.7487772663434346, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:04.035880", "query": "scan my data folder", "intent": "DATA_SCAN", "confidence": 0.8894675028324127, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:04.852740", "query": "search for human lung cancer RNA-seq data", "intent": "DATA_SEARCH", "confidence": 1.0775620516974183, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:04.875353", "query": "create a workflow for this data", "intent": "WORKFLOW_CREATE", "confidence": 0.7313420294046298, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:07.479437", "query": "my pipeline failed with an error", "intent": "DIAGNOSE_ERROR", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:08.615847", "query": "the error says 'out of memory'", "intent": "DIAGNOSE_ERROR", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:10.177786", "query": "how do I fix f19a1a66-ddc9-4567-80db-d009bb455b25?", "intent": "DIAGNOSE_ERROR", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:16.474361", "query": "I mean analyze the RNA-seq results", "intent": "ANALYSIS_INTERPRET", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:17.791946", "query": "show me the differential expression genes", "intent": "ANALYSIS_INTERPRET", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:19.331110", "query": "create a ChIP-seq workflow for H3K27ac", "intent": "WORKFLOW_CREATE", "confidence": 0.6622139712783639, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:26.234155", "query": "what is differential expression?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.6336457524090647, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:27.610900", "query": "how is f19a1a66-ddc9-4567-80db-d009bb455b25 different from differential accessibility?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:27.632950", "query": "ok, create a workflow for DE analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7202535315741547, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:29.853291", "query": "search for methylation data", "intent": "DATA_SEARCH", "confidence": 0.775885102534662, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:32.523169", "query": "yes, download GSE12345", "intent": "DATA_DOWNLOAD", "confidence": 0.6046082689967784, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:20:43.802863", "query": "scan my data folder", "intent": "DATA_SCAN", "confidence": 0.8894675028324127, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:27:16.988278", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:27:40.708252", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:27:53.955369", "query": "Create RNA-seq workflow @#$%^&*()", "intent": "WORKFLOW_CREATE", "confidence": 0.6489025798791186, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:27:59.734456", "query": "Create a workflow for RNA-seq analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7753640384590451, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:28:24.615552", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:28:25.872475", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:28:27.775009", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:28:31.326892", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:28:33.269357", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:28:34.596895", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:28:36.601150", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:19.153522", "query": "What is STAR aligner?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:20.493579", "query": "How is it different from HISAT2?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:25.489067", "query": "Create a ChIP-seq workflow for human histone marks", "intent": "WORKFLOW_CREATE", "confidence": 0.544641886027113, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:28.014538", "query": "What is the status of my workflow?", "intent": "JOB_STATUS", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:35.502670", "query": "Sorry, I meant what quality control tools are there?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:39.251056", "query": "What reference genome should I use?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:40.447375", "query": "How do I interpret the methylation calls?", "intent": "ANALYSIS_INTERPRET", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:43.259944", "query": "I want to work with human RNA-seq data", "intent": "DATA_SEARCH", "confidence": 0.5502892283569165, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T05:32:46.668593", "query": "And what about alignment?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
