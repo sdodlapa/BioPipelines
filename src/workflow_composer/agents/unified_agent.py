@@ -359,6 +359,19 @@ LEVEL_PERMISSIONS = {
 
 
 # =============================================================================
+# Utility Functions
+# =============================================================================
+
+def _get_tool_name(tool) -> str:
+    """Safely get tool name from enum or string."""
+    if tool is None:
+        return "none"
+    if hasattr(tool, 'value'):
+        return tool.value
+    return str(tool)
+
+
+# =============================================================================
 # Unified Agent
 # =============================================================================
 
@@ -719,24 +732,27 @@ class UnifiedAgent:
             {"read"}
         )
         
+        # Get safe string representation of tool name
+        tool_str = _get_tool_name(tool_name)
+        
         if permission_category in allowed_categories:
             return {
                 "allowed": True,
                 "requires_approval": False,
-                "reason": f"Tool '{tool_name.value}' is allowed at {self.autonomy_level.value} level",
+                "reason": f"Tool '{tool_str}' is allowed at {self.autonomy_level.value} level",
             }
         elif permission_category == "execute" and self.autonomy_level == AutonomyLevel.ASSISTED:
             # Execution needs approval at ASSISTED level
             return {
                 "allowed": True,
                 "requires_approval": True,
-                "reason": f"Tool '{tool_name.value}' requires approval at {self.autonomy_level.value} level",
+                "reason": f"Tool '{tool_str}' requires approval at {self.autonomy_level.value} level",
             }
         else:
             return {
                 "allowed": False,
                 "requires_approval": False,
-                "reason": f"Tool '{tool_name.value}' ({permission_category}) not allowed at {self.autonomy_level.value} level",
+                "reason": f"Tool '{tool_str}' ({permission_category}) not allowed at {self.autonomy_level.value} level",
             }
             
     # =========================================================================
@@ -1102,10 +1118,12 @@ class UnifiedAgent:
             detection = self.tools.detect_tool(query)
             if detection:
                 detected_tool, detected_args = detection
-                logger.info(f"Regex detected tool: {detected_tool.value} with args: {detected_args}")
+                tool_name = _get_tool_name(detected_tool)
+                logger.info(f"Regex detected tool: {tool_name} with args: {detected_args}")
         
         if detected_tool:
-            logger.info(f"Final detected tool: {detected_tool.value} with args: {detected_args}")
+            tool_name = _get_tool_name(detected_tool)
+            logger.info(f"Final detected tool: {tool_name} with args: {detected_args}")
             
             # Slot prompting: Check if required parameters are missing
             if detected_intent:
@@ -1143,12 +1161,12 @@ class UnifiedAgent:
             if perm["requires_approval"]:
                 return AgentResponse(
                     success=True,
-                    message=f"This action requires approval: {detected_tool.value}",
+                    message=f"This action requires approval: {_get_tool_name(detected_tool)}",
                     response_type=ResponseType.NEEDS_APPROVAL,
                     task_type=task_type,
                     requires_approval=True,
                     approval_request={
-                        "tool": detected_tool.value,
+                        "tool": _get_tool_name(detected_tool),
                         "query": query,
                         "reason": perm["reason"],
                     },
@@ -1170,7 +1188,7 @@ class UnifiedAgent:
                     with tracer.start_span("rag_enhance") as rag_span:
                         enhancement = self.rag.enhance(
                             query=query,
-                            candidate_tools=[detected_tool.value],
+                            candidate_tools=[_get_tool_name(detected_tool)],
                             base_args=params
                         )
                         # Use RAG-suggested arguments (merged with user-provided)
@@ -1186,7 +1204,7 @@ class UnifiedAgent:
             # Execute the tool with tracing
             with tracer.start_span(
                 "execute_tool",
-                tags={"tool": detected_tool.value, "rag_enhanced": rag_enhanced}
+                tags={"tool": _get_tool_name(detected_tool), "rag_enhanced": rag_enhanced}
             ) as tool_span:
                 execution = self.execute_tool(detected_tool, **params)
                 tool_span.add_tag("success", execution.result.success)
@@ -1201,7 +1219,7 @@ class UnifiedAgent:
                             recovery_response = self.recovery.handle_error(
                                 error=Exception(execution.result.error),
                                 query=query,
-                                tool_name=detected_tool.value,
+                                tool_name=_get_tool_name(detected_tool),
                                 parameters=params,
                             )
                             
@@ -1218,7 +1236,7 @@ class UnifiedAgent:
                     
                 metrics.counter(
                     "agent.tools.executed",
-                    tags={"tool": detected_tool.value, "success": str(execution.result.success)}
+                    tags={"tool": _get_tool_name(detected_tool), "success": str(execution.result.success)}
                 )
             
             # Build response
@@ -1260,7 +1278,7 @@ class UnifiedAgent:
                             self.session_memory.remember_dataset(params[key])
                     
                     # Remember search results
-                    if detected_tool and detected_tool.value in ("search_databases", "scan_data"):
+                    if detected_tool and _get_tool_name(detected_tool) in ("search_databases", "scan_data"):
                         result_data = execution.result.data if execution.result else {}
                         if isinstance(result_data, dict):
                             # From search
@@ -1270,9 +1288,9 @@ class UnifiedAgent:
                     
                     # Record the action
                     self.session_memory.record_action(
-                        action_type=detected_tool.value if detected_tool else "general",
+                        action_type=_get_tool_name(detected_tool) if detected_tool else "general",
                         query=query,
-                        tool_used=detected_tool.value if detected_tool else "none",
+                        tool_used=_get_tool_name(detected_tool) if detected_tool else "none",
                         success=response.success,
                         parameters=params,
                         result_summary=response.message[:200] if response.message else None,

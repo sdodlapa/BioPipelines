@@ -509,3 +509,44 @@
 {"timestamp": "2025-12-03T06:01:06.089074", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T06:01:07.420410", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T06:01:09.039758", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:25.163134", "query": "Search for mouse brain methylation data", "intent": "DATA_SEARCH", "confidence": 1.0585143840683653, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:27.098367", "query": "Search for yeast liver RNA-seq data", "intent": "DATA_SEARCH", "confidence": 1.0843558171484187, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:28.624536", "query": "Search for yeast hippocampus WES data", "intent": "DATA_SEARCH", "confidence": 0.7, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:30.218479", "query": "Search for fly lung Hi-C data", "intent": "DATA_SEARCH", "confidence": 0.9125, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:31.707992", "query": "Search for fly liver WES data", "intent": "DATA_SEARCH", "confidence": 0.9739966154098509, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:33.483083", "query": "Search for zebrafish kidney RNA-seq data", "intent": "DATA_SEARCH", "confidence": 1.06914849002958, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:35.536958", "query": "Search for fly intestine scRNA-seq data", "intent": "DATA_SEARCH", "confidence": 0.8969003854160807, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:36.850225", "query": "Search for rat hippocampus ATAC-seq data", "intent": "DATA_SEARCH", "confidence": 0.9455292196911846, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:38.156557", "query": "Search for worm liver Hi-C data", "intent": "DATA_SEARCH", "confidence": 1.1036455869674684, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:39.661436", "query": "Search for arabidopsis skin WES data", "intent": "DATA_SEARCH", "confidence": 0.7374999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:40.907044", "query": "Create a metagenomics pipeline for yeast", "intent": "WORKFLOW_CREATE", "confidence": 0.8235278089841206, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:45.150435", "query": "Create a Hi-C pipeline for worm", "intent": "WORKFLOW_CREATE", "confidence": 0.7372861032417598, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:47.769446", "query": "Create a ChIP-seq pipeline for arabidopsis", "intent": "WORKFLOW_CREATE", "confidence": 0.7504258341589888, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:50.284157", "query": "Create a ATAC-seq pipeline for mouse", "intent": "WORKFLOW_CREATE", "confidence": 0.5874440427695138, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:52.697684", "query": "Create a metagenomics pipeline for yeast", "intent": "WORKFLOW_CREATE", "confidence": 0.8235278089841206, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:55.812154", "query": "LOOK FOR ARABIDOPSIS DNA METHYLATION IN GEO", "intent": "DATA_SEARCH", "confidence": 0.7616715833202428, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:12:57.136463", "query": "LOOK FOR MCF7 DNA METHYLATION DATA", "intent": "DATA_SEARCH", "confidence": 1.0240494250689407, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:13:03.058355", "query": "hi", "intent": "META_GREETING", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:13:04.253429", "query": "hello", "intent": "META_GREETING", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:13:22.136231", "query": "can you help", "intent": "EDUCATION_HELP", "confidence": 0.65, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:23:15.585420", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:23:39.389784", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:23:52.754542", "query": "Create RNA-seq workflow @#$%^&*()", "intent": "WORKFLOW_CREATE", "confidence": 0.6489025798791186, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:23:58.342672", "query": "Create a workflow for RNA-seq analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7753640384590451, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:24:23.316853", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:24:24.570093", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:24:26.781724", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:24:30.332011", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:24:32.510590", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:24:33.947399", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:24:36.303195", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:25:56.332294", "query": "LOOK FOR ARABIDOPSIS DNA METHYLATION IN GEO", "intent": "DATA_SEARCH", "confidence": 0.7616715833202428, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:25:57.718447", "query": "LOOK FOR MCF7 DNA METHYLATION DATA", "intent": "DATA_SEARCH", "confidence": 1.0240494250689407, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:06.222622", "query": "hi", "intent": "META_GREETING", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:07.410249", "query": "hello", "intent": "META_GREETING", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:17.664699", "query": "help", "intent": "EDUCATION_HELP", "confidence": 0.96, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:20.174723", "query": "?", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:23.177647", "query": "I am looking for publicly available RNA-seq datasets that \n            profile human kidney tissue samples from healthy donors, preferably \n            with at least two biological replicates and proper controls, ideally from \n            the ENCODE consortium or GEO database, and if possible with accompanying \n            metadata about the experimental conditions", "intent": "DATA_SEARCH", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:26.148715", "query": "I am looking for publicly available RNA-seq datasets that \n            profile zebrafish kidney tissue samples from healthy donors, preferably \n            with at least two biological replicates and proper controls, ideally from \n            the ENCODE consortium or GEO database, and if possible with accompanying \n            metadata about the experimental conditions", "intent": "DATA_SEARCH", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:27.918126", "query": "Find H3K4me3 ChIP-seq (worm, kidney)", "intent": "DATA_SEARCH", "confidence": 0.7916666666666667, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:26:31.036037", "query": "Find H3K4me3 ChIP-seq (zebrafish, cerebellum)", "intent": "DATA_SEARCH", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
