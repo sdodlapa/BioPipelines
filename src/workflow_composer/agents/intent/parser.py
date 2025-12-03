@@ -888,6 +888,69 @@ class EntityPatterns:
 
 
 # =============================================================================
+# TYPO CORRECTION
+# =============================================================================
+
+# Common terms and their variants for fuzzy matching
+COMMON_TERMS = [
+    # Action words
+    "data", "dataset", "datasets", "download", "workflow", "search", "create",
+    "analyze", "analysis", "run", "submit", "status", "help", "explain",
+    "scan", "find", "check", "show", "list", "cancel", "restart",
+    # Bioinformatics terms
+    "rna-seq", "rnaseq", "chip-seq", "chipseq", "atac-seq", "atacseq",
+    "dna-seq", "dnaseq", "methylation", "genomics", "transcriptomics",
+    "fastq", "bam", "vcf", "bed", "reference", "genome", "annotation",
+    # Organisms
+    "human", "mouse", "drosophila", "zebrafish",
+]
+
+
+# Import difflib here to avoid import inside method
+from difflib import get_close_matches as _get_close_matches
+
+
+def _fix_typos_impl(message: str) -> str:
+    """
+    Fix common typos using fuzzy matching.
+    
+    Uses Levenshtein-like similarity to correct typos in key terms.
+    Only corrects words that are clearly typos (not in dictionary).
+    
+    Args:
+        message: User's message with potential typos
+        
+    Returns:
+        Message with typos corrected
+    """
+    words = message.split()
+    corrected = []
+    
+    for word in words:
+        word_lower = word.lower().rstrip("?.,!")
+        punctuation = word[len(word_lower):] if len(word) > len(word_lower) else ""
+        
+        # Skip short words and words that are already valid
+        if len(word_lower) < 4 or word_lower in COMMON_TERMS:
+            corrected.append(word)
+            continue
+        
+        # Try to find a close match
+        matches = _get_close_matches(word_lower, COMMON_TERMS, n=1, cutoff=0.75)
+        if matches:
+            # Preserve original case if possible
+            replacement = matches[0]
+            if word[0].isupper():
+                replacement = replacement.capitalize()
+            corrected.append(replacement + punctuation)
+            logger.debug(f"Typo corrected: '{word}' -> '{replacement}'")
+        else:
+            corrected.append(word)
+    
+    return " ".join(corrected)
+
+
+# =============================================================================
 # INTENT PARSER CLASS
 # =============================================================================
 
@@ -914,6 +977,10 @@ class IntentParser:
         self._compiled_patterns = self._compile_patterns()
         self._entity_extractor = EntityExtractor()
     
+    def _fix_typos(self, message: str) -> str:
+        """Instance method wrapper for typo fixing."""
+        return _fix_typos_impl(message)
+    
     def _compile_patterns(self) -> List[Tuple[re.Pattern, IntentType, Dict[str, int]]]:
         """Compile regex patterns for efficiency."""
         compiled = []
@@ -934,12 +1001,21 @@ class IntentParser:
         
         Args:
             message: User's message
-            context: Optional conversation context
+            context: Optional conversation context for follow-up handling
             
         Returns:
             IntentResult with intent, confidence, and entities
         """
         message = message.strip()
+        
+        # Pre-stage: Fix common typos using fuzzy matching
+        message = self._fix_typos(message)
+        
+        # Stage 0: Context-aware handling for follow-up queries
+        if context and self._is_followup_query(message):
+            followup_result = self._handle_followup(message, context)
+            if followup_result and followup_result.confidence >= 0.6:
+                return followup_result
         
         # Stage 1: Pattern matching
         pattern_result = self._match_patterns(message)
@@ -969,7 +1045,13 @@ class IntentParser:
             pattern_result.entities = entities
             return pattern_result
         
-        # Stage 3: LLM classification (if available)
+        # Stage 3: Context-based inference (for ambiguous queries)
+        if context:
+            context_result = self._infer_from_context(message, entities, context)
+            if context_result and context_result.confidence >= 0.5:
+                return context_result
+        
+        # Stage 4: LLM classification (if available)
         if self.llm_client:
             llm_result = self._classify_with_llm(message, context)
             if llm_result:
@@ -1277,3 +1359,142 @@ class EntityExtractor:
             ))
         
         return entities
+
+
+# =============================================================================
+# CONTEXT-AWARE PARSING HELPERS (added to IntentParser class)
+# =============================================================================
+
+def _add_context_methods():
+    """Add context-aware methods to IntentParser."""
+    
+    def _is_followup_query(self, message: str) -> bool:
+        """Check if this is a follow-up query (short, uses pronouns, etc.)."""
+        message_lower = message.lower().strip()
+        
+        # Short queries are often follow-ups
+        if len(message.split()) <= 6:
+            # Check for pronouns and references
+            followup_indicators = [
+                "it", "that", "this", "those", "these",
+                "what about", "how about", "and", "also",
+                "compare", "versus", "vs", "or",
+                "more", "other", "another", "same",
+                "back to", "actually", "no,", "not"
+            ]
+            return any(ind in message_lower for ind in followup_indicators)
+        return False
+    
+    def _handle_followup(self, message: str, context: Dict) -> Optional[IntentResult]:
+        """Handle follow-up queries using context."""
+        message_lower = message.lower().strip()
+        entities = self._entity_extractor.extract(message)
+        
+        last_intent = context.get("last_intent")
+        last_topic = context.get("last_topic")
+        last_tool = context.get("last_tool")
+        
+        # Handle comparison queries: "How does it compare to X?"
+        if any(kw in message_lower for kw in ["compare", "versus", "vs", "difference", "better"]):
+            # This is an educational comparison query
+            # Extract what we're comparing to
+            compare_patterns = [
+                r"compare.*?to\s+(.+?)[\?\.!]?$",
+                r"versus\s+(.+?)[\?\.!]?$",
+                r"vs\.?\s+(.+?)[\?\.!]?$",
+                r"difference.*?(?:between|with)\s+(.+?)[\?\.!]?$",
+                r"better.*?(?:than|for)\s+(.+?)[\?\.!]?$",
+            ]
+            for pattern in compare_patterns:
+                match = re.search(pattern, message_lower)
+                if match:
+                    concept2 = match.group(1).strip()
+                    concept1 = last_topic or "it"
+                    return IntentResult(
+                        primary_intent=IntentType.EDUCATION_EXPLAIN,
+                        confidence=0.75,
+                        entities=entities,
+                        slots={"concept": f"comparison of {concept1} and {concept2}"},
+                    )
+        
+        # Handle "what about X" - continues previous context
+        if message_lower.startswith("what about") or message_lower.startswith("how about"):
+            if last_intent == "EDUCATION_EXPLAIN":
+                new_topic = message_lower.replace("what about", "").replace("how about", "").strip().rstrip("?")
+                return IntentResult(
+                    primary_intent=IntentType.EDUCATION_EXPLAIN,
+                    confidence=0.70,
+                    entities=entities,
+                    slots={"concept": new_topic},
+                )
+            elif last_intent == "DATA_SEARCH":
+                new_query = message_lower.replace("what about", "").replace("how about", "").strip().rstrip("?")
+                return IntentResult(
+                    primary_intent=IntentType.DATA_SEARCH,
+                    confidence=0.70,
+                    entities=entities,
+                    slots={"query": new_query},
+                )
+        
+        # Handle corrections: "No, I meant X" or "actually, X"
+        if message_lower.startswith("no,") or message_lower.startswith("actually") or message_lower.startswith("not"):
+            # Try to extract the intended meaning and re-classify
+            cleaned = re.sub(r"^(no,|actually,?|not)\s*", "", message_lower).strip()
+            if cleaned:
+                # Re-run pattern matching on the cleaned message
+                return self._match_patterns(cleaned) or IntentResult(
+                    primary_intent=IntentType.META_CORRECT,
+                    confidence=0.60,
+                    entities=entities,
+                    needs_clarification=True,
+                    clarification_prompt=f"I understand you want to correct something. Could you tell me more specifically what you meant by '{cleaned}'?",
+                )
+        
+        return None
+    
+    def _infer_from_context(self, message: str, entities: List[Entity], context: Dict) -> Optional[IntentResult]:
+        """Infer intent from context when pattern matching fails."""
+        last_intent = context.get("last_intent")
+        last_topic = context.get("last_topic")
+        turn_count = context.get("turn_count", 0)
+        
+        message_lower = message.lower().strip()
+        
+        # If we're in a multi-turn conversation and the message looks like a continuation
+        if turn_count > 0 and len(message.split()) <= 10:
+            # Look for bioinformatics entities that might suggest intent
+            bio_entities = [e for e in entities if hasattr(e, 'type') and e.type in (
+                EntityType.ASSAY_TYPE, EntityType.ORGANISM, EntityType.TISSUE,
+                EntityType.TOOL, EntityType.FILE_FORMAT
+            )]
+            
+            if bio_entities:
+                # If entities match data types, might be search
+                if any(e.type == EntityType.ASSAY_TYPE for e in bio_entities):
+                    if "search" in message_lower or "find" in message_lower or "data" in message_lower:
+                        return IntentResult(
+                            primary_intent=IntentType.DATA_SEARCH,
+                            confidence=0.55,
+                            entities=entities,
+                            slots={"query": " ".join(e.value for e in bio_entities)},
+                        )
+                
+                # If continuing from educational context, likely asking about entity
+                if last_intent == "EDUCATION_EXPLAIN":
+                    topic = " ".join(e.value for e in bio_entities[:2])
+                    return IntentResult(
+                        primary_intent=IntentType.EDUCATION_EXPLAIN,
+                        confidence=0.55,
+                        entities=entities,
+                        slots={"concept": topic},
+                    )
+        
+        return None
+    
+    # Attach methods to the class
+    IntentParser._is_followup_query = _is_followup_query
+    IntentParser._handle_followup = _handle_followup
+    IntentParser._infer_from_context = _infer_from_context
+
+# Initialize context methods
+_add_context_methods()

@@ -48,6 +48,7 @@ Example with different autonomy levels:
 
 import asyncio
 import logging
+import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -949,8 +950,21 @@ class UnifiedAgent:
             # Use intent parser (recommended) or fall back to hybrid
             if self.intent_parser:
                 try:
+                    # Build context dictionary from ConversationContext for the parser
+                    parse_context = None
+                    if self._context:
+                        parse_context = {
+                            "last_intent": self._context.state.get("last_intent"),
+                            "last_topic": self._context.state.get("last_topic"),
+                            "last_entity": self._context.state.get("last_entity"),
+                            "last_tool": self._context.state.get("last_tool"),
+                            "last_workflow_type": self._context.state.get("workflow_type"),
+                            "entities": [e.value for e in self._context.entity_tracker.get_salient_entities()[:5]],
+                            "turn_count": self._context.turn_count,
+                        }
+                    
                     with tracer.start_span("intent_parse") as parse_span:
-                        intent_result = self.intent_parser.parse(query)
+                        intent_result = self.intent_parser.parse(query, context=parse_context)
                         intent_name = intent_result.primary_intent.name
                         parse_span.add_tag("intent", intent_name)
                         parse_span.add_tag("confidence", intent_result.confidence)
@@ -1026,6 +1040,26 @@ class UnifiedAgent:
                         
                         # Build params from slots
                         hybrid_params = intent_result.slots.copy() if intent_result.slots else {}
+                        
+                        # For DATA_SEARCH without a query, check if this is truly a search request
+                        # Ambiguous queries like "It is sequencing data" need clarification
+                        if intent_name == "DATA_SEARCH" and not hybrid_params.get("query"):
+                            # Check if the query looks like a search request or clarification
+                            search_indicators = ["search", "find", "look for", "get", "download", "available", "datasets"]
+                            is_likely_search = any(ind in query.lower() for ind in search_indicators)
+                            
+                            if is_likely_search:
+                                # Use the full query as the search term
+                                hybrid_params["query"] = query
+                            else:
+                                # This is likely a clarification or context continuation
+                                return AgentResponse(
+                                    success=True,
+                                    message="Could you please specify what you would like to do with that information? For example, are you looking to search for datasets, create a workflow, or learn more about the topic?",
+                                    response_type=ResponseType.QUESTION,
+                                    task_type=task_type,
+                                )
+                        
                         detected_args = list(hybrid_params.values()) if hybrid_params else []
                         logger.info(f"Mapped intent '{intent_name}' to tool: {detected_tool}, params: {hybrid_params}")
                     
@@ -1311,6 +1345,30 @@ class UnifiedAgent:
         # Record final metrics
         if span.end_time:
             metrics.histogram("agent.query.duration_ms", span.duration_ms)
+        
+        # ================================================================
+        # UPDATE CONVERSATION CONTEXT STATE for next turn's context
+        # ================================================================
+        if self._context:
+            try:
+                # Update state with current turn info
+                self._context.state["last_intent"] = intent_name if intent_result else None
+                self._context.state["last_tool"] = _get_tool_name(detected_tool) if detected_tool else None
+                
+                # Extract topic from query for context-aware parsing next turn
+                if intent_name == "EDUCATION_EXPLAIN" and intent_result and intent_result.slots:
+                    self._context.state["last_topic"] = intent_result.slots.get("concept") or intent_result.slots.get("topic")
+                
+                # Track last entity (most salient)
+                if extracted_entities:
+                    # Get the most specific entity
+                    for entity in extracted_entities:
+                        if hasattr(entity, 'entity_type') and entity.entity_type in ("TOOL", "ASSAY_TYPE", "ORGANISM"):
+                            self._context.state["last_entity"] = entity.text if hasattr(entity, 'text') else str(entity)
+                            break
+                
+            except Exception as e:
+                logger.debug(f"Context state update failed: {e}")
         
         # Add assistant response to conversation context
         self.context.add_turn(

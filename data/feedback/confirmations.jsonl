@@ -550,3 +550,93 @@
 {"timestamp": "2025-12-03T06:26:26.148715", "query": "I am looking for publicly available RNA-seq datasets that \n            profile zebrafish kidney tissue samples from healthy donors, preferably \n            with at least two biological replicates and proper controls, ideally from \n            the ENCODE consortium or GEO database, and if possible with accompanying \n            metadata about the experimental conditions", "intent": "DATA_SEARCH", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T06:26:27.918126", "query": "Find H3K4me3 ChIP-seq (worm, kidney)", "intent": "DATA_SEARCH", "confidence": 0.7916666666666667, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T06:26:31.036037", "query": "Find H3K4me3 ChIP-seq (zebrafish, cerebellum)", "intent": "DATA_SEARCH", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:35.441444", "query": "Tell me more about STAR aligner", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:38.343407", "query": "Which one is better for novel splice junction detection?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:39.834400", "query": "What about memory requirements?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:43.702385", "query": "Create a ChIP-seq workflow for H3K27ac", "intent": "WORKFLOW_CREATE", "confidence": 0.6622139712783639, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:44.843493", "query": "Actually, what is H3K27ac?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:49.977292", "query": "Now create a workflow for H3K4me3", "intent": "WORKFLOW_CREATE", "confidence": 0.6508630951397476, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:52.312012", "query": "I got an error about missing reference genome", "intent": "DIAGNOSE_ERROR", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:37:52.355157", "query": "Download the human reference genome hg38", "intent": "REFERENCE_CHECK", "confidence": 0.7885874718427658, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:03.794231", "query": "Generate the workflow now", "intent": "WORKFLOW_CREATE", "confidence": 0.92, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:12.749087", "query": "What data do I have available locally?", "intent": "DATA_SCAN", "confidence": 0.5106755913243262, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:13.082082", "query": "Search for public human liver RNA-seq datasets", "intent": "DATA_SEARCH", "confidence": 1.140675258999618, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:15.540934", "query": "Create an RNA-seq workflow for differential expression", "intent": "WORKFLOW_CREATE", "confidence": 0.7044572605027669, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:17.733500", "query": "What is the status of my analysis?", "intent": "JOB_STATUS", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:19.962621", "query": "Explain the DESeq2 output format", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:21.991547", "query": "How do I interpret a log2 fold change of 2?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:25.817455", "query": "No, I meant ChIP-seq not microarray", "intent": "EDUCATION_EXPLAIN", "confidence": 0.69, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:29.313631", "query": "Generate the workflow with MACS2", "intent": "WORKFLOW_CREATE", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:32.380102", "query": "I am new to bioinformatics, where do I start?", "intent": "EDUCATION_HELP", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:32.404206", "query": "What is the difference between DNA-seq and RNA-seq?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5505104848783994, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:35.270097", "query": "How do I check if my data quality is good?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:40.475403", "query": "How do I correlate gene expression with chromatin accessibility?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:40.497060", "query": "Create a workflow for the RNA-seq part first", "intent": "WORKFLOW_CREATE", "confidence": 0.8501262626262626, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T06:38:42.081244", "query": "Now create the ATAC-seq workflow", "intent": "WORKFLOW_CREATE", "confidence": 0.94, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:38:04.971427", "query": "search for daatsets", "intent": "DATA_SEARCH", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:38:06.530416", "query": "crate a wrokflow", "intent": "WORKFLOW_CREATE", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:38:07.096122", "query": "serach for human rna-seq", "intent": "DATA_SEARCH", "confidence": 0.6633405213386658, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:15.782764", "query": "Tell me more about STAR aligner", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:18.342042", "query": "What about memory requirements?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:22.094758", "query": "Create a ChIP-seq workflow for H3K27ac", "intent": "WORKFLOW_CREATE", "confidence": 0.6622139712783639, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:23.237137", "query": "Actually, what is H3K27ac?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:28.045666", "query": "Now create a workflow for H3K4me3", "intent": "WORKFLOW_CREATE", "confidence": 0.6508630951397476, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:30.360602", "query": "I got an error about missing reference genome", "intent": "DIAGNOSE_ERROR", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:38.344856", "query": "Generate the workflow now", "intent": "WORKFLOW_CREATE", "confidence": 0.92, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:47.451901", "query": "What data do I have available locally?", "intent": "DATA_SCAN", "confidence": 0.5106755913243262, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:47.728348", "query": "Search for public human liver RNA-seq datasets", "intent": "DATA_SEARCH", "confidence": 1.140675258999618, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:49.004974", "query": "Create an RNA-seq workflow for differential expression", "intent": "WORKFLOW_CREATE", "confidence": 0.7044572605027669, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:50.361519", "query": "What is the status of my analysis?", "intent": "JOB_STATUS", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:53.959249", "query": "Explain the DESeq2 output format", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:56.179893", "query": "How do I interpret a log2 fold change of 2?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:39:59.877059", "query": "No, I meant ChIP-seq not microarray", "intent": "EDUCATION_EXPLAIN", "confidence": 0.69, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:01.158238", "query": "Generate the workflow with MACS2", "intent": "WORKFLOW_CREATE", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:04.255245", "query": "I am new to bioinformatics, where do I start?", "intent": "EDUCATION_HELP", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:04.280485", "query": "What is the difference between DNA-seq and RNA-seq?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5505104848783994, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:06.010020", "query": "I have RNA-seq data, what can I learn from ENCSR216KLZ?", "intent": "DATA_SEARCH", "confidence": 0.5, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:07.703422", "query": "How do I check if my data quality is good?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:11.707635", "query": "How do I correlate gene expression with chromatin accessibility?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:11.730007", "query": "Create a workflow for the RNA-seq part first", "intent": "WORKFLOW_CREATE", "confidence": 0.8501262626262626, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:40:14.078750", "query": "Now create the ATAC-seq workflow", "intent": "WORKFLOW_CREATE", "confidence": 0.94, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:42:37.552220", "query": "Download the human reference genome hg38", "intent": "REFERENCE_CHECK", "confidence": 0.7885874718427658, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:44:29.503555", "query": "Search for human RNA-seq liver datasets", "intent": "DATA_SEARCH", "confidence": 1.0793688159012587, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:45:16.266628", "query": "Tell me more about STAR aligner", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:45:23.251153", "query": "Create a ChIP-seq workflow for H3K27ac", "intent": "WORKFLOW_CREATE", "confidence": 0.6622139712783639, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:45:24.415371", "query": "Actually, what is H3K27ac?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:45:29.561840", "query": "Now create a workflow for H3K4me3", "intent": "WORKFLOW_CREATE", "confidence": 0.6508630951397476, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:45:32.220709", "query": "I got an error about missing reference genome", "intent": "DIAGNOSE_ERROR", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:45:40.930900", "query": "Generate the workflow now", "intent": "WORKFLOW_CREATE", "confidence": 0.92, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:45:49.176946", "query": "What data do I have available locally?", "intent": "DATA_SCAN", "confidence": 0.5106755913243262, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:04.399954", "query": "Search for public human liver RNA-seq datasets", "intent": "DATA_SEARCH", "confidence": 1.140675258999618, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:05.968254", "query": "Create an RNA-seq workflow for differential expression", "intent": "WORKFLOW_CREATE", "confidence": 0.7044572605027669, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:07.622831", "query": "What is the status of my analysis?", "intent": "JOB_STATUS", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:08.753557", "query": "Explain the DESeq2 output format", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:10.123266", "query": "How do I interpret a log2 fold change of 2?", "intent": "ANALYSIS_INTERPRET", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:14.346700", "query": "Generate the workflow with MACS2", "intent": "WORKFLOW_CREATE", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:17.157960", "query": "I am new to bioinformatics, where do I start?", "intent": "EDUCATION_HELP", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:17.183718", "query": "What is the difference between DNA-seq and RNA-seq?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5505104848783994, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:19.836167", "query": "How do I check if my data quality is good?", "intent": "DATA_DESCRIBE", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:24.035397", "query": "How do I correlate gene expression with chromatin accessibility?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:24.058244", "query": "Create a workflow for the RNA-seq part first", "intent": "WORKFLOW_CREATE", "confidence": 0.8501262626262626, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:46:25.193198", "query": "Now create the ATAC-seq workflow", "intent": "WORKFLOW_CREATE", "confidence": 0.94, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:47:15.620777", "query": "I got an error about missing reference genome", "intent": "DIAGNOSE_ERROR", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:49:51.988586", "query": "Tell me more about STAR aligner", "intent": "EDUCATION_EXPLAIN", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:49:59.131692", "query": "Create a ChIP-seq workflow for H3K27ac", "intent": "WORKFLOW_CREATE", "confidence": 0.6622139712783639, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:00.310140", "query": "Actually, what is H3K27ac?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:05.191240", "query": "Now create a workflow for H3K4me3", "intent": "WORKFLOW_CREATE", "confidence": 0.6508630951397476, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:07.542590", "query": "I got an error about missing reference genome", "intent": "DIAGNOSE_ERROR", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:16.649464", "query": "Generate the workflow now", "intent": "WORKFLOW_CREATE", "confidence": 0.92, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:24.754826", "query": "What data do I have available locally?", "intent": "DATA_SCAN", "confidence": 0.5106755913243262, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:25.681673", "query": "Search for public human liver RNA-seq datasets", "intent": "DATA_SEARCH", "confidence": 1.140675258999618, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:26.998971", "query": "Create an RNA-seq workflow for differential expression", "intent": "WORKFLOW_CREATE", "confidence": 0.7044572605027669, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:28.396920", "query": "What is the status of my analysis?", "intent": "JOB_STATUS", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:29.842879", "query": "Explain the DESeq2 output format", "intent": "EDUCATION_EXPLAIN", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:31.248731", "query": "How do I interpret a log2 fold change of 2?", "intent": "ANALYSIS_INTERPRET", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:34.883950", "query": "Generate the workflow with MACS2", "intent": "WORKFLOW_CREATE", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:37.272087", "query": "I am new to bioinformatics, where do I start?", "intent": "EDUCATION_HELP", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:37.297096", "query": "What is the difference between DNA-seq and RNA-seq?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5505104848783994, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:39.056752", "query": "I have RNA-seq data, what can I learn from ENCSR216KLZ?", "intent": "DATA_SEARCH", "confidence": 0.5, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:40.190876", "query": "How do I check if my data quality is good?", "intent": "DATA_DESCRIBE", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:44.044363", "query": "How do I correlate gene expression with chromatin accessibility?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:44.067377", "query": "Create a workflow for the RNA-seq part first", "intent": "WORKFLOW_CREATE", "confidence": 0.8501262626262626, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T07:50:47.720267", "query": "Now create the ATAC-seq workflow", "intent": "WORKFLOW_CREATE", "confidence": 0.94, "user": "anonymous", "type": "confirmation"}
