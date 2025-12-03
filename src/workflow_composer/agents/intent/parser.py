@@ -242,6 +242,21 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # =========================================================================
     # EDUCATION - must come before workflow creation to catch "how does X work"
     # =========================================================================
+    # Tool recommendation questions - must capture full topic after "for"
+    (r"what\s+tools?\s+(?:should|would|do)\s+(?:i|we|you)?\s*(?:use|recommend|need|suggest)\s+for\s+(.+?)(?:\?|$)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    (r"what\s+tools?\s+(?:should|would|do)\s+(?:i|we|you)?\s*(?:use|recommend|need|suggest)(?:\?|$)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": "tools"}),  # When no topic specified
+    (r"(?:recommend|suggest)\s+(?:a\s+|some\s+)?tools?\s+for\s+(.+?)(?:\?|$)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    (r"which\s+tools?\s+(?:are\s+)?(?:best|good|recommended)\s+for\s+(.+?)(?:\?|$)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    (r"what(?:'s| is)\s+(?:the\s+)?(?:best|recommended)\s+(?:tool|software|program)\s+for\s+(.+?)(?:\?|$)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    # Follow-up "how about for X specifically" - tool recommendation context
+    (r"(?:how|what)\s+about\s+(?:for\s+)?(.+?)(?:\s+specifically)?(?:\?|$)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    
     # "How do/does X work" - both singular and plural subjects
     (r"how\s+do(?:es)?\s+(.+?)\s+work(?:\??|$)",
      IntentType.EDUCATION_EXPLAIN, {"concept": 1}),

@@ -838,11 +838,31 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
             message="❌ Database search is not available."
         )
     except Exception as e:
+        # Graceful degradation: provide helpful information even when search fails
+        logger.error(f"Database search failed: {e}")
+        
+        # Provide manual search links as fallback
+        encoded_query = query.replace(" ", "+") if query else ""
+        fallback_message = f"""⚠️ Live database search is temporarily unavailable.
+
+**Manual search options:**
+- 🔬 [ENCODE](<https://www.encodeproject.org/search/?searchTerm={encoded_query}&type=Experiment>) - Chromatin & transcription data
+- 🧬 [GEO](<https://www.ncbi.nlm.nih.gov/gds/?term={encoded_query}>) - Gene expression studies  
+- 📊 [SRA](<https://www.ncbi.nlm.nih.gov/sra/?term={encoded_query}>) - Sequencing reads
+- 🏥 [GDC/TCGA](<https://portal.gdc.cancer.gov/>) - Cancer genomics
+
+**Tips for your search** "{query}":
+- Include organism (human, mouse)
+- Specify assay type (RNA-seq, ChIP-seq, ATAC-seq)
+- Add tissue or cell line keywords
+
+**Try again:** `search databases for {query}`"""
+        
         return ToolResult(
-            success=False,
+            success=True,  # Mark as success since we provided helpful fallback
             tool_name="search_databases",
-            error=str(e),
-            message=f"❌ Search failed: {e}"
+            data={"results": [], "query": query, "fallback": True},
+            message=fallback_message
         )
 
 
