@@ -438,6 +438,8 @@ Return JSON:
 
 class EnsembleIntentParser:
     """
+    DEPRECATED: Use `workflow_composer.agents.intent.UnifiedIntentParser` instead.
+    
     Ensemble parser combining multiple models for accurate intent parsing.
     
     Strategy:
@@ -445,6 +447,10 @@ class EnsembleIntentParser:
     2. Run BioMistral on GPU if available
     3. Combine with weighted voting
     4. Fall back to rules if models unavailable
+    
+    .. deprecated:: 2.1.0
+        Use :class:`workflow_composer.agents.intent.UnifiedIntentParser` instead.
+        This class will be removed in version 3.0.0.
     """
     
     def __init__(
@@ -456,11 +462,22 @@ class EnsembleIntentParser:
         """
         Initialize ensemble parser.
         
+        .. deprecated:: 2.1.0
+            Use UnifiedIntentParser from workflow_composer.agents.intent instead.
+        
         Args:
             config: Model configurations
             vllm_url: URL for vLLM server (BioMistral)
             parallel: Run models in parallel
         """
+        import warnings
+        warnings.warn(
+            "EnsembleIntentParser from core.query_parser_ensemble is deprecated. "
+            "Use workflow_composer.agents.intent.UnifiedIntentParser instead. "
+            "This class will be removed in version 3.0.0.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.config = config or DEFAULT_ENSEMBLE_CONFIG
         self.parallel = parallel
         

@@ -719,3 +719,5 @@
 {"timestamp": "2025-12-04T04:54:27.145732", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-04T04:54:27.233489", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-04T04:54:29.183039", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T04:59:32.434919", "query": "Hi, how are you? what can you do for me?", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T05:00:13.940344", "query": "scan my data then", "intent": "DATA_SCAN", "confidence": 0.5, "user": "anonymous", "type": "confirmation"}

@@ -977,6 +977,8 @@ class QueryParseResult:
 
 class HybridQueryParser:
     """
+    DEPRECATED: Use `UnifiedIntentParser` from this module instead.
+    
     Production-grade hybrid query parser.
     
     Combines multiple approaches for robust intent understanding:
@@ -987,6 +989,10 @@ class HybridQueryParser:
     
     The parser uses a confidence-based fusion strategy to combine
     results from different methods.
+    
+    .. deprecated:: 2.1.0
+        Use :class:`UnifiedIntentParser` instead. This class is retained
+        only for backward compatibility and will be removed in version 3.0.0.
     """
     
     def __init__(
@@ -1000,6 +1006,9 @@ class HybridQueryParser:
         """
         Initialize the hybrid parser.
         
+        .. deprecated:: 2.1.0
+            Use UnifiedIntentParser instead.
+        
         Args:
             llm_client: LLM client for complex cases and embeddings fallback
             embedding_model: Sentence transformer model
@@ -1007,6 +1016,14 @@ class HybridQueryParser:
             semantic_weight: Weight for semantic similarity
             entity_weight: Weight for entity-based inference
         """
+        import warnings
+        warnings.warn(
+            "HybridQueryParser is deprecated. "
+            "Use workflow_composer.agents.intent.UnifiedIntentParser instead. "
+            "This class will be removed in version 3.0.0.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.llm_client = llm_client
         self.pattern_weight = pattern_weight
         self.semantic_weight = semantic_weight

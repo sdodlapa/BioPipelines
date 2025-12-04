@@ -75,7 +75,6 @@ from .classification import TaskType, classify_task as _classify_task_impl
 
 # Intent parsing (ensemble parser integration)
 from .intent import (
-    HybridQueryParser, 
     QueryParseResult, 
     ConversationContext, 
     UnifiedIntentParser,
@@ -453,10 +452,7 @@ class UnifiedAgent:
         # RAG orchestrator for tool selection and argument optimization
         self._rag_orchestrator: Optional[RAGOrchestrator] = None
         
-        # Hybrid intent parser (legacy, for fallback)
-        self._query_parser: Optional[HybridQueryParser] = None
-        
-        # Unified intent parser (recommended - uses arbiter)
+        # Unified intent parser (primary - uses arbiter for complex queries)
         self._intent_parser: Optional[UnifiedIntentParser] = None
         
         # Conversation context for multi-turn memory
@@ -507,18 +503,6 @@ class UnifiedAgent:
                 logger.warning(f"Failed to initialize RAGOrchestrator: {e}")
                 self._rag_orchestrator = None
         return self._rag_orchestrator
-        
-    @property
-    def query_parser(self) -> HybridQueryParser:
-        """Get or initialize the hybrid query parser (legacy fallback)."""
-        if self._query_parser is None:
-            try:
-                self._query_parser = HybridQueryParser()
-                logger.info("HybridQueryParser initialized")
-            except Exception as e:
-                logger.warning(f"Failed to initialize HybridQueryParser: {e}")
-                self._query_parser = None
-        return self._query_parser
     
     @property
     def intent_parser(self) -> Optional[UnifiedIntentParser]:
@@ -1087,39 +1071,9 @@ class UnifiedAgent:
             # We disable it to avoid conflicting decisions.
             # 
             # If UnifiedIntentParser fails completely (exception), we still want
-            # some fallback, but only for catastrophic failures.
-            use_hybrid_fallback = (
-                not detected_tool and 
-                self.query_parser and 
-                intent_result is None  # Only if UnifiedIntentParser completely failed
-            )
-            
-            if use_hybrid_fallback:
-                logger.warning("Using legacy HybridParser fallback - UnifiedIntentParser failed")
-                try:
-                    with tracer.start_span("hybrid_parse") as parse_span:
-                        parse_result = self.query_parser.parse(query)
-                        parse_span.add_tag("intent", parse_result.intent)
-                        parse_span.add_tag("confidence", parse_result.intent_confidence)
-                    logger.info(f"HybridParser fallback: intent={parse_result.intent}, confidence={parse_result.intent_confidence:.2f}")
-                    
-                    # Extract entities for context
-                    extracted_entities = parse_result.entities if parse_result.entities else []
-                    
-                    # Map intent to tool
-                    if parse_result.intent_confidence >= 0.35 and parse_result.intent in INTENT_TO_TOOL:
-                        detected_tool = INTENT_TO_TOOL[parse_result.intent]
-                        hybrid_params = self._build_params_from_parse_result(parse_result, query)
-                        detected_args = list(hybrid_params.values()) if hybrid_params else []
-                        logger.info(f"Mapped intent '{parse_result.intent}' to tool: {detected_tool}, params: {hybrid_params}")
-                    
-                    # Handle context-aware intents
-                    if parse_result.intent in ("CONTEXT_RECALL", "CONTEXT_METADATA"):
-                        return await self._handle_context_query(parse_result.intent, query, task_type)
-                        
-                except Exception as e:
-                    span.add_event("parser_fallback", {"error": str(e)})
-                    logger.warning(f"HybridParser failed, falling back to regex: {e}")
+            # If UnifiedIntentParser completely failed, log and continue to regex fallback
+            if not detected_tool and intent_result is None:
+                logger.warning("UnifiedIntentParser returned None - will use regex fallback")
         
         # Add user turn to conversation context
         # Note: We pass entities=[] because BioEntity and Entity have different structures

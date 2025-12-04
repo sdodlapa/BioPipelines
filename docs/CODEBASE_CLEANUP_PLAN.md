@@ -1,7 +1,7 @@
 # BioPipelines Codebase Cleanup Plan
 
 **Created**: December 4, 2025  
-**Status**: Phase 1 Complete ✅  
+**Status**: Phase 2 Complete ✅  
 **Author**: AI Assistant (Claude)  
 **Last Updated**: December 4, 2025
 
@@ -9,10 +9,21 @@
 
 ## Completed Cleanups
 
+### ✅ December 4, 2025 - Phase 2 Implemented (Parser Consolidation)
+1. **Removed HybridQueryParser fallback** from `UnifiedAgent` - now uses only `UnifiedIntentParser`
+2. **Added deprecation warnings** to legacy parsers:
+   - `core/query_parser.py:IntentParser` 
+   - `core/query_parser_ensemble.py:EnsembleIntentParser`
+   - `core/model_service_manager.py:AdaptiveIntentParser`
+   - `agents/intent/semantic.py:HybridQueryParser`
+3. **Simplified parsing chain**: `UnifiedAgent` → `UnifiedIntentParser` → regex fallback (no more HybridParser)
+
 ### ✅ December 4, 2025 - Phase 1 Implemented
 1. **Renamed duplicate class** in `arbiter.py`: `UnifiedIntentParser` → `SimpleArbiterParser`
 2. **Deleted unused directory**: `web/archive/` (4 files removed)
 3. **Verified imports**: All core imports working correctly
+4. **Added DATA_DESCRIBE patterns** to `parser.py` (8 new patterns)
+5. **Added DESCRIBE_FILES_PATTERNS** to `data_discovery.py` (5 new patterns)
 
 ---
 

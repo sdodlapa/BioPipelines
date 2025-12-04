@@ -451,15 +451,29 @@ def get_orchestrator() -> ModelOrchestrator:
 
 class AdaptiveIntentParser:
     """
+    DEPRECATED: Use `workflow_composer.agents.intent.UnifiedIntentParser` instead.
+    
     Intent parser that adapts to available models.
     
     Automatically uses the best available strategy:
     1. Full ensemble if GPU server running
     2. BERT-enhanced rules if CPU only
     3. Pure rules as fallback
+    
+    .. deprecated:: 2.1.0
+        Use :class:`workflow_composer.agents.intent.UnifiedIntentParser` instead.
+        This class will be removed in version 3.0.0.
     """
     
     def __init__(self):
+        import warnings
+        warnings.warn(
+            "AdaptiveIntentParser from core.model_service_manager is deprecated. "
+            "Use workflow_composer.agents.intent.UnifiedIntentParser instead. "
+            "This class will be removed in version 3.0.0.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.orchestrator = get_orchestrator()
         self._rule_parser = None
         self._ensemble_parser = None

@@ -283,6 +283,8 @@ ORGANISM_MAP = {
 
 class IntentParser:
     """
+    DEPRECATED: Use `workflow_composer.agents.intent.UnifiedIntentParser` instead.
+    
     Parses natural language to extract analysis intent.
     
     Uses a hybrid approach (Rules-First):
@@ -295,6 +297,10 @@ class IntentParser:
     - Fast response for common queries
     - Consistent handling of bioinformatics terminology
     - LLM only used when truly needed
+    
+    .. deprecated:: 2.1.0
+        Use :class:`workflow_composer.agents.intent.UnifiedIntentParser` instead.
+        This class will be removed in version 3.0.0.
     """
     
     # Confidence threshold for rule-based matching
@@ -340,13 +346,24 @@ Respond with a JSON object containing:
     "reasoning": "brief explanation of your interpretation"
 }}"""
 
-    def __init__(self, llm: LLMAdapter):
+    def __init__(self, llm: "LLMAdapter" = None):
         """
         Initialize intent parser.
+        
+        .. deprecated:: 2.1.0
+            Use UnifiedIntentParser from workflow_composer.agents.intent instead.
         
         Args:
             llm: LLM adapter for natural language understanding
         """
+        import warnings
+        warnings.warn(
+            "IntentParser from core.query_parser is deprecated. "
+            "Use workflow_composer.agents.intent.UnifiedIntentParser instead. "
+            "This class will be removed in version 3.0.0.",
+            DeprecationWarning,
+            stacklevel=2
+        )
         self.llm = llm
     
     def parse(self, query: str) -> ParsedIntent:
