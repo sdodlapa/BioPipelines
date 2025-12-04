@@ -10,11 +10,14 @@ from __future__ import annotations
 import time
 import logging
 import asyncio
-from typing import Optional, Dict, Any, List, Union, Iterator, AsyncIterator
+from typing import Optional, Dict, Any, List, Union, Iterator, AsyncIterator, TYPE_CHECKING
 from dataclasses import dataclass
 
 from .base import BaseProvider, Message, ProviderResponse, ProviderError
 from .registry import get_registry, ProviderRegistry, ProviderConfig
+
+if TYPE_CHECKING:
+    from .usage_tracker import UsageTracker
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +67,7 @@ class ProviderRouter:
         registry: Optional[ProviderRegistry] = None,
         skip_providers: Optional[List[str]] = None,
         max_retries: int = 1,  # Reduced: cascade fast, don't retry same provider
+        track_usage: bool = True,  # Enable usage tracking
     ):
         """
         Initialize the router.
@@ -72,10 +76,12 @@ class ProviderRouter:
             registry: Provider registry (uses global if not provided)
             skip_providers: Provider IDs to skip
             max_retries: Max retries per provider (1 = no retries, cascade immediately)
+            track_usage: Whether to track usage with UsageTracker
         """
         self.registry = registry or get_registry()
         self.skip_providers = set(skip_providers or [])
         self.max_retries = max_retries
+        self.track_usage = track_usage
         
         # Session state: track provider status
         self._failure_counts: Dict[str, int] = {}
@@ -84,6 +90,45 @@ class ProviderRouter:
         # Rate limit tracking: providers marked inactive for this session
         self._rate_limited: Dict[str, bool] = {}  # provider_id -> is_rate_limited
         self._inactive_reason: Dict[str, str] = {}  # provider_id -> reason
+        
+        # Usage tracker (lazy loaded)
+        self._usage_tracker: Optional["UsageTracker"] = None
+    
+    def _get_usage_tracker(self) -> Optional["UsageTracker"]:
+        """Get the usage tracker (lazy load)."""
+        if not self.track_usage:
+            return None
+        if self._usage_tracker is None:
+            try:
+                from .usage_tracker import get_tracker
+                self._usage_tracker = get_tracker()
+            except ImportError:
+                logger.warning("UsageTracker not available")
+                self.track_usage = False
+        return self._usage_tracker
+    
+    def _record_usage(
+        self,
+        provider: str,
+        model: str,
+        input_tokens: int,
+        output_tokens: int,
+        latency_ms: float,
+        success: bool = True,
+        error: Optional[str] = None,
+    ):
+        """Record usage to tracker."""
+        tracker = self._get_usage_tracker()
+        if tracker:
+            tracker.record_request(
+                provider=provider,
+                model=model,
+                input_tokens=input_tokens,
+                output_tokens=output_tokens,
+                latency_ms=latency_ms,
+                success=success,
+                error=error,
+            )
     
     def _get_ordered_providers(self) -> List[ProviderConfig]:
         """Get active providers in priority order, skipping rate-limited ones."""
@@ -263,6 +308,7 @@ class ProviderRouter:
                     provider = self._get_provider_instance(config)
                     
                     # Override model if preferred
+                    model_used = preferred_model or provider.model
                     if preferred_model:
                         provider.model = preferred_model
                     
@@ -273,6 +319,16 @@ class ProviderRouter:
                         **kwargs
                     )
                     response.latency_ms = (time.time() - start) * 1000
+                    
+                    # Track usage
+                    self._record_usage(
+                        provider=config.id,
+                        model=model_used,
+                        input_tokens=getattr(response, 'prompt_tokens', 0) or 0,
+                        output_tokens=getattr(response, 'completion_tokens', 0) or 0,
+                        latency_ms=response.latency_ms,
+                        success=True,
+                    )
                     
                     # Clear failure count on success
                     self._failure_counts[config.id] = 0
@@ -288,6 +344,17 @@ class ProviderRouter:
                     error_msg = f"{config.id}: {str(e)}"
                     errors.append(error_msg)
                     logger.warning(f"Provider failed: {error_msg}")
+                    
+                    # Record failed request
+                    self._record_usage(
+                        provider=config.id,
+                        model=preferred_model or config.default_model or "unknown",
+                        input_tokens=0,
+                        output_tokens=0,
+                        latency_ms=0,
+                        success=False,
+                        error=str(e)[:200],
+                    )
                     
                     # Check for rate limit - mark inactive and cascade immediately
                     if self._is_rate_limit_error(e):
@@ -709,6 +776,45 @@ class ProviderRouter:
             "rate_limited_providers": rate_limited_count,
             "total_configured": len(status),
         }
+    
+    def get_usage_summary(self) -> Dict[str, Any]:
+        """Get usage summary from the usage tracker."""
+        tracker = self._get_usage_tracker()
+        if tracker:
+            return tracker.get_cost_summary()
+        return {"error": "Usage tracking not available"}
+    
+    def get_quota_status(self) -> Dict[str, Dict[str, Any]]:
+        """Get quota status for all providers."""
+        tracker = self._get_usage_tracker()
+        if tracker:
+            return tracker.get_all_status()
+        return {"error": "Usage tracking not available"}
+    
+    def recommend_model(
+        self,
+        task: str = "general",
+        prefer_free: bool = True,
+    ) -> Optional[tuple]:
+        """
+        Get model recommendation based on current quotas and task.
+        
+        Args:
+            task: Task type (general, code, reasoning, fast_response, etc.)
+            prefer_free: Prefer free tier providers
+            
+        Returns:
+            Tuple of (provider_id, model_id) or None
+        """
+        tracker = self._get_usage_tracker()
+        if tracker:
+            return tracker.recommend_model(task=task, prefer_free=prefer_free)
+        
+        # Fallback: return first active provider
+        providers = self._get_ordered_providers()
+        if providers:
+            return (providers[0].id, providers[0].default_model)
+        return None
     
     def print_status(self):
         """Print formatted status of all providers."""

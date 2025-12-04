@@ -726,16 +726,16 @@ class UnifiedIntentParser:
         Combine all signals using weighted voting.
         
         Weights:
-        - Pattern: 0.35 (fast, good for exact matches)
-        - Semantic: 0.40 (better semantic understanding)
-        - Entity boost: 0.25 (domain knowledge)
+        - Pattern: 0.45 (increased for high-confidence exact matches)
+        - Semantic: 0.35 (semantic understanding)
+        - Entity boost: 0.20 (domain knowledge)
         
         Returns:
             Tuple of (winning_intent, confidence, method, all_scores)
         """
-        WEIGHT_PATTERN = 0.35
-        WEIGHT_SEMANTIC = 0.40
-        WEIGHT_ENTITY = 0.25
+        WEIGHT_PATTERN = 0.45  # Increased from 0.35 - pattern matching is reliable for bioinformatics
+        WEIGHT_SEMANTIC = 0.35  # Decreased from 0.40
+        WEIGHT_ENTITY = 0.20   # Decreased from 0.25
         
         # Initialize scores for all possible intents
         intent_scores: Dict[str, float] = {}
@@ -744,6 +744,11 @@ class UnifiedIntentParser:
         if pattern_result:
             pattern_intent = pattern_result.primary_intent.name
             pattern_conf = self._normalize_confidence(pattern_result.confidence, "pattern")
+            
+            # Boost for high-confidence pattern matches (>0.75) - trust the pattern
+            if pattern_result.confidence > 0.75:
+                pattern_conf = min(1.0, pattern_conf * 1.3)  # 30% boost
+            
             intent_scores[pattern_intent] = intent_scores.get(pattern_intent, 0) + WEIGHT_PATTERN * pattern_conf
             
             # Add alternatives with lower weight

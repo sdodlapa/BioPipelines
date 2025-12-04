@@ -111,11 +111,11 @@ INTENT_GRANULARITY_TESTS = [
     RegressionTest(
         id="REG-GRAN-001",
         query="Watch job 54321 and notify me when it's done",
-        expected_intent="JOB_STATUS",  # Parser treats watch as status check
+        expected_intent="JOB_WATCH",  # Now correctly identified as JOB_WATCH
         expected_entities={"JOB_ID": "54321"},
         category="intent_granularity",
         gap_type="job_watch_vs_status",
-        description="Watch job - currently mapped to JOB_STATUS",
+        description="Watch job with notifications = JOB_WATCH",
         priority="high"
     ),
     RegressionTest(
@@ -150,20 +150,20 @@ INTENT_GRANULARITY_TESTS = [
     RegressionTest(
         id="REG-GRAN-005",
         query="Monitor job 12345 until completion",
-        expected_intent="JOB_STATUS",  # Parser treats monitor as status
+        expected_intent="JOB_WATCH",  # Now correctly identified as JOB_WATCH
         expected_entities={"JOB_ID": "12345"},
         category="intent_granularity",
         gap_type="job_watch_vs_status",
-        description="'Monitor until' - currently mapped to JOB_STATUS",
+        description="'Monitor until' = JOB_WATCH",
         priority="medium"
     ),
     RegressionTest(
         id="REG-GRAN-006",
         query="Retry the failed job with 64GB RAM",
-        expected_intent="JOB_SUBMIT",  # 'Retry' without 'resubmit' maps to submit
+        expected_intent="JOB_RESUBMIT",  # Now correctly identified as JOB_RESUBMIT
         category="intent_granularity",
         gap_type="resubmit_vs_submit",
-        description="'Retry' is currently mapped to JOB_SUBMIT",
+        description="'Retry' now correctly mapped to JOB_RESUBMIT",
         priority="high"
     ),
     RegressionTest(

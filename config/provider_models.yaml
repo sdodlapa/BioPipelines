@@ -1,0 +1,1243 @@
+# =============================================================================
+# BioPipelines - Complete LLM Provider Model Catalog
+# =============================================================================
+# Generated: December 4, 2025
+# Source: Live API queries to each provider
+#
+# This file contains ALL available models from each provider.
+# Use this as reference for configuring providers in the system.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# GROQ - Ultra-fast inference (280-1000+ tok/s)
+# Dashboard: https://console.groq.com/usage
+# API Key: https://console.groq.com/keys
+# Free Tier: Very generous - up to 14,400 req/day
+# -----------------------------------------------------------------------------
+groq:
+  base_url: "https://api.groq.com/openai/v1"
+  api_key_env: "GROQ_API_KEY"
+  
+  models:
+    # ===== PRODUCTION TEXT MODELS =====
+    llama-3.1-8b-instant:
+      display_name: "Llama 3.1 8B Instant"
+      speed: 560  # tokens/sec
+      context: 131072
+      tpm: 250000
+      rpm: 1000
+      input_price: 0.05   # per 1M tokens
+      output_price: 0.08
+      best_for: ["quick_response", "chat", "classification"]
+    
+    llama-3.3-70b-versatile:
+      display_name: "Llama 3.3 70B Versatile"
+      speed: 280
+      context: 131072
+      tpm: 300000
+      rpm: 1000
+      input_price: 0.59
+      output_price: 0.79
+      best_for: ["general", "reasoning", "code"]
+    
+    openai/gpt-oss-120b:
+      display_name: "OpenAI GPT-OSS 120B"
+      speed: 500
+      context: 131072
+      tpm: 250000
+      rpm: 1000
+      input_price: 0.15
+      output_price: 0.60
+      best_for: ["reasoning", "code", "complex_tasks"]
+    
+    openai/gpt-oss-20b:
+      display_name: "OpenAI GPT-OSS 20B"
+      speed: 1000
+      context: 131072
+      tpm: 250000
+      rpm: 1000
+      input_price: 0.075
+      output_price: 0.30
+      best_for: ["fast_tasks", "simple_queries"]
+    
+    qwen/qwen3-32b:
+      display_name: "Qwen 3 32B"
+      speed: 400
+      context: 131072
+      tpm: 300000
+      rpm: 1000
+      input_price: 0.29
+      output_price: 0.59
+      best_for: ["code", "math", "reasoning"]
+    
+    # ===== PREVIEW MODELS =====
+    meta-llama/llama-4-maverick-17b-128e-instruct:
+      display_name: "Llama 4 Maverick 17B"
+      speed: 600
+      context: 131072
+      tpm: 300000
+      rpm: 1000
+      input_price: 0.20
+      output_price: 0.60
+      preview: true
+    
+    meta-llama/llama-4-scout-17b-16e-instruct:
+      display_name: "Llama 4 Scout 17B"
+      speed: 750
+      context: 131072
+      tpm: 300000
+      rpm: 1000
+      input_price: 0.11
+      output_price: 0.34
+      preview: true
+    
+    moonshotai/kimi-k2-instruct:
+      display_name: "Kimi K2"
+      speed: 200
+      context: 262144
+      input_price: 1.00
+      output_price: 3.00
+      best_for: ["long_context", "reasoning"]
+    
+    moonshotai/kimi-k2-instruct-0905:
+      display_name: "Kimi K2 0905"
+      speed: 200
+      context: 262144
+      input_price: 1.00
+      output_price: 3.00
+    
+    # ===== SAFETY MODELS =====
+    meta-llama/llama-guard-4-12b:
+      display_name: "Llama Guard 4 12B"
+      speed: 1200
+      context: 131072
+      tpm: 30000
+      rpm: 100
+      input_price: 0.20
+      output_price: 0.20
+      best_for: ["content_moderation", "safety"]
+    
+    meta-llama/llama-prompt-guard-2-22m:
+      display_name: "Llama Prompt Guard 2 22M"
+      context: 512
+      tpm: 30000
+      rpm: 100
+      input_price: 0.03
+      output_price: 0.03
+      best_for: ["prompt_injection_detection"]
+    
+    meta-llama/llama-prompt-guard-2-86m:
+      display_name: "Llama Prompt Guard 2 86M"
+      context: 512
+      tpm: 30000
+      rpm: 100
+      input_price: 0.04
+      output_price: 0.04
+      best_for: ["prompt_injection_detection"]
+    
+    openai/gpt-oss-safeguard-20b:
+      display_name: "GPT-OSS Safeguard 20B"
+      speed: 1000
+      context: 131072
+      input_price: 0.075
+      output_price: 0.30
+      best_for: ["safety", "content_filtering"]
+    
+    # ===== AGENTIC SYSTEMS =====
+    groq/compound:
+      display_name: "Groq Compound"
+      speed: 450
+      context: 131072
+      tpm: 200000
+      rpm: 200
+      input_price: 0.0  # System pricing
+      output_price: 0.0
+      best_for: ["agentic", "web_search", "code_execution"]
+      capabilities: ["web_search", "code_execution"]
+    
+    groq/compound-mini:
+      display_name: "Groq Compound Mini"
+      speed: 450
+      context: 131072
+      tpm: 200000
+      rpm: 200
+      input_price: 0.0
+      output_price: 0.0
+      best_for: ["agentic", "quick_actions"]
+    
+    # ===== AUDIO MODELS =====
+    whisper-large-v3:
+      display_name: "Whisper Large V3"
+      type: "audio"
+      price_per_hour: 0.111
+      rpm: 300
+      max_file_size_mb: 100
+      best_for: ["transcription", "speech_to_text"]
+    
+    whisper-large-v3-turbo:
+      display_name: "Whisper Large V3 Turbo"
+      type: "audio"
+      price_per_hour: 0.04
+      rpm: 400
+      max_file_size_mb: 100
+      best_for: ["fast_transcription"]
+    
+    # ===== TEXT-TO-SPEECH =====
+    playai-tts:
+      display_name: "PlayAI TTS"
+      type: "tts"
+      price_per_million_chars: 50.00
+      tpm: 50000
+      rpm: 250
+    
+    playai-tts-arabic:
+      display_name: "PlayAI TTS Arabic"
+      type: "tts"
+      price_per_million_chars: 50.00
+    
+    # ===== OTHER =====
+    allam-2-7b:
+      display_name: "Allam 2 7B"
+      context: 8192
+      best_for: ["arabic_language"]
+
+
+# -----------------------------------------------------------------------------
+# CEREBRAS - World's fastest inference (1000-3000 tok/s)
+# Dashboard: https://cloud.cerebras.ai/
+# Pricing: https://www.cerebras.ai/pricing
+# Free Tier: All models free! 14,400 req/day, 1M tokens/day
+# -----------------------------------------------------------------------------
+cerebras:
+  base_url: "https://api.cerebras.ai/v1"
+  api_key_env: "CEREBRAS_API_KEY"
+  
+  models:
+    # ===== PRODUCTION MODELS =====
+    gpt-oss-120b:
+      display_name: "OpenAI GPT-OSS 120B"
+      speed: 3000  # tokens/sec - FASTEST!
+      params: "120B"
+      context: 131072
+      free_tier: true
+      input_price: 0.35
+      output_price: 0.75
+      best_for: ["general", "reasoning", "code"]
+    
+    llama-3.3-70b:
+      display_name: "Llama 3.3 70B"
+      speed: 2100
+      params: "70B"
+      context: 131072
+      free_tier: true
+      input_price: 0.85
+      output_price: 1.20
+      best_for: ["general", "conversation"]
+    
+    llama3.1-8b:
+      display_name: "Llama 3.1 8B"
+      speed: 2200
+      params: "8B"
+      context: 131072
+      free_tier: true
+      input_price: 0.10
+      output_price: 0.10
+      best_for: ["quick_response", "simple_tasks"]
+    
+    qwen-3-32b:
+      display_name: "Qwen 3 32B"
+      speed: 2600
+      params: "32B"
+      context: 131072
+      free_tier: true
+      input_price: 0.40
+      output_price: 0.80
+      best_for: ["code", "math", "reasoning"]
+    
+    # ===== PREVIEW MODELS =====
+    qwen-3-235b-a22b-instruct-2507:
+      display_name: "Qwen 3 235B A22B Instruct"
+      speed: 1400
+      params: "235B"
+      context: 131072
+      free_tier: true
+      preview: true
+      input_price: 0.60
+      output_price: 1.20
+      best_for: ["complex_reasoning", "scientific"]
+    
+    zai-glm-4.6:
+      display_name: "Z.AI GLM 4.6"
+      speed: 1000
+      params: "357B"
+      context: 202752
+      free_tier: true
+      preview: true
+      input_price: 2.25
+      output_price: 2.75
+      best_for: ["massive_context", "complex_tasks"]
+
+
+# -----------------------------------------------------------------------------
+# GOOGLE GEMINI - Best free tier (1M+ context)
+# Dashboard: https://aistudio.google.com/usage
+# API Key: https://aistudio.google.com/apikey
+# Free Tier: All models free with rate limits, 1M+ tokens/day
+# -----------------------------------------------------------------------------
+gemini:
+  base_url: "https://generativelanguage.googleapis.com/v1beta"
+  api_key_env: "GOOGLE_API_KEY"
+  
+  models:
+    # ===== LATEST MODELS =====
+    gemini-3-pro-preview:
+      display_name: "Gemini 3 Pro Preview"
+      context: 200000
+      free_rpm: 2
+      free_rpd: 50
+      paid_input_price: 2.00
+      paid_output_price: 12.00
+      best_for: ["multimodal", "agentic", "vibe_coding"]
+      capabilities: ["text", "image", "video", "audio"]
+    
+    gemini-3-pro-image-preview:
+      display_name: "Gemini 3 Pro Image Preview"
+      context: 200000
+      paid_input_price: 2.00
+      paid_output_price: 12.00
+      best_for: ["image_generation"]
+      capabilities: ["text", "image_generation"]
+    
+    # ===== 2.5 GENERATION =====
+    gemini-2.5-pro:
+      display_name: "Gemini 2.5 Pro"
+      context: 1048576  # 1M tokens!
+      free_rpm: 2
+      free_rpd: 50
+      paid_input_price: 1.25
+      paid_output_price: 10.00
+      best_for: ["complex_reasoning", "code", "scientific"]
+      capabilities: ["text", "image", "video", "audio", "thinking"]
+    
+    gemini-2.5-flash:
+      display_name: "Gemini 2.5 Flash"
+      context: 1048576
+      free_rpm: 10
+      free_rpd: 250
+      paid_input_price: 0.30
+      paid_output_price: 2.50
+      best_for: ["large_scale", "agentic", "thinking"]
+      capabilities: ["text", "image", "video", "audio"]
+    
+    gemini-2.5-flash-lite:
+      display_name: "Gemini 2.5 Flash-Lite"
+      context: 1048576
+      free_rpm: 15
+      free_rpd: 1000
+      paid_input_price: 0.10
+      paid_output_price: 0.40
+      best_for: ["high_volume", "cost_effective"]
+    
+    gemini-2.5-flash-preview-09-2025:
+      display_name: "Gemini 2.5 Flash Preview Sep 2025"
+      context: 1048576
+      free_rpm: 10
+      free_rpd: 250
+      preview: true
+    
+    gemini-2.5-flash-lite-preview-09-2025:
+      display_name: "Gemini 2.5 Flash-Lite Preview"
+      context: 1048576
+      free_rpm: 15
+      free_rpd: 1000
+      preview: true
+    
+    gemini-2.5-flash-image:
+      display_name: "Gemini 2.5 Flash Image"
+      context: 32768
+      paid_output_price: 0.039  # per image
+      best_for: ["image_generation"]
+    
+    gemini-2.5-flash-image-preview:
+      display_name: "Gemini 2.5 Flash Image Preview"
+      context: 32768
+      preview: true
+    
+    # ===== 2.0 GENERATION =====
+    gemini-2.0-flash:
+      display_name: "Gemini 2.0 Flash"
+      context: 1048576
+      free_rpm: 15
+      free_rpd: 200
+      paid_input_price: 0.10
+      paid_output_price: 0.40
+      best_for: ["balanced", "multimodal", "agents"]
+    
+    gemini-2.0-flash-001:
+      display_name: "Gemini 2.0 Flash 001"
+      context: 1048576
+      free_rpm: 15
+      free_rpd: 200
+    
+    gemini-2.0-flash-lite:
+      display_name: "Gemini 2.0 Flash-Lite"
+      context: 1048576
+      free_rpm: 30
+      free_rpd: 200
+      paid_input_price: 0.075
+      paid_output_price: 0.30
+      best_for: ["cost_effective", "simple_tasks"]
+    
+    gemini-2.0-flash-lite-001:
+      display_name: "Gemini 2.0 Flash-Lite 001"
+      context: 1048576
+      free_rpm: 30
+      free_rpd: 200
+    
+    gemini-2.0-flash-exp:
+      display_name: "Gemini 2.0 Flash Experimental"
+      context: 1048576
+      experimental: true
+    
+    gemini-2.0-flash-exp-image-generation:
+      display_name: "Gemini 2.0 Flash Image Gen Experimental"
+      context: 1048576
+      experimental: true
+      capabilities: ["image_generation"]
+    
+    gemini-2.0-pro-exp:
+      display_name: "Gemini 2.0 Pro Experimental"
+      context: 1048576
+      experimental: true
+    
+    gemini-2.0-pro-exp-02-05:
+      display_name: "Gemini 2.0 Pro Experimental 02-05"
+      context: 1048576
+      experimental: true
+    
+    # ===== SPECIALIZED MODELS =====
+    gemini-2.5-flash-preview-tts:
+      display_name: "Gemini 2.5 Flash TTS"
+      type: "tts"
+      paid_input_price: 0.50
+      paid_output_price: 10.00  # audio
+      best_for: ["text_to_speech"]
+    
+    gemini-2.5-pro-preview-tts:
+      display_name: "Gemini 2.5 Pro TTS"
+      type: "tts"
+      paid_input_price: 1.00
+      paid_output_price: 20.00
+    
+    gemini-2.5-computer-use-preview-10-2025:
+      display_name: "Gemini 2.5 Computer Use"
+      context: 200000
+      paid_input_price: 1.25
+      paid_output_price: 10.00
+      best_for: ["browser_automation", "computer_use"]
+    
+    gemini-robotics-er-1.5-preview:
+      display_name: "Gemini Robotics-ER 1.5"
+      context: 1048576
+      best_for: ["robotics", "embodied_reasoning"]
+    
+    # ===== GEMMA OPEN MODELS =====
+    gemma-3-1b-it:
+      display_name: "Gemma 3 1B"
+      context: 32768
+      free_only: true
+      best_for: ["edge_devices", "lightweight"]
+    
+    gemma-3-4b-it:
+      display_name: "Gemma 3 4B"
+      context: 131072
+      free_only: true
+    
+    gemma-3-12b-it:
+      display_name: "Gemma 3 12B"
+      context: 131072
+      free_only: true
+    
+    gemma-3-27b-it:
+      display_name: "Gemma 3 27B"
+      context: 131072
+      free_rpm: 30
+      free_rpd: 14400
+      free_only: true
+      best_for: ["local_deployment", "open_weights"]
+    
+    gemma-3n-e4b-it:
+      display_name: "Gemma 3n E4B"
+      context: 131072
+      free_only: true
+      best_for: ["mobile", "edge"]
+    
+    gemma-3n-e2b-it:
+      display_name: "Gemma 3n E2B"
+      context: 131072
+      free_only: true
+    
+    # ===== ALIASES =====
+    gemini-flash-latest:
+      display_name: "Gemini Flash Latest"
+      alias_for: "gemini-2.5-flash"
+    
+    gemini-flash-lite-latest:
+      display_name: "Gemini Flash-Lite Latest"
+      alias_for: "gemini-2.5-flash-lite"
+    
+    gemini-pro-latest:
+      display_name: "Gemini Pro Latest"
+      alias_for: "gemini-2.5-pro"
+    
+    gemini-exp-1206:
+      display_name: "Gemini Experimental 1206"
+      experimental: true
+
+
+# -----------------------------------------------------------------------------
+# LIGHTNING.AI - Unified API access
+# Dashboard: https://lightning.ai/account
+# Free Tier: 30M tokens/month + 15 credits
+# Note: Uses litai SDK, not OpenAI-compatible API
+# -----------------------------------------------------------------------------
+lightning:
+  sdk: "litai"  # Use litai SDK, not OpenAI-compatible
+  api_key_env: "LIGHTNING_API_KEY"
+  
+  models:
+    # ===== LIGHTNING NATIVE (FREE) =====
+    lightning-ai/gpt-oss-20b:
+      display_name: "Lightning GPT-OSS 20B"
+      context: 32768
+      free_tier: true
+      free_tokens_month: 30000000  # 30M
+      input_price: 0.05
+      output_price: 0.10
+      best_for: ["chat", "intent_parsing", "general"]
+      notes: "Lightning's own model - fast and free"
+    
+    lightning-ai/gpt-oss-120b:
+      display_name: "Lightning GPT-OSS 120B"
+      context: 131072
+      free_tier: true
+      input_price: 0.15
+      output_price: 0.60
+      best_for: ["reasoning", "complex_tasks"]
+    
+    # ===== OPENAI VIA LIGHTNING =====
+    openai/gpt-4o:
+      display_name: "GPT-4o via Lightning"
+      context: 128000
+      input_price: 2.50
+      output_price: 10.00
+      best_for: ["highest_quality", "multimodal"]
+    
+    openai/gpt-4-turbo:
+      display_name: "GPT-4 Turbo via Lightning"
+      context: 128000
+      input_price: 10.00
+      output_price: 30.00
+    
+    openai/gpt-4:
+      display_name: "GPT-4 via Lightning"
+      context: 8192
+      input_price: 30.00
+      output_price: 60.00
+    
+    openai/gpt-3.5-turbo:
+      display_name: "GPT-3.5 Turbo via Lightning"
+      context: 16384
+      input_price: 0.50
+      output_price: 1.50
+      best_for: ["cheap_fallback"]
+
+
+# -----------------------------------------------------------------------------
+# OPENROUTER - Multi-model gateway (335+ models)
+# Dashboard: https://openrouter.ai/activity
+# Models: https://openrouter.ai/models
+# Free Tier: 50 req/day for :free models, 1000/day after $10 top-up
+# -----------------------------------------------------------------------------
+openrouter:
+  base_url: "https://openrouter.ai/api/v1"
+  api_key_env: "OPENROUTER_API_KEY"
+  
+  models:
+    # ===== FREE MODELS (29 available) =====
+    meta-llama/llama-3.3-70b-instruct:free:
+      display_name: "Llama 3.3 70B (FREE)"
+      context: 131072
+      free: true
+      rpd: 50
+      best_for: ["general", "conversation"]
+    
+    google/gemini-2.0-flash-exp:free:
+      display_name: "Gemini 2.0 Flash Exp (FREE)"
+      context: 1048576
+      free: true
+      rpd: 50
+    
+    google/gemma-3-27b-it:free:
+      display_name: "Gemma 3 27B (FREE)"
+      context: 131072
+      free: true
+      rpd: 50
+    
+    google/gemma-3-12b-it:free:
+      display_name: "Gemma 3 12B (FREE)"
+      context: 131072
+      free: true
+    
+    google/gemma-3-4b-it:free:
+      display_name: "Gemma 3 4B (FREE)"
+      context: 131072
+      free: true
+    
+    google/gemma-3n-e4b-it:free:
+      display_name: "Gemma 3n E4B (FREE)"
+      context: 131072
+      free: true
+    
+    google/gemma-3n-e2b-it:free:
+      display_name: "Gemma 3n E2B (FREE)"
+      context: 131072
+      free: true
+    
+    qwen/qwen3-235b-a22b:free:
+      display_name: "Qwen 3 235B (FREE)"
+      context: 40960
+      free: true
+      rpd: 50
+      best_for: ["complex_reasoning"]
+    
+    qwen/qwen3-4b:free:
+      display_name: "Qwen 3 4B (FREE)"
+      context: 32768
+      free: true
+    
+    qwen/qwen3-coder:free:
+      display_name: "Qwen 3 Coder (FREE)"
+      context: 131072
+      free: true
+      best_for: ["code"]
+    
+    openai/gpt-oss-20b:free:
+      display_name: "GPT-OSS 20B (FREE)"
+      context: 131072
+      free: true
+      rpd: 50
+    
+    mistralai/mistral-7b-instruct:free:
+      display_name: "Mistral 7B (FREE)"
+      context: 32768
+      free: true
+    
+    mistralai/mistral-small-3.1-24b-instruct:free:
+      display_name: "Mistral Small 3.1 24B (FREE)"
+      context: 32768
+      free: true
+    
+    moonshotai/kimi-k2:free:
+      display_name: "Kimi K2 (FREE)"
+      context: 32768
+      free: true
+    
+    meta-llama/llama-3.2-3b-instruct:free:
+      display_name: "Llama 3.2 3B (FREE)"
+      context: 131072
+      free: true
+    
+    nousresearch/hermes-3-llama-3.1-405b:free:
+      display_name: "Hermes 3 405B (FREE)"
+      context: 131072
+      free: true
+      best_for: ["massive_model", "reasoning"]
+    
+    nvidia/nemotron-nano-12b-v2-vl:free:
+      display_name: "Nemotron Nano 12B VL (FREE)"
+      context: 128000
+      free: true
+      capabilities: ["vision"]
+    
+    nvidia/nemotron-nano-9b-v2:free:
+      display_name: "Nemotron Nano 9B (FREE)"
+      context: 128000
+      free: true
+    
+    amazon/nova-2-lite-v1:free:
+      display_name: "Amazon Nova 2 Lite (FREE)"
+      context: 1000000
+      free: true
+    
+    z-ai/glm-4.5-air:free:
+      display_name: "GLM 4.5 Air (FREE)"
+      context: 131072
+      free: true
+    
+    kwaipilot/kat-coder-pro:free:
+      display_name: "Kat Coder Pro (FREE)"
+      context: 256000
+      free: true
+      best_for: ["code"]
+    
+    alibaba/tongyi-deepresearch-30b-a3b:free:
+      display_name: "Tongyi DeepResearch (FREE)"
+      context: 131072
+      free: true
+    
+    allenai/olmo-3-32b-think:free:
+      display_name: "OLMo 3 32B Think (FREE)"
+      context: 65536
+      free: true
+    
+    arcee-ai/trinity-mini:free:
+      display_name: "Arcee Trinity Mini (FREE)"
+      context: 131072
+      free: true
+    
+    cognitivecomputations/dolphin-mistral-24b-venice-edition:free:
+      display_name: "Dolphin Mistral 24B (FREE)"
+      context: 32768
+      free: true
+    
+    meituan/longcat-flash-chat:free:
+      display_name: "Longcat Flash Chat (FREE)"
+      context: 131072
+      free: true
+    
+    tngtech/deepseek-r1t-chimera:free:
+      display_name: "DeepSeek R1T Chimera (FREE)"
+      context: 163840
+      free: true
+    
+    tngtech/deepseek-r1t2-chimera:free:
+      display_name: "DeepSeek R1T2 Chimera (FREE)"
+      context: 163840
+      free: true
+    
+    tngtech/tng-r1t-chimera:free:
+      display_name: "TNG R1T Chimera (FREE)"
+      context: 163840
+      free: true
+    
+    # ===== POPULAR PAID MODELS =====
+    openai/gpt-4o:
+      display_name: "OpenAI GPT-4o"
+      context: 128000
+      input_price: 2.50
+      output_price: 10.00
+      best_for: ["highest_quality", "multimodal"]
+    
+    openai/gpt-4o-mini:
+      display_name: "OpenAI GPT-4o Mini"
+      context: 128000
+      input_price: 0.15
+      output_price: 0.60
+      best_for: ["cost_effective", "fast"]
+    
+    openai/o1:
+      display_name: "OpenAI o1"
+      context: 200000
+      input_price: 15.00
+      output_price: 60.00
+      best_for: ["reasoning", "math", "science"]
+    
+    openai/o3-mini:
+      display_name: "OpenAI o3-mini"
+      context: 200000
+      input_price: 1.10
+      output_price: 4.40
+      best_for: ["fast_reasoning"]
+    
+    anthropic/claude-3.5-sonnet:
+      display_name: "Claude 3.5 Sonnet"
+      context: 200000
+      input_price: 6.00
+      output_price: 30.00
+      best_for: ["writing", "analysis", "scientific"]
+    
+    anthropic/claude-3.7-sonnet:
+      display_name: "Claude 3.7 Sonnet"
+      context: 200000
+      input_price: 3.00
+      output_price: 15.00
+      best_for: ["writing", "code"]
+    
+    anthropic/claude-sonnet-4:
+      display_name: "Claude Sonnet 4"
+      context: 200000
+      input_price: 3.00
+      output_price: 15.00
+    
+    anthropic/claude-opus-4:
+      display_name: "Claude Opus 4"
+      context: 200000
+      input_price: 15.00
+      output_price: 75.00
+      best_for: ["highest_quality"]
+    
+    google/gemini-2.5-pro:
+      display_name: "Gemini 2.5 Pro"
+      context: 1048576
+      input_price: 1.25
+      output_price: 10.00
+    
+    google/gemini-2.5-flash:
+      display_name: "Gemini 2.5 Flash"
+      context: 1048576
+      input_price: 0.30
+      output_price: 2.50
+    
+    deepseek/deepseek-chat-v3-0324:
+      display_name: "DeepSeek Chat V3"
+      context: 8192
+      input_price: 0.15
+      output_price: 0.70
+      best_for: ["reasoning", "code", "value"]
+    
+    deepseek/deepseek-r1:
+      display_name: "DeepSeek R1"
+      context: 163840
+      input_price: 0.30
+      output_price: 1.20
+      best_for: ["reasoning", "math"]
+    
+    deepseek/deepseek-r1-0528:
+      display_name: "DeepSeek R1 0528"
+      context: 163840
+      input_price: 0.20
+      output_price: 4.50
+    
+    meta-llama/llama-3.1-405b-instruct:
+      display_name: "Llama 3.1 405B"
+      context: 130815
+      input_price: 3.50
+      output_price: 3.50
+      best_for: ["massive_model"]
+    
+    x-ai/grok-3:
+      display_name: "xAI Grok 3"
+      context: 131072
+      input_price: 3.00
+      output_price: 15.00
+    
+    x-ai/grok-4:
+      display_name: "xAI Grok 4"
+      context: 256000
+      input_price: 3.00
+      output_price: 15.00
+    
+    x-ai/grok-4-fast:
+      display_name: "xAI Grok 4 Fast"
+      context: 2000000
+      input_price: 0.20
+      output_price: 0.50
+      best_for: ["long_context", "fast"]
+    
+    qwen/qwen-max:
+      display_name: "Qwen Max"
+      context: 32768
+      input_price: 1.60
+      output_price: 6.40
+    
+    qwen/qwen-plus:
+      display_name: "Qwen Plus"
+      context: 131072
+      input_price: 0.40
+      output_price: 1.20
+    
+    perplexity/sonar-pro:
+      display_name: "Perplexity Sonar Pro"
+      context: 200000
+      input_price: 3.00
+      output_price: 15.00
+      best_for: ["search", "research"]
+      capabilities: ["web_search"]
+    
+    perplexity/sonar-reasoning:
+      display_name: "Perplexity Sonar Reasoning"
+      context: 127000
+      input_price: 1.00
+      output_price: 5.00
+      capabilities: ["web_search", "reasoning"]
+
+
+# -----------------------------------------------------------------------------
+# GITHUB MODELS - Copilot Pro+ integration
+# Playground: https://github.com/marketplace/models
+# Docs: https://docs.github.com/en/github-models
+# Free Tier: Varies by Copilot tier (Free/Pro/Business/Enterprise)
+# -----------------------------------------------------------------------------
+github_models:
+  base_url: "https://models.inference.ai.azure.com"
+  api_key_env: "GITHUB_TOKEN"
+  
+  models:
+    # ===== OPENAI MODELS =====
+    gpt-4o:
+      display_name: "GPT-4o"
+      azure_id: "azureml://registries/azure-openai/models/gpt-4o/versions/2"
+      tier: "high"
+      copilot_free_rpm: 10
+      copilot_free_rpd: 50
+      copilot_pro_rpd: 50
+      copilot_business_rpd: 100
+      copilot_enterprise_rpd: 150
+    
+    gpt-4o-mini:
+      display_name: "GPT-4o Mini"
+      azure_id: "azureml://registries/azure-openai/models/gpt-4o-mini/versions/1"
+      tier: "low"
+      copilot_free_rpm: 15
+      copilot_free_rpd: 150
+      copilot_pro_rpd: 150
+      copilot_business_rpd: 300
+      copilot_enterprise_rpd: 450
+    
+    # ===== META LLAMA MODELS =====
+    Meta-Llama-3-70B-Instruct:
+      display_name: "Llama 3 70B"
+      azure_id: "azureml://registries/azureml-meta/models/Meta-Llama-3-70B-Instruct/versions/6"
+      tier: "low"
+    
+    Meta-Llama-3-8B-Instruct:
+      display_name: "Llama 3 8B"
+      azure_id: "azureml://registries/azureml-meta/models/Meta-Llama-3-8B-Instruct/versions/6"
+      tier: "low"
+    
+    Meta-Llama-3.1-405B-Instruct:
+      display_name: "Llama 3.1 405B"
+      azure_id: "azureml://registries/azureml-meta/models/Meta-Llama-3.1-405B-Instruct/versions/1"
+      tier: "high"
+    
+    Meta-Llama-3.1-70B-Instruct:
+      display_name: "Llama 3.1 70B"
+      azure_id: "azureml://registries/azureml-meta/models/Meta-Llama-3.1-70B-Instruct/versions/1"
+      tier: "low"
+    
+    Meta-Llama-3.1-8B-Instruct:
+      display_name: "Llama 3.1 8B"
+      azure_id: "azureml://registries/azureml-meta/models/Meta-Llama-3.1-8B-Instruct/versions/1"
+      tier: "low"
+    
+    # ===== MISTRAL MODELS =====
+    Mistral-large-2407:
+      display_name: "Mistral Large 2407"
+      azure_id: "azureml://registries/azureml-mistral/models/Mistral-large-2407/versions/1"
+      tier: "high"
+    
+    Mistral-Nemo:
+      display_name: "Mistral Nemo"
+      azure_id: "azureml://registries/azureml-mistral/models/Mistral-Nemo/versions/1"
+      tier: "low"
+    
+    # ===== OTHER MODELS =====
+    AI21-Jamba-Instruct:
+      display_name: "AI21 Jamba Instruct"
+      azure_id: "azureml://registries/azureml-ai21/models/AI21-Jamba-Instruct/versions/2"
+      tier: "low"
+    
+    # ===== EMBEDDING MODELS =====
+    text-embedding-3-large:
+      display_name: "Text Embedding 3 Large"
+      azure_id: "azureml://registries/azure-openai/models/text-embedding-3-large/versions/1"
+      type: "embedding"
+      tier: "embedding"
+    
+    text-embedding-3-small:
+      display_name: "Text Embedding 3 Small"
+      azure_id: "azureml://registries/azure-openai/models/text-embedding-3-small/versions/1"
+      type: "embedding"
+      tier: "embedding"
+    
+    Cohere-embed-v3-english:
+      display_name: "Cohere Embed V3 English"
+      azure_id: "azureml://registries/azureml-cohere/models/Cohere-embed-v3-english/versions/3"
+      type: "embedding"
+      tier: "embedding"
+    
+    Cohere-embed-v3-multilingual:
+      display_name: "Cohere Embed V3 Multilingual"
+      azure_id: "azureml://registries/azureml-cohere/models/Cohere-embed-v3-multilingual/versions/3"
+      type: "embedding"
+      tier: "embedding"
+  
+  # Rate limit tiers
+  rate_limits:
+    low:
+      copilot_free: {rpm: 15, rpd: 150, tokens_in: 8000, tokens_out: 4000}
+      copilot_pro: {rpm: 15, rpd: 150, tokens_in: 8000, tokens_out: 4000}
+      copilot_business: {rpm: 15, rpd: 300, tokens_in: 8000, tokens_out: 4000}
+      copilot_enterprise: {rpm: 20, rpd: 450, tokens_in: 8000, tokens_out: 8000}
+    high:
+      copilot_free: {rpm: 10, rpd: 50, tokens_in: 8000, tokens_out: 4000}
+      copilot_pro: {rpm: 10, rpd: 50, tokens_in: 8000, tokens_out: 4000}
+      copilot_business: {rpm: 10, rpd: 100, tokens_in: 8000, tokens_out: 4000}
+      copilot_enterprise: {rpm: 15, rpd: 150, tokens_in: 16000, tokens_out: 8000}
+    embedding:
+      copilot_free: {rpm: 15, rpd: 150, tokens_in: 64000}
+      copilot_pro: {rpm: 15, rpd: 150, tokens_in: 64000}
+      copilot_business: {rpm: 15, rpd: 300, tokens_in: 64000}
+      copilot_enterprise: {rpm: 20, rpd: 450, tokens_in: 64000}
+
+
+# -----------------------------------------------------------------------------
+# OPENAI - Direct API (paid, last resort)
+# Dashboard: https://platform.openai.com/usage
+# Pricing: https://openai.com/api/pricing/
+# -----------------------------------------------------------------------------
+openai:
+  base_url: "https://api.openai.com/v1"
+  api_key_env: "OPENAI_API_KEY"
+  priority: 99  # Last resort
+  
+  models:
+    # ===== GPT-4O FAMILY =====
+    gpt-4o:
+      display_name: "GPT-4o"
+      context: 128000
+      input_price: 2.50
+      output_price: 10.00
+      best_for: ["highest_quality", "multimodal"]
+    
+    gpt-4o-2024-11-20:
+      display_name: "GPT-4o (Nov 2024)"
+      context: 128000
+      input_price: 2.50
+      output_price: 10.00
+    
+    gpt-4o-mini:
+      display_name: "GPT-4o Mini"
+      context: 128000
+      input_price: 0.15
+      output_price: 0.60
+      best_for: ["cost_effective", "fast"]
+    
+    chatgpt-4o-latest:
+      display_name: "ChatGPT-4o Latest"
+      context: 128000
+      input_price: 5.00
+      output_price: 15.00
+    
+    # ===== GPT-4 FAMILY =====
+    gpt-4-turbo:
+      display_name: "GPT-4 Turbo"
+      context: 128000
+      input_price: 10.00
+      output_price: 30.00
+    
+    gpt-4:
+      display_name: "GPT-4"
+      context: 8192
+      input_price: 30.00
+      output_price: 60.00
+    
+    gpt-4-0613:
+      display_name: "GPT-4 0613"
+      context: 8192
+      input_price: 30.00
+      output_price: 60.00
+    
+    # ===== GPT-4.1 FAMILY =====
+    gpt-4.1:
+      display_name: "GPT-4.1"
+      context: 128000
+      input_price: 2.00
+      output_price: 8.00
+    
+    gpt-4.1-mini:
+      display_name: "GPT-4.1 Mini"
+      context: 128000
+      input_price: 0.40
+      output_price: 1.60
+    
+    gpt-4.1-nano:
+      display_name: "GPT-4.1 Nano"
+      context: 128000
+      input_price: 0.10
+      output_price: 0.40
+    
+    # ===== GPT-5 FAMILY =====
+    gpt-5:
+      display_name: "GPT-5"
+      context: 256000
+      input_price: 5.00
+      output_price: 20.00
+      best_for: ["frontier", "complex_reasoning"]
+    
+    gpt-5-mini:
+      display_name: "GPT-5 Mini"
+      context: 200000
+      input_price: 1.00
+      output_price: 4.00
+    
+    gpt-5-nano:
+      display_name: "GPT-5 Nano"
+      context: 128000
+      input_price: 0.20
+      output_price: 0.80
+    
+    gpt-5-pro:
+      display_name: "GPT-5 Pro"
+      context: 256000
+      input_price: 15.00
+      output_price: 60.00
+    
+    gpt-5.1:
+      display_name: "GPT-5.1"
+      context: 256000
+      input_price: 5.00
+      output_price: 20.00
+    
+    gpt-5.1-codex:
+      display_name: "GPT-5.1 Codex"
+      context: 256000
+      best_for: ["code"]
+    
+    gpt-5.1-codex-max:
+      display_name: "GPT-5.1 Codex Max"
+      context: 256000
+      best_for: ["code", "complex_projects"]
+    
+    # ===== GPT-3.5 FAMILY =====
+    gpt-3.5-turbo:
+      display_name: "GPT-3.5 Turbo"
+      context: 16385
+      input_price: 0.50
+      output_price: 1.50
+    
+    gpt-3.5-turbo-instruct:
+      display_name: "GPT-3.5 Turbo Instruct"
+      context: 4095
+      input_price: 1.50
+      output_price: 2.00
+    
+    # ===== O-SERIES (REASONING) =====
+    o1:
+      display_name: "o1"
+      context: 200000
+      input_price: 15.00
+      output_price: 60.00
+      best_for: ["reasoning", "math", "science"]
+    
+    o1-pro:
+      display_name: "o1 Pro"
+      context: 200000
+      input_price: 150.00
+      output_price: 600.00
+      best_for: ["hardest_problems"]
+    
+    o3:
+      display_name: "o3"
+      context: 200000
+      input_price: 10.00
+      output_price: 40.00
+    
+    o3-mini:
+      display_name: "o3-mini"
+      context: 200000
+      input_price: 1.10
+      output_price: 4.40
+      best_for: ["fast_reasoning"]
+    
+    # ===== SPECIALIZED =====
+    gpt-4o-audio-preview:
+      display_name: "GPT-4o Audio"
+      type: "audio"
+      capabilities: ["audio_input", "audio_output"]
+    
+    gpt-4o-realtime-preview:
+      display_name: "GPT-4o Realtime"
+      type: "realtime"
+      capabilities: ["voice", "streaming"]
+    
+    gpt-4o-transcribe:
+      display_name: "GPT-4o Transcribe"
+      type: "transcription"
+    
+    gpt-4o-mini-tts:
+      display_name: "GPT-4o Mini TTS"
+      type: "tts"
+    
+    gpt-image-1:
+      display_name: "GPT Image 1"
+      type: "image_generation"
+    
+    gpt-audio:
+      display_name: "GPT Audio"
+      type: "audio"
+    
+    gpt-realtime:
+      display_name: "GPT Realtime"
+      type: "realtime"
+    
+    gpt-5-search-api:
+      display_name: "GPT-5 Search API"
+      capabilities: ["web_search"]
+
+
+# -----------------------------------------------------------------------------
+# MODEL RECOMMENDATIONS BY TASK
+# Use this to auto-select models based on task type
+# -----------------------------------------------------------------------------
+task_recommendations:
+  # Simple, fast tasks
+  quick_response:
+    primary: "groq:llama-3.1-8b-instant"
+    fallback: ["cerebras:llama3.1-8b", "gemini:gemini-2.0-flash-lite"]
+  
+  # Intent parsing and classification
+  intent_parsing:
+    primary: "gemini:gemini-2.5-flash-lite"
+    fallback: ["groq:openai/gpt-oss-20b", "cerebras:gpt-oss-120b"]
+  
+  # Code generation
+  code_generation:
+    primary: "openrouter:deepseek/deepseek-chat-v3-0324"
+    fallback: ["groq:qwen/qwen3-32b", "cerebras:qwen-3-32b"]
+  
+  # Complex reasoning
+  complex_reasoning:
+    primary: "cerebras:qwen-3-235b-a22b-instruct-2507"
+    fallback: ["openrouter:deepseek/deepseek-r1", "gemini:gemini-2.5-pro"]
+  
+  # Scientific analysis
+  scientific_analysis:
+    primary: "gemini:gemini-2.5-pro"
+    fallback: ["openrouter:anthropic/claude-3.5-sonnet", "cerebras:qwen-3-235b-a22b-instruct-2507"]
+  
+  # Workflow generation
+  workflow_generation:
+    primary: "gemini:gemini-2.5-flash"
+    fallback: ["groq:openai/gpt-oss-120b", "cerebras:gpt-oss-120b"]
+  
+  # Long context processing
+  long_context:
+    primary: "gemini:gemini-2.5-pro"  # 1M context
+    fallback: ["openrouter:x-ai/grok-4-fast", "openrouter:amazon/nova-2-lite-v1"]
+  
+  # Content moderation / Safety
+  content_moderation:
+    primary: "groq:meta-llama/llama-guard-4-12b"
+    fallback: ["groq:openai/gpt-oss-safeguard-20b"]
+  
+  # Transcription
+  transcription:
+    primary: "groq:whisper-large-v3-turbo"
+    fallback: ["groq:whisper-large-v3"]
+  
+  # Embeddings
+  embeddings:
+    primary: "gemini:gemini-embedding-001"
+    fallback: ["github_models:text-embedding-3-large"]
+  
+  # Image understanding
+  vision:
+    primary: "gemini:gemini-2.5-flash"
+    fallback: ["openrouter:google/gemini-2.5-flash", "openai:gpt-4o"]
+  
+  # Highest quality (cost not a concern)
+  highest_quality:
+    primary: "openai:gpt-5"
+    fallback: ["openai:o1", "openrouter:anthropic/claude-opus-4"]

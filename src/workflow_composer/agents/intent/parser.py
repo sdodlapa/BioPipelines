@@ -281,11 +281,18 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # "can you show me how to X" / "help me learn how to X"
     (r"(?:can\s+you\s+)?(?:show|teach|explain)\s+(?:me\s+)?how\s+to\s+(.+?)(?:\?|$)",
      IntentType.EDUCATION_HELP, {"topic": 1}),
+    # "help me with RNA-seq" / "help with ChIP-seq" - educational help
+    (r"(?:help|assist)\s+(?:me\s+)?with\s+(.+?)(?:\?|$)",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
+    # Single word assay type queries - wants information about the assay
+    (r"^(rna-?seq|chip-?seq|atac-?seq|wgs|wes|rrbs|bisulfite|methylation|proseq|hi-?c|cutnrun|scrna-?seq|cut-?n-?run|single-?cell)(?:\?)?$",
+     IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
     # "what are the best practices for X" - asking about practices, not doing X
     (r"what\s+(?:are|is)\s+(?:the\s+)?(?:best\s+)?(?:practice|way|approach|method)s?\s+(?:for|to)\s+(.+?)(?:\?|$)",
      IntentType.EDUCATION_EXPLAIN, {"topic": 1}),
     # "what is X" / "what are X" - definitional questions
-    (r"what\s+(?:is|are)\s+(?:a\s+|an\s+)?(.+?)(?:\?|$)",
+    # Exclude error-related queries (handled by DIAGNOSE_ERROR patterns)
+    (r"what\s+(?:is|are)\s+(?:a\s+|an\s+)?(?!causing|the\s+(?:cause|problem|issue|error))(.+?)(?:\?|$)",
      IntentType.EDUCATION_EXPLAIN, {"concept": 1}),
     # "can you explain X" / "explain X to me"
     (r"(?:can\s+you\s+)?explain\s+(?:what\s+)?(.+?)(?:\s+to\s+me)?(?:\?|$)",
@@ -330,8 +337,12 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # =========================================================================
     # DATA SCANNING - local filesystem
     # =========================================================================
-    (r"(?:scan|find|look\s+for|discover|list|show)\s+(?:the\s+)?(?:local\s+)?(?:data|files?|samples?|fastq)(?:\s+(?:in|at|from|under)\s+(.+))?", 
-     IntentType.DATA_SCAN, {"path": 1}),
+    # "scan my data folder for sequencing files" / "scan data folder"
+    (r"(?:scan|find|look\s+for|discover|list|show)\s+(?:the\s+|my\s+)?(?:local\s+)?(?:data|files?|samples?|fastq)(?:\s+(?:folder|directory))?(?:\s+(?:for|in|at|from|under)\s+(.+))?", 
+     IntentType.DATA_SCAN, {"data_type": 1}),
+    # "scan for data" / "scan for fastq files"
+    (r"scan\s+for\s+(?:the\s+|my\s+)?(?:data|files?|samples?|fastq|sequences?|sequencing)",
+     IntentType.DATA_SCAN, {}),
     # Explicit path patterns for scan
     (r"scan\s+([/~][^\s]+)\s+(?:for\s+)?(?:data|files?|samples?|fastq)?",
      IntentType.DATA_SCAN, {"path": 1}),
@@ -387,6 +398,18 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # =========================================================================
     # DATA DESCRIBE - Show details about local data (must come before DATABASE SEARCH)
     # =========================================================================
+    # IMPORTANT: "Analyze X data" where X contains assay type (RNA-seq, ChIP-seq, etc.)
+    # should be WORKFLOW_CREATE, not DATA_DESCRIBE. These patterns MUST come FIRST.
+    # "analyze mouse brain RNA-seq data" / "analyze human ChIP-seq data"
+    (r"analyze\s+(?:the\s+)?(?:my\s+)?(?:\w+\s+)?(?:\w+\s+)?(?:rna-?seq|chip-?seq|atac-?seq|wgs|wes|bisulfite|methylation|proseq|hi-?c|cutnrun|cut-?n-?run|scRNA-?seq|single-?cell)\s+data",
+     IntentType.WORKFLOW_CREATE, {}),
+    # "analyze X-seq data" where X is a general assay suffix
+    (r"analyze\s+(?:the\s+)?(?:my\s+)?(?:\w+\s+)?(?:\w+\s+)?\w+-?seq\s+data",
+     IntentType.WORKFLOW_CREATE, {}),
+    # "analyze my fastq files" / "analyze the fastq files"
+    (r"analyze\s+(?:the\s+|my\s+)?(?:fastq|fq|bam|sam|vcf)\s+files?",
+     IntentType.WORKFLOW_CREATE, {}),
+    
     # "how many samples/files are there" - counting is descriptive NOT scanning
     (r"how\s+many\s+(?:samples?|files?|datasets?)(?:\s+(?:are|do)\s+(?:there|we\s+have))?",
      IntentType.DATA_DESCRIBE, {}),
@@ -679,6 +702,9 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.JOB_SUBMIT, {"path": 1}),
     
     # Job status
+    # "What's the status of my running jobs?" / "what is the status of my jobs"
+    (r"what(?:'s|\s+is)\s+(?:the\s+)?status\s+(?:of|for)\s+(?:my\s+)?(?:running\s+)?jobs?",
+     IntentType.JOB_STATUS, {}),
     (r"(?:what\s+is|check|show|get)\s+(?:the\s+)?(?:job\s+)?status(?:\s+(?:of|for)\s+(?:job\s+)?(\d+))?",
      IntentType.JOB_STATUS, {"job_id": 1}),
     (r"(?:is\s+(?:the\s+)?job|are\s+(?:the\s+)?jobs?)\s+(?:still\s+)?(?:running|done|finished|complete)",
@@ -715,18 +741,22 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.JOB_LOGS, {"job_id": 1}),
     (r"(?:show|get|view|display)\s+(?:the\s+)?(?:job\s+)?logs?(?:\s+(?:for|of)\s+(?:job\s+)?(\d+))?",
      IntentType.JOB_LOGS, {"job_id": 1}),
-    (r"(?:what\s+happened|what\s+went\s+wrong|show\s+me\s+(?:the\s+)?(?:error|output))",
+    (r"show\s+me\s+(?:the\s+)?(?:error|output|logs?)",
      IntentType.JOB_LOGS, {}),
     # "what's the output of job X" - with optional "please" prefix
     (r"(?:please\s+)?what(?:'s|\s+is)\s+(?:the\s+)?output\s+(?:of|for)\s+(?:job\s+)?(\d+)",
      IntentType.JOB_LOGS, {"job_id": 1}),
+    # "what happened" context for JOB_LOGS - only when asking about job output
+    (r"what\s+happened\s+(?:to|with)\s+(?:the\s+)?(?:job|output)",
+     IntentType.JOB_LOGS, {}),
     
     # Job List (must come before more generic patterns)
     (r"list\s+(?:all\s+)?(?:my\s+)?(?:running\s+)?jobs",
      IntentType.JOB_LIST, {}),
     (r"list\s+(?:my\s+)?submitted\s+jobs",
      IntentType.JOB_LIST, {}),
-    (r"(?:show|display|get)\s+(?:all\s+)?(?:my\s+)?(?:running\s+)?jobs",
+    # "show [me] [all] [my] [running] jobs" - flexible word order
+    (r"(?:show|display|get)\s+(?:me\s+)?(?:all\s+)?(?:my\s+)?(?:running\s+)?jobs",
      IntentType.JOB_LIST, {}),
     # "show active jobs" / "Can you show active jobs"
     (r"(?:can\s+you\s+)?(?:show|display|get|list)\s+(?:the\s+)?(?:active|running|queued|pending)\s+jobs",
@@ -747,6 +777,9 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # Cancel
     (r"(?:cancel|stop|kill|abort)\s+(?:the\s+)?(?:job|run|analysis)(?:\s+(\d+))?",
      IntentType.JOB_CANCEL, {"job_id": 1}),
+    # "something went wrong, cancel it" / "there's an issue, stop it"
+    (r"(?:something\s+(?:went\s+wrong|is\s+wrong)|there'?s?\s+(?:an?\s+)?(?:issue|problem|error))[,;]?\s*(?:cancel|stop|kill|abort)\s+(?:it|the\s+job)",
+     IntentType.JOB_CANCEL, {}),
     
     # Watch/Monitor (must come before JOB_STATUS for "monitor" to work)
     (r"(?:watch|monitor|follow|track)\s+(?:the\s+)?(?:job|run|pipeline|analysis)(?:\s+progress)?(?:\s+(\d+))?",
@@ -783,13 +816,27 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"run\s+(?:it\s+)?again(?:\s+with\s+(.+))?",
      IntentType.JOB_RESUBMIT, {"resource": 1}),
     
-    # Diagnostics
+    # Diagnostics - expanded patterns
     (r"(?:diagnose|debug|troubleshoot|analyze)\s+(?:this\s+)?(?:error|failure|problem)",
      IntentType.DIAGNOSE_ERROR, {}),
-    (r"(?:what\s+went\s+wrong|why\s+did\s+it\s+fail|fix\s+this|help\s+me\s+fix)",
+    # "I'm getting 'error message'" / "I'm getting an error"
+    (r"(?:i'?m|i\s+am)\s+(?:getting|seeing|receiving|having)\s+['\"]?(?:an?\s+)?(?:error|failure|problem|exception|issue)",
+     IntentType.DIAGNOSE_ERROR, {}),
+    # "I'm getting 'X: command not found'" / "I'm getting 'permission denied'"  
+    (r"(?:i'?m|i\s+am)\s+(?:getting|seeing|receiving)\s+['\"]?.+?(?:command\s+not\s+found|permission\s+denied|no\s+such\s+file|not\s+found)",
+     IntentType.DIAGNOSE_ERROR, {}),
+    # "what went wrong" should be DIAGNOSE_ERROR, not JOB_LOGS
+    (r"what(?:'s|\s+)(?:went\s+wrong|the\s+(?:problem|issue|error))(?:\?)?$",
+     IntentType.DIAGNOSE_ERROR, {}),
+    (r"(?:why\s+did\s+(?:it|my\s+job|the\s+job)|why\s+is\s+it)\s+(?:fail|failing|crash|crashing)",
+     IntentType.DIAGNOSE_ERROR, {}),
+    (r"(?:fix\s+this|help\s+me\s+fix|help\s+debug|can\s+you\s+fix)",
      IntentType.DIAGNOSE_ERROR, {}),
     # "what went wrong and how do I fix it"
     (r"what\s+went\s+wrong\s+(?:and\s+)?(?:how\s+(?:do\s+i|can\s+i|to)\s+)?(?:fix|solve|resolve)",
+     IntentType.DIAGNOSE_ERROR, {}),
+    # "what is causing the error" / "what is the problem"
+    (r"what\s+(?:is|are)\s+(?:causing|the\s+cause\s+of)\s+(?:the\s+)?(?:error|problem|issue|failure)",
      IntentType.DIAGNOSE_ERROR, {}),
     # ADDED: Broader troubleshooting patterns
     (r"(?:my\s+)?(?:pipeline|workflow|job|run|script)\s+(?:failed|crashed|errored|broke|stopped|died)",
@@ -799,6 +846,9 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"(?:it'?s?\s+)?(?:not\s+working|broken|failing|crashing|erroring)",
      IntentType.DIAGNOSE_ERROR, {}),
     (r"(?:error|failure|exception|problem|issue)\s+(?:with|in|during|when|while)",
+     IntentType.DIAGNOSE_ERROR, {}),
+    # "can't find" / "couldn't find" errors (file missing, reference missing, etc.)
+    (r"(?:can'?t|couldn'?t|unable\s+to|failed\s+to)\s+(?:find|locate|access)",
      IntentType.DIAGNOSE_ERROR, {}),
     (r"(?:try\s+to\s+)?(?:fix|recover|resolve)\s+(?:this|the)\s+(?:error|issue|problem)",
      IntentType.DIAGNOSE_RECOVER, {}),
@@ -1707,9 +1757,17 @@ def _add_context_methods():
                 "what about", "how about", "and", "also",
                 "compare", "versus", "vs", "or",
                 "more", "other", "another", "same",
-                "back to", "actually", "no,", "not"
+                "back to", "actually", "no,", "not",
+                # Workflow refinement indicators
+                "include", "add", "use", "with"
             ]
             return any(ind in message_lower for ind in followup_indicators)
+        
+        # Also check for workflow refinement patterns (even if longer)
+        refinement_starters = ["include", "add", "use ", "with "]
+        if any(message_lower.startswith(s) for s in refinement_starters):
+            return True
+            
         return False
     
     def _handle_followup(self, message: str, context: Dict) -> Optional[IntentResult]:
@@ -1720,6 +1778,131 @@ def _add_context_methods():
         last_intent = context.get("last_intent")
         last_topic = context.get("last_topic")
         last_tool = context.get("last_tool")
+        
+        # =====================================================================
+        # PRONOUN RESOLUTION: Handle "verb + it/that/the workflow/etc."
+        # =====================================================================
+        pronoun_patterns = {
+            # "download it" / "get it" / "fetch it" / "download that"
+            (r"^(?:download|get|fetch)\s+(?:it|that|them|these|those)\.?!?$",
+             IntentType.DATA_DOWNLOAD, 0.85),
+            # "submit it" / "run it" / "execute it" / "submit the workflow"
+            (r"^(?:let'?s?\s+)?(?:submit|run|execute)\s+(?:it|that|the\s+workflow|the\s+job)\.?!?$",
+             IntentType.JOB_SUBMIT, 0.85),
+            # "check its status" / "check the status" / "get its status"
+            (r"^(?:check|get|show|what'?s?)\s+(?:its\s+|the\s+)?status\.?!?\??$",
+             IntentType.JOB_STATUS, 0.85),
+            # "show its logs" / "check the logs" / "get its logs"
+            (r"^(?:show|check|get|view)\s+(?:its\s+|the\s+)?logs?\.?!?$",
+             IntentType.JOB_LOGS, 0.85),
+            # "cancel it" / "stop it" / "kill it"
+            (r"^(?:cancel|stop|kill|abort)\s+(?:it|that|the\s+job)\.?!?$",
+             IntentType.JOB_CANCEL, 0.85),
+            # "resubmit it" / "retry it" / "run it again"
+            (r"^(?:resubmit|retry|rerun)\s+(?:it|that|the\s+job)\.?!?$",
+             IntentType.JOB_RESUBMIT, 0.85),
+            (r"^(?:run|submit)\s+(?:it|that)\s+again\.?!?$",
+             IntentType.JOB_RESUBMIT, 0.85),
+            # "submit the workflow" after WORKFLOW_CREATE
+            (r"^submit\s+the\s+workflow\.?!?$",
+             IntentType.JOB_SUBMIT, 0.85),
+            # "filter these results" / "filter them"
+            (r"^filter\s+(?:these|those|them|the)\s*(?:results?)?",
+             IntentType.DATA_FILTER, 0.80),
+            # "download the first X" - selection from results
+            (r"^download\s+the\s+(?:first|last|top)\s+\d+\.?!?$",
+             IntentType.DATA_DOWNLOAD, 0.80),
+        }
+        
+        for pattern, intent_type, confidence in pronoun_patterns:
+            if re.match(pattern, message_lower, re.IGNORECASE):
+                return IntentResult(
+                    primary_intent=intent_type,
+                    confidence=confidence,
+                    entities=entities,
+                    slots={"context_reference": True},
+                )
+        
+        # Handle workflow refinement patterns (after WORKFLOW_CREATE context)
+        if last_intent in ("WORKFLOW_CREATE", "WORKFLOW_MODIFY"):
+            # Modification patterns - explicitly modifying existing workflow structure
+            # Key: "at the beginning", "at the end", positional references imply modification
+            modification_patterns = [
+                # "add quality control at the beginning" / "add step to the end"
+                (r"add\s+(.+?)(?:\s+step)?\s+(?:at|to)\s+(?:the\s+)?(?:beginning|end|start|middle)",
+                 IntentType.WORKFLOW_MODIFY, {"add_step": 1}),
+                # "insert a step" / "remove the step"
+                (r"(?:insert|remove|delete)\s+(?:a\s+|the\s+)?(.+?)(?:\s+step)?\.?$",
+                 IntentType.WORKFLOW_MODIFY, {"modify_step": 1}),
+            ]
+            for pattern, intent_type, slots in modification_patterns:
+                if re.match(pattern, message_lower, re.IGNORECASE):
+                    return IntentResult(
+                        primary_intent=intent_type,
+                        confidence=0.80,
+                        entities=entities,
+                        slots={**slots, "context_reference": True},
+                    )
+            
+            # Feature/capability addition patterns - continuing workflow creation
+            creation_patterns = [
+                # "include cell type clustering" / "include marker gene identification"
+                (r"include\s+(.+?)(?:\s+(?:step|analysis))?\.?$",
+                 IntentType.WORKFLOW_CREATE, {"add_feature": 1}),
+                # "add quality control" (without positional reference)
+                (r"add\s+(.+?)(?:\s+step)?\.?$",
+                 IntentType.WORKFLOW_CREATE, {"add_step": 1}),
+            ]
+            for pattern, intent_type, slots in creation_patterns:
+                if re.match(pattern, message_lower, re.IGNORECASE):
+                    return IntentResult(
+                        primary_intent=intent_type,
+                        confidence=0.80,
+                        entities=entities,
+                        slots={**slots, "context_reference": True},
+                    )
+            
+            # Tool preference patterns - continue workflow creation with tool choice
+            tool_patterns = [
+                # "use DESeq2 for the analysis" / "use STAR for alignment"
+                (r"use\s+(\w+)\s+(?:for|in)\s+(?:the\s+)?(?:analysis|workflow|pipeline|alignment)",
+                 IntentType.WORKFLOW_CREATE, {"preferred_tool": 1}),
+                # "use STAR instead of HISAT2"
+                (r"use\s+(\w+)\s+instead\s+of\s+(\w+)",
+                 IntentType.WORKFLOW_CREATE, {"preferred_tool": 1, "avoided_tool": 2}),
+            ]
+            for pattern, intent_type, slots in tool_patterns:
+                if re.match(pattern, message_lower, re.IGNORECASE):
+                    return IntentResult(
+                        primary_intent=intent_type,
+                        confidence=0.80,
+                        entities=entities,
+                        slots={**slots, "context_reference": True},
+                    )
+        
+        # Handle "do the same for X" / "same but for Y" - inherit last intent
+        same_patterns = [
+            r"(?:now\s+)?do\s+(?:the\s+)?same\s+(?:for|with|on)\s+(.+)",
+            r"(?:now\s+)?(?:the\s+)?same\s+(?:for|with|on)\s+(.+)",
+            r"(?:but\s+)?(?:now\s+)?for\s+(.+)\s+(?:instead|too|also)",
+            r"repeat\s+(?:that\s+)?(?:for|with)\s+(.+)",
+        ]
+        for pattern in same_patterns:
+            match = re.match(pattern, message_lower)
+            if match:
+                # Inherit the last intent if available
+                if last_intent:
+                    # Convert string intent name to IntentType
+                    try:
+                        inherited_intent = IntentType[last_intent]
+                        return IntentResult(
+                            primary_intent=inherited_intent,
+                            confidence=0.80,
+                            entities=entities,
+                            slots={"context_reference": True, "new_target": match.group(1).strip()},
+                        )
+                    except KeyError:
+                        pass
         
         # Handle comparison queries: "How does it compare to X?"
         if any(kw in message_lower for kw in ["compare", "versus", "vs", "difference", "better"]):
@@ -1792,7 +1975,7 @@ def _add_context_methods():
             # Look for bioinformatics entities that might suggest intent
             bio_entities = [e for e in entities if hasattr(e, 'type') and e.type in (
                 EntityType.ASSAY_TYPE, EntityType.ORGANISM, EntityType.TISSUE,
-                EntityType.TOOL, EntityType.FILE_FORMAT
+                EntityType.WORKFLOW_TYPE, EntityType.FILE_FORMAT
             )]
             
             if bio_entities:

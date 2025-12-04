@@ -113,6 +113,19 @@ from .utils import (
     get_usage_tracker,
 )
 
+# Model Registry (complete model catalog)
+from .model_registry import (
+    ModelRegistry,
+    ModelInfo,
+    ProviderInfo,
+    ModelType,
+    TaskType,
+    get_registry as get_model_registry,
+    get_model,
+    get_free_models,
+    get_recommended_model,
+)
+
 # Factory functions
 from .factory import (
     get_provider,
@@ -180,4 +193,15 @@ __all__ = [
     "HealthStatus",
     "UsageMetrics",
     "get_usage_tracker",
+    
+    # Model Registry
+    "ModelRegistry",
+    "ModelInfo",
+    "ProviderInfo",
+    "ModelType",
+    "TaskType",
+    "get_model_registry",
+    "get_model",
+    "get_free_models",
+    "get_recommended_model",
 ]

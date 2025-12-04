@@ -35,33 +35,43 @@ from .base import LLMAdapter, Message, LLMResponse, Role
 logger = logging.getLogger(__name__)
 
 
-# Model pricing per million tokens (as of Nov 2025)
+# Models confirmed working via litai SDK (tested Jan 2025)
+# Format: provider/model_name
+WORKING_MODELS = [
+    "lightning-ai/gpt-oss-20b",    # Lightning's own model - FREE
+    "openai/gpt-4-turbo",          # OpenAI via Lightning
+    "openai/gpt-4",                # OpenAI via Lightning  
+    "openai/gpt-4o",               # OpenAI via Lightning
+    "openai/gpt-3.5-turbo",        # OpenAI via Lightning - cheaper
+]
+
+# Model pricing per million tokens (as of Jan 2025)
+# Note: Pricing via Lightning.ai may differ from direct API
 MODEL_PRICING = {
-    "deepseek-ai/DeepSeek-V3": {"input": 0.14, "output": 0.28},
-    "deepseek-ai/DeepSeek-R1": {"input": 0.14, "output": 0.28},
-    "deepseek-ai/deepseek-chat": {"input": 0.07, "output": 0.14},
-    "meta-llama/Llama-3.3-70B-Instruct": {"input": 0.80, "output": 0.80},
-    "meta-llama/Llama-3.1-70B-Instruct": {"input": 0.80, "output": 0.80},
-    "meta-llama/Llama-3.1-8B-Instruct": {"input": 0.10, "output": 0.10},
-    "mistralai/Mistral-Large-Instruct-2411": {"input": 2.00, "output": 6.00},
-    "mistralai/Mistral-7B-Instruct-v0.3": {"input": 0.25, "output": 0.25},
-    "Qwen/Qwen2.5-72B-Instruct": {"input": 0.80, "output": 0.80},
+    # Lightning AI native models
+    "lightning-ai/gpt-oss-20b": {"input": 0.05, "output": 0.10},
+    # OpenAI models via Lightning
     "openai/gpt-4o": {"input": 2.50, "output": 10.00},
-    "openai/gpt-4o-mini": {"input": 0.15, "output": 0.60},
+    "openai/gpt-4-turbo": {"input": 10.00, "output": 30.00},
+    "openai/gpt-4": {"input": 30.00, "output": 60.00},
+    "openai/gpt-3.5-turbo": {"input": 0.50, "output": 1.50},
+    # Legacy entries (may not work with current API)
+    "deepseek-ai/DeepSeek-V3": {"input": 0.14, "output": 0.28},
+    "meta-llama/Llama-3.3-70B-Instruct": {"input": 0.80, "output": 0.80},
+    "Qwen/Qwen2.5-72B-Instruct": {"input": 0.80, "output": 0.80},
 }
 
-# Model recommendations by task
+# Model recommendations by task (using confirmed working models)
 TASK_MODELS = {
-    "intent_parsing": "deepseek-ai/DeepSeek-V3",
-    "workflow_generation": "deepseek-ai/DeepSeek-V3",
-    "module_creation": "deepseek-ai/DeepSeek-V3",
-    "code_generation": "deepseek-ai/DeepSeek-V3",
-    "scientific_analysis": "Qwen/Qwen2.5-72B-Instruct",
-    "chat": "meta-llama/Llama-3.3-70B-Instruct",
-    "quick_response": "meta-llama/Llama-3.1-8B-Instruct",
-    "high_quality": "deepseek-ai/DeepSeek-V3",
+    "intent_parsing": "lightning-ai/gpt-oss-20b",       # Free and fast
+    "workflow_generation": "lightning-ai/gpt-oss-20b", 
+    "module_creation": "openai/gpt-4o",                  # High quality
+    "code_generation": "openai/gpt-4o",
+    "scientific_analysis": "openai/gpt-4o",
+    "chat": "lightning-ai/gpt-oss-20b",                  # Fast responses
+    "quick_response": "openai/gpt-3.5-turbo",            # Cheapest
+    "high_quality": "openai/gpt-4o",
 }
-
 
 @dataclass
 class UsageTracker:
@@ -100,15 +110,22 @@ class LightningAdapter(LLMAdapter):
     - 30M free tokens/month
     - Automatic fallback support
     - Usage tracking and cost estimation
+    
+    Working models (tested Jan 2025):
+    - lightning-ai/gpt-oss-20b (FREE, Lightning's own model)
+    - openai/gpt-4o (High quality)
+    - openai/gpt-4-turbo
+    - openai/gpt-4
+    - openai/gpt-3.5-turbo (Cheapest)
     """
     
     FREE_TIER_LIMIT = 30_000_000  # 30M tokens/month
     
     def __init__(
         self,
-        model: str = "deepseek-ai/DeepSeek-V3",
+        model: str = "lightning-ai/gpt-oss-20b",  # Use Lightning's free model
         api_key: Optional[str] = None,
-        fallback_model: Optional[str] = "meta-llama/Llama-3.1-8B-Instruct",
+        fallback_model: Optional[str] = "openai/gpt-3.5-turbo",  # Cheap fallback
         task: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 2048,
@@ -152,21 +169,33 @@ class LightningAdapter(LLMAdapter):
             )
             return
         
-        # Use OpenAI-compatible API (more reliable than litai)
+        # Use litai SDK (native Lightning.ai client - more reliable than OpenAI-compat)
         try:
-            from openai import OpenAI
-            self._client = OpenAI(
-                base_url="https://api.lightning.ai/v1",
-                api_key=self.api_key,
-            )
-            self._use_openai_compat = True
-            logger.debug("Using OpenAI-compatible client for Lightning.ai")
+            from litai import LLM as LitaiLLM
+            self._litai_available = True
+            self._use_openai_compat = False
+            logger.debug("Using litai SDK for Lightning.ai")
         except ImportError:
-            logger.error(
-                "openai package not installed. "
-                "Install with: pip install openai"
+            self._litai_available = False
+            logger.warning(
+                "litai package not installed. "
+                "Install with: pip install litai"
             )
-            self._client = None
+            # Fallback to OpenAI-compatible API (may have auth issues)
+            try:
+                from openai import OpenAI
+                self._client = OpenAI(
+                    base_url="https://api.lightning.ai/v1",
+                    api_key=self.api_key,
+                )
+                self._use_openai_compat = True
+                logger.debug("Fallback: Using OpenAI-compatible client for Lightning.ai")
+            except ImportError:
+                logger.error(
+                    "Neither litai nor openai packages installed. "
+                    "Install with: pip install litai"
+                )
+                self._client = None
     
     @property
     def provider_name(self) -> str:
@@ -200,7 +229,8 @@ class LightningAdapter(LLMAdapter):
         Returns:
             LLMResponse with generated content
         """
-        if not self._client:
+        # Check if we have a valid client (either litai or OpenAI-compat)
+        if not getattr(self, '_litai_available', False) and not self._client:
             raise RuntimeError(
                 "Lightning.ai client not initialized. "
                 "Set LIGHTNING_API_KEY environment variable."
@@ -229,7 +259,38 @@ class LightningAdapter(LLMAdapter):
         **kwargs
     ) -> LLMResponse:
         """Call the Lightning.ai API."""
-        # Use OpenAI-compatible endpoint
+        # Use litai SDK (preferred)
+        if getattr(self, '_litai_available', False):
+            from litai import LLM as LitaiLLM
+            
+            # Build user message from conversation
+            user_msg = ""
+            for msg in messages:
+                role = msg.get('role', 'user')
+                content = msg.get('content', '')
+                if role == 'system':
+                    user_msg = f"System: {content}\n\n" + user_msg
+                elif role == 'user':
+                    user_msg += f"{content}\n"
+                elif role == 'assistant':
+                    user_msg += f"Assistant: {content}\n"
+            
+            llm = LitaiLLM(model=self.model, api_key=self.api_key)
+            content = llm.chat(user_msg.strip())
+            
+            # litai doesn't return token counts, estimate
+            prompt_tokens = len(user_msg.split()) * 2
+            completion_tokens = len(content.split()) * 2
+            self.usage.add(prompt_tokens, completion_tokens)
+            
+            return LLMResponse(
+                content=content,
+                model=self.model,
+                provider=self.provider_name,
+                tokens_used=prompt_tokens + completion_tokens,
+            )
+        
+        # Fallback: OpenAI-compatible endpoint
         response = self._client.chat.completions.create(
             model=self.model,
             messages=messages,

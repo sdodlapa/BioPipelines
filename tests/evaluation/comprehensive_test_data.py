@@ -750,7 +750,7 @@ COREFERENCE_CONVERSATIONS = [
             Turn(
                 query="Search for human liver RNA-seq data",
                 expected_intent="DATA_SEARCH",
-                expected_entities={"ORGANISM": "human", "TISSUE": "liver"},
+                expected_entities={"ORGANISM": "human", "TISSUE": "liver", "ASSAY_TYPE": "RNA-seq"},
                 expected_tool="search_databases",
             ),
             Turn(
@@ -772,7 +772,7 @@ COREFERENCE_CONVERSATIONS = [
             Turn(
                 query="Create an RNA-seq workflow",
                 expected_intent="WORKFLOW_CREATE",
-                expected_entities={"ANALYSIS_TYPE": "RNA-seq"},
+                expected_entities={"ASSAY_TYPE": "RNA-seq"},
                 expected_tool="generate_workflow",
             ),
             Turn(
