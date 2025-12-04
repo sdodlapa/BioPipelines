@@ -57,6 +57,9 @@ class IntentType(Enum):
     WORKFLOW_LIST = auto()       # List available workflows
     WORKFLOW_CONFIGURE = auto()  # Configure workflow parameters
     WORKFLOW_VISUALIZE = auto()  # Show workflow DAG
+    WORKFLOW_VALIDATE = auto()   # Validate workflow code
+    WORKFLOW_MODIFY = auto()     # Modify existing workflow
+    WORKFLOW_DESCRIBE = auto()   # Describe workflow details
     
     # Reference Data
     REFERENCE_CHECK = auto()     # Check reference availability
@@ -71,12 +74,19 @@ class IntentType(Enum):
     JOB_RESUBMIT = auto()        # Resubmit failed job
     JOB_LIST = auto()            # List all jobs
     JOB_WATCH = auto()           # Monitor job in real-time
+    JOB_RESOURCES = auto()       # Check job resource usage
     
     # Analysis & Results
     ANALYSIS_RUN = auto()        # Run analysis on results
     ANALYSIS_INTERPRET = auto()  # Interpret QC/results
     ANALYSIS_COMPARE = auto()    # Compare samples/conditions
     ANALYSIS_VISUALIZE = auto()  # Generate plots
+    ANALYSIS_REPORT = auto()     # Generate report
+    
+    # Data Operations (extended)
+    DATA_COMPARE = auto()        # Compare datasets
+    DATA_FILTER = auto()         # Filter datasets
+    # DATA_VALIDATE already defined above
     
     # Diagnostics
     DIAGNOSE_ERROR = auto()      # Diagnose failures
@@ -85,6 +95,7 @@ class IntentType(Enum):
     # System Operations
     SYSTEM_STATUS = auto()       # Check system health
     SYSTEM_RESTART = auto()      # Restart services
+    SYSTEM_COMMAND = auto()      # Run a simple shell command (not a workflow)
     
     # Education
     EDUCATION_EXPLAIN = auto()   # Explain concepts
@@ -238,6 +249,22 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # Generate then run
     (r"(?:create|generate|make)\s+(?:a\s+)?(.+?)\s+(?:workflow|pipeline)\s+(?:and\s+)?(?:then\s+)?(?:run|execute|submit)",
      IntentType.COMPOSITE_GENERATE_THEN_RUN, {"workflow_type": 1}),
+    
+    # =========================================================================
+    # REFERENCE CHECK - must come before DATA_SCAN to prevent "check if we have X genome" from matching DATA_SCAN
+    # =========================================================================
+    # "check if we have the human reference genome" - explicit check for reference genome
+    (r"check\s+if\s+(?:we\s+have|there\s+is)\s+(?:the\s+)?(?:a\s+)?(?:\w+\s+)?(?:reference\s+)?genome",
+     IntentType.REFERENCE_CHECK, {}),
+    # "do we have the human reference genome"
+    (r"(?:do\s+we\s+have|have\s+we\s+got)\s+(?:the\s+)?(?:a\s+)?(?:\w+\s+)?(?:reference\s+)?genome",
+     IntentType.REFERENCE_CHECK, {}),
+    # "is the human reference genome available"
+    (r"(?:is|are)\s+(?:the\s+)?(?:\w+\s+)?(?:reference\s+)?genome(?:s?)?\s+(?:available|ready|installed|present)",
+     IntentType.REFERENCE_CHECK, {}),
+    # "verify we have the reference for human"
+    (r"(?:verify|confirm|make\s+sure)\s+(?:we\s+have|there\s+is)\s+(?:the\s+)?(?:a\s+)?(?:\w+\s+)?reference",
+     IntentType.REFERENCE_CHECK, {}),
     
     # =========================================================================
     # EDUCATION - must come before workflow creation to catch "how does X work"
@@ -461,6 +488,12 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     # "I want to analyze X data" (where X is organism/tissue) - workflow creation
     (r"i\s+want\s+to\s+analyze\s+(.+?)\s+data\s+(?:with|using)\s+(.+)",
      IntentType.WORKFLOW_CREATE, {"organism": 1, "analysis_type": 2}),
+    # "I have X samples and want to find/analyze Y" - workflow creation from description
+    (r"i\s+have\s+(?:.+?\s+)?(?:samples?|data)\s+(?:from\s+.+?\s+)?(?:and\s+)?(?:want|need)\s+to\s+(?:find|analyze|identify|detect)\s+(.+)",
+     IntentType.WORKFLOW_CREATE, {"analysis_type": 1}),
+    # "want to find differentially expressed genes" - DE analysis workflow
+    (r"(?:want|need)\s+to\s+(?:find|identify|detect)\s+differentially\s+expressed\s+genes?",
+     IntentType.WORKFLOW_CREATE, {"workflow_type": "differential_expression"}),
     # Simple "X analysis" / "X workflow" patterns for common bioinformatics workflows
     (r"^(cutnrun|cut\s*n\s*run|cut\s*and\s*run|cutandrun)\s+(?:analysis|workflow|pipeline)?$",
      IntentType.WORKFLOW_CREATE, {"workflow_type": "cut_and_run"}),
@@ -475,7 +508,8 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"^(.+?)\s+(?:workflow|pipeline)\s+(?:but\s+use|with)\s+(.+?)(?:\s+not\s+(.+))?$",
      IntentType.WORKFLOW_CREATE, {"workflow_type": 1, "preferred_tool": 2, "avoided_tool": 3}),
     # "X workflow for Y" / "variant calling workflow for homo sapiens"
-    (r"^(.+?)\s+(?:workflow|pipeline)\s+for\s+(.+)$",
+    # CRITICAL: Use negative lookbehind to exclude submit/run/execute (those are JOB_SUBMIT)
+    (r"^(?!submit\b|run\b|execute\b)(.+?)\s+(?:workflow|pipeline)\s+for\s+(.+)$",
      IntentType.WORKFLOW_CREATE, {"workflow_type": 1, "organism": 2}),
     # "first align with X, then do Y" - multi-step workflow description
     (r"first\s+(?:align|map)\s+with\s+(.+?)[,;]?\s+then\s+(?:do\s+)?(.+)",
@@ -528,8 +562,32 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
     (r"(?:create\s+)?peak\s+calling\s+(?:avoid|without|skip)\s+(\w+)\s+(?:use|with)\s+(\w+)",
      IntentType.WORKFLOW_CREATE, {"workflow_type": "peak_calling", "avoided_tool": 1, "preferred_tool": 2}),
     
+    # =========================================================================
+    # JOB_RESUBMIT - must come before JOB_SUBMIT to avoid "submit" matching in "resubmit"
+    # =========================================================================
+    (r"^resubmit\b", IntentType.JOB_RESUBMIT, {}),  # Any phrase starting with resubmit
+    (r"^retry\b", IntentType.JOB_RESUBMIT, {}),      # Any phrase starting with retry
+    (r"^rerun\b", IntentType.JOB_RESUBMIT, {}),      # Any phrase starting with rerun
+    (r"(?:resubmit|retry|rerun|restart)\s+(?:the\s+)?(?:failed\s+)?(?:job|run|analysis|workflow|pipeline)(?:\s+(\d+))?",
+     IntentType.JOB_RESUBMIT, {"job_id": 1}),
+    (r"(?:try\s+)?(?:the\s+)?(?:job|run)(?:\s+(\d+))?\s+again",
+     IntentType.JOB_RESUBMIT, {"job_id": 1}),
+    
     # Job submission - "submit my X workflow" means run existing workflow
+    # CRITICAL: Full sentence patterns first (higher coverage = higher confidence)
+    # "submit the X workflow for my Y data" - complete pattern with data
+    (r"^submit\s+(?:the\s+)?(\S+(?:-\S+)?)\s+(?:workflow|pipeline)\s+(?:for|on|with)\s+(?:my\s+)?(?:\S+\s+)?(?:data|samples?)$",
+     IntentType.JOB_SUBMIT, {"workflow_type": 1}),
+    # "submit the X workflow for my data" (Y is data type)
+    (r"submit\s+(?:the\s+)?(.+?)\s+(?:workflow|pipeline)\s+(?:for|on|with)\s+(?:my\s+)?(.+)$",
+     IntentType.JOB_SUBMIT, {"workflow_type": 1, "data_type": 2}),
+    # These patterns must be specific enough to catch "submit" + workflow type
+    (r"(?:please\s+)?submit\s+(?:my\s+)?(?:the\s+)?(.+?)\s+(?:workflow|pipeline|job|analysis)",
+     IntentType.JOB_SUBMIT, {"workflow_type": 1}),
     (r"(?:please\s+)?submit\s+(?:my\s+)?(?:the\s+)?(\w+(?:\s+\w+)?)\s+(?:workflow|pipeline)",
+     IntentType.JOB_SUBMIT, {"workflow_type": 1}),
+    # "submit the X workflow for my Y data" - Y is data type, not workflow type
+    (r"submit\s+(?:the\s+)?(\w+(?:-\w+)?)\s+workflow\s+(?:for|on|with)\s+(?:my\s+)?",
      IntentType.JOB_SUBMIT, {"workflow_type": 1}),
     (r"(?:can\s+you\s+)?(?:run|execute)\s+(?:the\s+)?(?:pipeline|workflow)\s+(?:in|at|from)\s+([/~][^\s]+)",
      IntentType.JOB_SUBMIT, {"path": 1}),
@@ -641,6 +699,9 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.DIAGNOSE_ERROR, {}),
     (r"(?:what\s+went\s+wrong|why\s+did\s+it\s+fail|fix\s+this|help\s+me\s+fix)",
      IntentType.DIAGNOSE_ERROR, {}),
+    # "what went wrong and how do I fix it"
+    (r"what\s+went\s+wrong\s+(?:and\s+)?(?:how\s+(?:do\s+i|can\s+i|to)\s+)?(?:fix|solve|resolve)",
+     IntentType.DIAGNOSE_ERROR, {}),
     # ADDED: Broader troubleshooting patterns
     (r"(?:my\s+)?(?:pipeline|workflow|job|run|script)\s+(?:failed|crashed|errored|broke|stopped|died)",
      IntentType.DIAGNOSE_ERROR, {}),
@@ -652,6 +713,151 @@ INTENT_PATTERNS: List[Tuple[str, IntentType, Dict[str, int]]] = [
      IntentType.DIAGNOSE_ERROR, {}),
     (r"(?:try\s+to\s+)?(?:fix|recover|resolve)\s+(?:this|the)\s+(?:error|issue|problem)",
      IntentType.DIAGNOSE_RECOVER, {}),
+    
+    # =========================================================================
+    # REFERENCE CHECK PATTERNS - checking local reference genome availability
+    # =========================================================================
+    # "check if we have the human reference genome" (explicit check pattern)
+    (r"check\s+if\s+(?:we\s+have|there\s+is)\s+(?:the\s+)?(?:a\s+)?(?:human|mouse|rat|zebrafish)?\s*(?:reference\s+)?(?:genome|annotation)",
+     IntentType.REFERENCE_CHECK, {}),
+    # "check if human reference genome is available" / "is hg38 available?"
+    (r"(?:check\s+(?:if\s+)?|is\s+(?:the\s+)?|do\s+(?:we|i)\s+have\s+)(?:the\s+)?(?:human|mouse|rat|hg38|hg19|mm10|mm39|GRCh38|GRCh37|GRCm39|GRCm38)\s+(?:reference\s+)?(?:genome|assembly|index)?(?:\s+(?:available|installed|ready|present))?",
+     IntentType.REFERENCE_CHECK, {}),
+    # "check reference genome availability" / "check for hg38"
+    (r"(?:check|verify|see|look)\s+(?:for\s+)?(?:the\s+)?(?:reference\s+)?(?:genome|index|annotation)\s+(?:availability|status)",
+     IntentType.REFERENCE_CHECK, {}),
+    (r"(?:check|look)\s+(?:for|if)\s+(?:the\s+)?(?:reference\s+)?(?:genome|index)(?:\s+(?:exists?|is\s+there))?",
+     IntentType.REFERENCE_CHECK, {}),
+    # "is reference genome available" / "do we have the reference"
+    (r"(?:is\s+(?:the\s+)?|do\s+(?:we|i)\s+have\s+(?:a\s+|the\s+)?)(?:reference\s+)?(?:genome|index|annotation)(?:\s+(?:available|installed|ready|set\s+up))?",
+     IntentType.REFERENCE_CHECK, {}),
+    # "verify reference files" / "check reference status"
+    (r"(?:verify|check|validate)\s+(?:the\s+)?(?:reference|genome|index)\s+(?:files?|status|setup)",
+     IntentType.REFERENCE_CHECK, {}),
+    # "which references are available" / "list available genomes"
+    (r"(?:which|what|list)\s+(?:reference\s+)?(?:genomes?|references?|indices)\s+(?:are\s+)?(?:available|installed|ready)",
+     IntentType.REFERENCE_CHECK, {}),
+    
+    # =========================================================================
+    # SYSTEM COMMAND PATTERNS - run simple commands (NOT workflow submission)
+    # These must come BEFORE JOB_SUBMIT patterns to take priority
+    # =========================================================================
+    # "run fastqc --version" / "run samtools view" - direct command execution
+    (r"(?:run|execute)\s+(fastqc|samtools|bwa|bowtie|bowtie2|hisat2|star|kallisto|salmon|picard|gatk|bcftools|bedtools|deeptools|macs2|macs3|htseq|featurecounts|multiqc|trimmomatic|cutadapt|trim_galore)\s+(--?[\w-]+(?:\s+--?[\w-]+)*)",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "args": 2}),
+    # "run tool --version" / "run tool --help" pattern specifically  
+    (r"(?:run|execute|check)\s+(\w+)\s+(--version|--help|-v|-h)\s*$",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "args": 2}),
+    # "fastqc --version" / "samtools --version" - direct command without "run"
+    (r"^(fastqc|samtools|bwa|bowtie|bowtie2|hisat2|star|kallisto|salmon|picard|gatk|bcftools|bedtools|deeptools|macs2|macs3|htseq|featurecounts|multiqc|trimmomatic|cutadapt|trim_galore|nextflow|snakemake)\s+(--version|--help|-v|-h)\s*$",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "args": 2}),
+    # "what version of X" / "check X version" / "X version"
+    (r"(?:what\s+(?:is\s+the\s+)?version\s+(?:of\s+)?|check\s+(?:the\s+)?(?:version\s+(?:of\s+)?)?)(fastqc|samtools|bwa|bowtie|bowtie2|hisat2|star|kallisto|salmon|picard|gatk|bcftools|bedtools|deeptools|macs|macs2|macs3|htseq|featurecounts|multiqc|trimmomatic|cutadapt|trim_galore|nextflow|snakemake)",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "args": "--version"}),
+    # "tool version" / "tool version?" (short form)
+    (r"^(fastqc|samtools|bwa|bowtie|bowtie2|hisat2|star|kallisto|salmon|picard|gatk|bcftools|bedtools|deeptools|macs|macs2|macs3|htseq|featurecounts|multiqc|trimmomatic|cutadapt|trim_galore|nextflow|snakemake)\s+version\s*\??$",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "args": "--version"}),
+    # "is X installed" / "do we have X" - tool availability check
+    (r"(?:is\s+|do\s+(?:we|i)\s+have\s+)(fastqc|samtools|bwa|bowtie|bowtie2|hisat2|star|kallisto|salmon|picard|gatk|bcftools|bedtools|deeptools|macs|macs2|macs3|htseq|featurecounts|multiqc|trimmomatic|cutadapt|trim_galore|nextflow|snakemake)(?:\s+installed)?",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "check_installed": True}),
+    # "is X available" / "can I use X" - tool availability
+    (r"(?:is\s+|can\s+(?:i|we)\s+use\s+)(fastqc|samtools|bwa|bowtie|bowtie2|hisat2|star|kallisto|salmon|picard|gatk|bcftools|bedtools|deeptools|macs|macs2|macs3|htseq|featurecounts|multiqc|trimmomatic|cutadapt|trim_galore|nextflow|snakemake)(?:\s+(?:available|here))?",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "check_installed": True}),
+    # "where is X installed" / "path to X"
+    (r"(?:where\s+is|path\s+to|locate)\s+(fastqc|samtools|bwa|bowtie|bowtie2|hisat2|star|kallisto|salmon|picard|gatk|bcftools|bedtools|deeptools|macs|macs2|macs3|htseq|featurecounts|multiqc|trimmomatic|cutadapt|trim_galore|nextflow|snakemake)",
+     IntentType.SYSTEM_COMMAND, {"tool": 1, "check_installed": True}),
+    # "which tools are available" / "list installed tools"
+    (r"(?:which|what|list)\s+(?:bioinformatics\s+)?tools?\s+(?:are\s+)?(?:available|installed)",
+     IntentType.SYSTEM_STATUS, {}),
+    # "check system status" / "system health"
+    (r"(?:check\s+)?(?:system|cluster|slurm)\s+(?:status|health)",
+     IntentType.SYSTEM_STATUS, {}),
+    
+    # =========================================================================
+    # WORKFLOW VALIDATION/MODIFICATION PATTERNS
+    # =========================================================================
+    # "validate the workflow" / "check the workflow" / "validate the complete workflow"
+    (r"(?:validate|verify|check)\s+(?:the\s+)?(?:complete\s+)?(?:workflow|pipeline)(?:\s+(?:before\s+)?(?:running|submitting))?",
+     IntentType.WORKFLOW_VALIDATE, {}),
+    (r"(?:validate|verify|check)\s+(?:the\s+)?(?:changes|modifications)",
+     IntentType.WORKFLOW_VALIDATE, {}),
+    # "modify the workflow" / "change the workflow" / "update the workflow"
+    (r"(?:modify|change|update|edit|fix)\s+(?:the\s+)?(?:workflow|pipeline)",
+     IntentType.WORKFLOW_MODIFY, {}),
+    # "apply that fix" / "apply the fix to the workflow"
+    (r"(?:apply|use|implement)\s+(?:that|the)\s+(?:fix|change|modification|suggestion)",
+     IntentType.WORKFLOW_MODIFY, {}),
+    # "use X instead" / "switch to X"
+    (r"(?:use|switch\s+to)\s+(\w+[-\w]*)\s+instead",
+     IntentType.WORKFLOW_MODIFY, {"new_tool": 1}),
+    # "add X step" / "add X to the workflow"  
+    (r"(?:also\s+)?add\s+(.+?)(?:\s+to\s+(?:the\s+)?(?:workflow|pipeline))?$",
+     IntentType.WORKFLOW_MODIFY, {"add_step": 1}),
+    # "what aligner/tool did you use" - workflow describe
+    (r"what\s+(?:aligner|tool|version|step)\s+(?:did\s+you|are\s+you)\s+(?:use|using)",
+     IntentType.WORKFLOW_DESCRIBE, {}),
+    (r"(?:describe|show|explain)\s+(?:the\s+)?(?:workflow|pipeline)(?:\s+(?:details?|steps?|configuration))?",
+     IntentType.WORKFLOW_DESCRIBE, {}),
+    
+    # =========================================================================
+    # JOB MONITORING/RESOURCE PATTERNS
+    # =========================================================================
+    # "how much memory/cpu is it using"
+    (r"(?:how\s+much|what)\s+(?:memory|cpu|resources?|disk)\s+(?:is\s+)?(?:it|the\s+job)?\s*(?:using|usage)?",
+     IntentType.JOB_RESOURCES, {}),
+    (r"(?:show|check|get)\s+(?:resource|memory|cpu)\s+(?:usage|consumption|stats?)",
+     IntentType.JOB_RESOURCES, {}),
+    # "is it running yet" / "is it done"
+    (r"^is\s+it\s+(?:running|done|finished|complete|started)(?:\s+yet)?(?:\?)?$",
+     IntentType.JOB_STATUS, {}),
+    # "monitor it" / "watch the job"
+    (r"(?:monitor|watch|track)\s+(?:it|the\s+job|the\s+run)",
+     IntentType.JOB_WATCH, {}),
+    (r"(?:let\s+me\s+know|notify\s+me|alert\s+me)\s+(?:if|when)\s+(?:it|the\s+job)",
+     IntentType.JOB_WATCH, {}),
+    
+    # =========================================================================
+    # ANALYSIS/RESULTS PATTERNS
+    # =========================================================================
+    # "interpret the results" / "what are the results"
+    (r"(?:what\s+are|show\s+me)\s+(?:the\s+)?(?:key\s+)?(?:results?|findings?|output)",
+     IntentType.ANALYSIS_INTERPRET, {}),
+    # "generate a report" / "create a QC report"
+    (r"(?:generate|create|make|build)\s+(?:a\s+)?(?:qc\s+)?(?:report|summary)",
+     IntentType.ANALYSIS_REPORT, {}),
+    (r"(?:generate|create)\s+(?:a\s+)?(?:report|summary)\s+(?:i\s+can\s+)?(?:share|send)",
+     IntentType.ANALYSIS_REPORT, {}),
+    
+    # =========================================================================
+    # DATA COMPARISON/FILTERING/VALIDATION PATTERNS
+    # =========================================================================
+    # "compare the results" / "compare datasets"
+    (r"compare\s+(?:the\s+)?(?:quality\s+of\s+)?(?:results?|datasets?|data)",
+     IntentType.DATA_COMPARE, {}),
+    # "filter to only" / "filter datasets"
+    (r"filter\s+(?:to\s+)?(?:only\s+)?(?:datasets?|results?|those)",
+     IntentType.DATA_FILTER, {}),
+    (r"(?:only\s+)?(?:show|keep)\s+(?:datasets?|results?)\s+(?:with|where|that)",
+     IntentType.DATA_FILTER, {}),
+    # "verify the download" / "check the data"
+    (r"(?:verify|validate|check)\s+(?:the\s+)?(?:downloads?|data)(?:\s+(?:completed|finished|successfully))?",
+     IntentType.DATA_VALIDATE, {}),
+    
+    # =========================================================================
+    # CONTEXTUAL SHORT PHRASES
+    # =========================================================================
+    # "let's run it" / "run it" / "submit it" - context-dependent
+    (r"^(?:let'?s?\s+)?(?:run|submit|execute)\s+it!?$",
+     IntentType.JOB_SUBMIT, {}),
+    # "great, let's run it" / "ok run it" - enthusiasm + action
+    (r"^(?:great|ok|okay|perfect|good|nice)[,!]?\s+(?:let'?s?\s+)?(?:run|submit)\s+it!?$",
+     IntentType.JOB_SUBMIT, {}),
+    # "looks good" / "that's fine" - confirmation before submit
+    (r"^(?:looks?\s+good|that'?s?\s+(?:fine|good|great)|ok|okay),?\s*(?:submit|run)?\s*(?:it)?$",
+     IntentType.JOB_SUBMIT, {}),
+    # "show me the logs" - short form
+    (r"^show\s+(?:me\s+)?(?:the\s+)?logs?(?:\s+so\s+far)?$",
+     IntentType.JOB_LOGS, {}),
     
     # Analysis/Results
     (r"(?:analyze|interpret|explain)\s+(?:the\s+)?(?:results?|output|qc)",
@@ -788,8 +994,10 @@ class EntityPatterns:
     
     # Paths
     PATH_PATTERNS = [
-        (r'(?:in|at|from|to)\s+["\']?(/[^\s"\']+|~/[^\s"\']+)["\']?', EntityType.DIRECTORY_PATH),
+        (r'(?:scan|check|look|search|in|at|from|to|submit)\s+(?:\w+\s+)*?["\']?(/[^\s"\']+|~/[^\s"\']+)["\']?', EntityType.DIRECTORY_PATH),
         (r'(?:file\s+)?["\']?(/[^\s"\']+\.(?:fastq|fq|bam|bed|vcf|txt|csv|tsv)(?:\.gz)?)["\']?', EntityType.FILE_PATH),
+        # Bare path at word boundary (for cases like "scan /data/raw")
+        (r'\b(/[a-zA-Z0-9_/.-]+)(?:\s|$)', EntityType.DIRECTORY_PATH),
     ]
     
     # Organisms
@@ -897,12 +1105,20 @@ COMMON_TERMS = [
     "data", "dataset", "datasets", "download", "workflow", "search", "create",
     "analyze", "analysis", "run", "submit", "status", "help", "explain",
     "scan", "find", "check", "show", "list", "cancel", "restart",
+    "resubmit", "retry", "rerun",  # Important: prevent these from being "corrected" to "submit"/"run"
+    "tools", "tool", "recommend", "suggest",  # For tool recommendation queries
     # Bioinformatics terms
     "rna-seq", "rnaseq", "chip-seq", "chipseq", "atac-seq", "atacseq",
     "dna-seq", "dnaseq", "methylation", "genomics", "transcriptomics",
+    "scrna-seq", "scrnaseq", "single-cell", "10x",  # Single-cell terms
     "fastq", "bam", "vcf", "bed", "reference", "genome", "annotation",
     # Organisms
     "human", "mouse", "drosophila", "zebrafish",
+    # Common bioinformatics tools (prevent incorrect fuzzy matching)
+    "fastqc", "samtools", "bwa", "bowtie", "bowtie2", "hisat2", "star",
+    "kallisto", "salmon", "picard", "gatk", "bcftools", "bedtools",
+    "deeptools", "macs2", "macs3", "htseq", "featurecounts", "multiqc",
+    "trimmomatic", "cutadapt", "trim_galore", "nextflow", "snakemake",
 ]
 
 

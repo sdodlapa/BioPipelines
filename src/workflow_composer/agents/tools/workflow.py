@@ -154,11 +154,26 @@ def generate_workflow_impl(
 
 Would you like me to explain what the workflow does?
 """
+        # Validate the generated workflow
+        validation_msg = ""
+        try:
+            from workflow_composer.core.workflow_validator import WorkflowValidator
+            validator = WorkflowValidator(use_llm=False)  # Fast validation first
+            main_nf_path = output_dir / "main.nf"
+            if main_nf_path.exists():
+                validation = validator.validate_file(main_nf_path)
+                if validation.valid:
+                    validation_msg = f"\n\n✅ **Validation:** Passed (Score: {validation.score:.0f}/100)"
+                else:
+                    validation_msg = f"\n\n⚠️ **Validation Issues:**\n{validation.summary()}"
+        except Exception as e:
+            logger.debug(f"Validation skipped: {e}")
+        
         return ToolResult(
             success=True,
             tool_name="generate_workflow",
             data={"workflow_type": workflow_type, "path": str(workflow_path)},
-            message=message
+            message=message + validation_msg
         )
         
     except ImportError as e:
@@ -715,4 +730,150 @@ apt-get install graphviz  # or: brew install graphviz
             tool_name="visualize_workflow",
             error=str(e),
             message=f"❌ Visualization error: {e}"
+        )
+
+
+# =============================================================================
+# VALIDATE_WORKFLOW - Validate workflow code quality
+# =============================================================================
+
+VALIDATE_WORKFLOW_PATTERNS = [
+    r"(?:validate|check|verify)\s+(?:the\s+)?(?:workflow|pipeline|code)",
+    r"(?:is\s+the\s+)?(?:workflow|pipeline)\s+(?:valid|correct|ok)",
+    r"review\s+(?:the\s+)?(?:workflow|pipeline|generated)\s+code",
+]
+
+
+def validate_workflow_impl(
+    path: str = None,
+    workflow_path: str = None,
+    use_llm: bool = False,
+    **kwargs,
+) -> ToolResult:
+    """
+    Validate a generated workflow for correctness.
+    
+    Args:
+        path: Path to workflow file or directory
+        workflow_path: Alternative parameter name
+        use_llm: Whether to use LLM for deep analysis
+        
+    Returns:
+        ToolResult with validation results
+    """
+    from pathlib import Path as PathLib
+    
+    # Get the path
+    wf_path = path or workflow_path
+    
+    if not wf_path:
+        # Try to find the most recent generated workflow
+        generated_dir = PathLib.cwd() / "generated_workflows"
+        if generated_dir.exists():
+            subdirs = sorted(generated_dir.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True)
+            if subdirs:
+                wf_path = str(subdirs[0])
+    
+    if not wf_path:
+        return ToolResult(
+            success=False,
+            tool_name="validate_workflow",
+            error="No workflow path provided",
+            message="❌ Please specify a workflow path to validate, or generate a workflow first."
+        )
+    
+    wf_path = PathLib(wf_path)
+    
+    if not wf_path.exists():
+        return ToolResult(
+            success=False,
+            tool_name="validate_workflow",
+            error=f"Path not found: {wf_path}",
+            message=f"❌ Path not found: `{wf_path}`"
+        )
+    
+    try:
+        from workflow_composer.core.workflow_validator import WorkflowValidator
+        
+        validator = WorkflowValidator(use_llm=use_llm)
+        
+        if wf_path.is_dir():
+            # Validate all workflow files in directory
+            results = validator.validate_directory(wf_path, use_llm)
+            
+            if not results:
+                return ToolResult(
+                    success=False,
+                    tool_name="validate_workflow",
+                    error="No workflow files found",
+                    message=f"❌ No workflow files (*.nf, Snakefile) found in `{wf_path}`"
+                )
+            
+            # Aggregate results
+            all_valid = all(r.valid for r in results.values())
+            total_errors = sum(len(r.errors) for r in results.values())
+            total_warnings = sum(len(r.warnings) for r in results.values())
+            avg_score = sum(r.score for r in results.values()) / len(results)
+            
+            lines = [f"## Workflow Validation: `{wf_path.name}`\n"]
+            
+            for filepath, result in results.items():
+                status = "✅" if result.valid else "❌"
+                lines.append(f"### {status} `{PathLib(filepath).name}` (Score: {result.score:.0f}/100)")
+                lines.append(result.summary())
+                lines.append("")
+            
+            lines.append(f"\n**Summary:** {len(results)} files, {total_errors} errors, {total_warnings} warnings")
+            
+            return ToolResult(
+                success=all_valid,
+                tool_name="validate_workflow",
+                data={
+                    "path": str(wf_path),
+                    "valid": all_valid,
+                    "files": len(results),
+                    "errors": total_errors,
+                    "warnings": total_warnings,
+                    "score": avg_score,
+                },
+                message="\n".join(lines)
+            )
+        else:
+            # Validate single file
+            result = validator.validate_file(wf_path, use_llm)
+            
+            status = "✅ Valid" if result.valid else "❌ Invalid"
+            
+            message = f"""## Workflow Validation
+
+**File:** `{wf_path.name}`
+**Status:** {status}
+**Score:** {result.score:.0f}/100
+
+{result.summary()}
+"""
+            if result.llm_review:
+                message += f"\n**LLM Assessment:**\n{result.llm_review}"
+            
+            return ToolResult(
+                success=result.valid,
+                tool_name="validate_workflow",
+                data=result.to_dict(),
+                message=message
+            )
+            
+    except ImportError as e:
+        return ToolResult(
+            success=False,
+            tool_name="validate_workflow",
+            error=str(e),
+            message=f"❌ Validator not available: {e}"
+        )
+    except Exception as e:
+        logger.exception("validate_workflow failed")
+        return ToolResult(
+            success=False,
+            tool_name="validate_workflow",
+            error=str(e),
+            message=f"❌ Validation error: {e}"
         )

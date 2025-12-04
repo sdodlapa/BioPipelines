@@ -123,6 +123,10 @@ INTENT_TO_TOOL: Dict[str, ToolName] = {
     "JOB_SUBMIT": ToolName.SUBMIT_JOB,
     "JOB_STATUS": ToolName.GET_JOB_STATUS,
     "JOB_LOGS": ToolName.GET_LOGS,
+    "JOB_LIST": ToolName.LIST_JOBS,
+    "JOB_CANCEL": ToolName.CANCEL_JOB,
+    "JOB_WATCH": ToolName.WATCH_JOB,
+    "JOB_RESUBMIT": ToolName.RESUBMIT_JOB,
     
     # Diagnostics
     "DIAGNOSE_ERROR": ToolName.DIAGNOSE_ERROR,
@@ -131,6 +135,10 @@ INTENT_TO_TOOL: Dict[str, ToolName] = {
     # Reference Management
     "REFERENCE_CHECK": ToolName.CHECK_REFERENCES,
     "REFERENCE_DOWNLOAD": ToolName.DOWNLOAD_REFERENCE,
+    
+    # System Operations
+    "SYSTEM_STATUS": ToolName.CHECK_SYSTEM_HEALTH,
+    "SYSTEM_COMMAND": ToolName.RUN_COMMAND,
     
     # Education
     "EDUCATION_EXPLAIN": ToolName.EXPLAIN_CONCEPT,
@@ -313,6 +321,7 @@ TOOL_PERMISSION_MAPPING = {
     ToolName.DIAGNOSE_ERROR: "read",
     ToolName.ANALYZE_RESULTS: "read",
     ToolName.VISUALIZE_WORKFLOW: "read",
+    ToolName.VALIDATE_WORKFLOW: "read",  # Workflow validation is read-only
     ToolName.MONITOR_JOBS: "read",
     ToolName.RUN_COMMAND: "execute",
     ToolName.GET_DATASET_DETAILS: "read",  # New: dataset details is read-only
@@ -331,6 +340,7 @@ TOOL_PERMISSION_MAPPING = {
     ToolName.GET_ARTICLE: "read",
     ToolName.SEARCH_CLINVAR: "read",
     ToolName.GET_VARIANTS: "read",
+    ToolName.RUN_COMMAND: "read",  # Version checks are safe reads
     
     # Write/execute tools (may need approval)
     ToolName.DOWNLOAD_DATASET: "write",

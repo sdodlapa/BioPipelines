@@ -36,6 +36,7 @@ class ToolName(Enum):
     GENERATE_WORKFLOW = "generate_workflow"
     LIST_WORKFLOWS = "list_workflows"
     CHECK_REFERENCES = "check_references"
+    VALIDATE_WORKFLOW = "validate_workflow"
     
     # Execution
     SUBMIT_JOB = "submit_job"

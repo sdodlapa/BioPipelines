@@ -87,6 +87,61 @@ class ArbiterResult:
         }
 
 
+# =============================================================================
+# LLM TRIGGER PATTERNS (Option C)
+# =============================================================================
+# These patterns are AMBIGUOUS and should ALWAYS trigger LLM arbitration
+# even if pattern matching returns high confidence. The pattern might match
+# multiple intents, so we need LLM to disambiguate.
+
+LLM_TRIGGER_PATTERNS = [
+    # "run X --something" could be SYSTEM_COMMAND or JOB_SUBMIT
+    r"run\s+\w+\s+--",
+    r"execute\s+\w+\s+--",
+    
+    # "submit X workflow" - could be JOB_SUBMIT (run existing) or misclassified
+    r"submit\s+(?:my\s+)?(?:the\s+)?\w+[-\s]?\w*\s+(?:workflow|pipeline)",
+    
+    # "check X" is ambiguous (status? availability? validation?)
+    r"^check\s+(?:if\s+)?(?!status|job|queue)",  # But not "check status"
+    r"^verify\s+",
+    
+    # "is X available/installed" could be REFERENCE_CHECK or SYSTEM_STATUS
+    r"is\s+\w+\s+(?:installed|available|ready|present)",
+    r"do\s+(?:i|we)\s+have\s+",
+    
+    # Version/help checks look like commands
+    r"\w+\s+(?:--version|--help|-v|-h)\b",
+    r"(?:version|help)\s+(?:of|for)\s+\w+",
+    
+    # "get X" is ambiguous (download? search? fetch?)
+    r"^get\s+(?!status|logs|job)",  # But not "get status"
+    
+    # "find X" could be search or scan
+    r"^find\s+(?:all|any|some)?\s*(?:local|my)?",
+    
+    # "show X" could be list, status, visualize
+    r"^show\s+(?:me\s+)?(?:the\s+)?",
+    
+    # "what is" could be education or status
+    r"^what\s+(?:is|are)\s+",
+]
+
+# =============================================================================
+# HIGH RISK INTENTS (Option E)
+# =============================================================================
+# These intents are DANGEROUS or EXPENSIVE - always verify with LLM
+# before executing, even if pattern matching is confident.
+
+HIGH_RISK_INTENTS = {
+    "JOB_SUBMIT",      # Submits to cluster, uses resources
+    "JOB_CANCEL",      # Terminates running jobs
+    "DATA_CLEANUP",    # Deletes data
+    "DATA_DOWNLOAD",   # Downloads large files, uses bandwidth
+    "REFERENCE_DOWNLOAD",  # Downloads large reference files
+    "SYSTEM_RESTART",  # Restarts services
+}
+
 # Complexity indicators that suggest LLM should be invoked
 COMPLEXITY_INDICATORS = {
     # Negation patterns
@@ -152,7 +207,9 @@ INSTRUCTIONS:
 3. Look for implicit intent (e.g., "lung cancer RNA data" implies DATA_SEARCH)
 4. If the user says "not X, but Y" - focus on Y
 5. Consider the context and entities mentioned
-6. If the query is too vague to determine intent (e.g., "analyze this", "run it"), return:
+6. IMPORTANT: "run X --version" or "X version" is SYSTEM_COMMAND (checking tool), NOT JOB_SUBMIT (running a workflow)
+7. "check reference" or "is X genome available" is REFERENCE_CHECK, NOT DATA_SEARCH
+8. If the query is too vague to determine intent (e.g., "analyze this", "run it"), return:
    - intent: "META_UNKNOWN"
    - needs_clarification: true
    - clarification_prompt: A helpful question asking what they want
@@ -169,11 +226,15 @@ Respond with ONLY valid JSON:
         "WORKFLOW_CREATE": "Create/generate an analysis pipeline or workflow",
         "WORKFLOW_LIST": "List available workflow templates",
         "WORKFLOW_VISUALIZE": "Show workflow diagram/DAG",
-        "JOB_SUBMIT": "Submit/run/execute a job on the cluster",
+        "REFERENCE_CHECK": "Check if reference genome/annotation is available locally",
+        "REFERENCE_DOWNLOAD": "Download a reference genome/annotation",
+        "JOB_SUBMIT": "Submit a workflow or pipeline job to the cluster (NOT for checking tool versions)",
         "JOB_STATUS": "Check status of running/queued jobs",
         "JOB_LOGS": "View logs or output of a job",
         "JOB_CANCEL": "Cancel/stop a running job",
         "JOB_LIST": "List all jobs or active jobs",
+        "SYSTEM_COMMAND": "Run a simple shell command like checking tool version (--version, --help)",
+        "SYSTEM_STATUS": "Check system health or available tools",
         "ANALYSIS_INTERPRET": "Interpret or explain analysis results",
         "DIAGNOSE_ERROR": "Debug or troubleshoot an error",
         "EDUCATION_EXPLAIN": "Explain a concept, method, or term",
@@ -225,6 +286,11 @@ Respond with ONLY valid JSON:
             self._complexity_patterns[category] = [
                 re.compile(p, re.IGNORECASE) for p in patterns
             ]
+        
+        # Compile LLM trigger patterns (Option C)
+        self._llm_trigger_patterns = [
+            re.compile(p, re.IGNORECASE) for p in LLM_TRIGGER_PATTERNS
+        ]
     
     def arbitrate(
         self,
@@ -313,12 +379,25 @@ Respond with ONLY valid JSON:
             # 3. Check for complexity
             has_complexity = self._detect_complexity(query)
             
-            # 4. Check if best vote is META_UNKNOWN
-            best_vote = max(votes, key=lambda v: v.confidence)
-            is_unknown = best_vote.intent == "META_UNKNOWN"
+            # 4. Check for LLM trigger patterns (Option C)
+            has_trigger_pattern = self._matches_trigger_pattern(query)
+            
+            # 5. Check for high-risk intent (Option E)
+            best_vote = max(votes, key=lambda v: v.confidence) if votes else None
+            is_high_risk = best_vote and best_vote.intent in HIGH_RISK_INTENTS
+            
+            # 6. Check if best vote is META_UNKNOWN
+            is_unknown = best_vote and best_vote.intent == "META_UNKNOWN"
             
             # Invoke LLM if any significant signal
-            return has_disagreement or low_confidence or has_complexity or is_unknown
+            # Log which signal triggered for debugging
+            if has_trigger_pattern:
+                logger.debug(f"LLM trigger pattern matched in '{query[:50]}'")
+            if is_high_risk:
+                logger.debug(f"High-risk intent '{best_vote.intent}' detected, verifying with LLM")
+            
+            return (has_disagreement or low_confidence or has_complexity or 
+                    is_unknown or has_trigger_pattern or is_high_risk)
         
         return False
     
@@ -329,6 +408,17 @@ Respond with ONLY valid JSON:
                 if pattern.search(query):
                     logger.debug(f"Complexity detected: {category} in '{query[:50]}'")
                     return True
+        return False
+    
+    def _matches_trigger_pattern(self, query: str) -> bool:
+        """Check if query matches any LLM trigger pattern (Option C).
+        
+        These are patterns that are inherently ambiguous and need
+        LLM arbitration even if pattern matching is confident.
+        """
+        for pattern in self._llm_trigger_patterns:
+            if pattern.search(query):
+                return True
         return False
     
     def _invoke_llm_arbiter(

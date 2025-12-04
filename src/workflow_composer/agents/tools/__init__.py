@@ -58,10 +58,12 @@ from .workflow import (
     LIST_WORKFLOWS_PATTERNS,
     CHECK_REFERENCES_PATTERNS,
     VISUALIZE_WORKFLOW_PATTERNS,
+    VALIDATE_WORKFLOW_PATTERNS,
     generate_workflow_impl,
     list_workflows_impl,
     check_references_impl,
     visualize_workflow_impl,
+    validate_workflow_impl,
 )
 
 from .execution import (
@@ -349,9 +351,15 @@ class AgentTools:
             "list_workflows": lambda **kw: list_workflows_impl(**kw),
             "check_references": lambda **kw: check_references_impl(**kw),
             "visualize_workflow": lambda **kw: visualize_workflow_impl(**kw),
+            "validate_workflow": lambda **kw: validate_workflow_impl(**kw),
             
-            # Execution
-            "submit_job": lambda **kw: submit_job_impl(**kw),
+            # Execution - normalize workflow_dir to workflow_path
+            "submit_job": lambda **kw: submit_job_impl(
+                workflow_path=kw.get('workflow_path') or kw.get('workflow_dir'),
+                profile=kw.get('profile', 'slurm'),
+                partition=kw.get('partition'),
+                execute=kw.get('execute', True),
+            ),
             "get_job_status": lambda **kw: get_job_status_impl(**kw),
             "get_logs": lambda **kw: get_logs_impl(**kw),
             "cancel_job": lambda **kw: cancel_job_impl(**kw),
@@ -374,6 +382,9 @@ class AgentTools:
             "get_help": lambda **kw: get_help_impl(),
             "show_help": lambda **kw: get_help_impl(),  # Alias for get_help (matches ToolName.SHOW_HELP)
             
+            # System Commands
+            "run_command": lambda **kw: self._run_command(**kw),
+            
             # Database Clients (Phase 2)
             "search_uniprot": lambda **kw: self._search_uniprot(**kw),
             "get_protein": lambda **kw: self._get_protein(**kw),
@@ -390,6 +401,114 @@ class AgentTools:
             "get_variants": lambda **kw: self._get_variants(**kw),
         }
         return dispatch
+    
+    # =========================================================================
+    # SYSTEM COMMAND IMPLEMENTATION
+    # =========================================================================
+    
+    def _run_command(self, tool: str = None, args: str = None, check_installed: bool = False, **kwargs) -> ToolResult:
+        """Run a simple shell command (e.g., version check) - NOT a workflow."""
+        import subprocess
+        import shutil
+        
+        if not tool:
+            return ToolResult(
+                success=False,
+                tool_name="run_command",
+                error="No tool specified",
+                message="❌ Please specify which tool to run."
+            )
+        
+        # Security: whitelist of allowed bioinformatics tools
+        ALLOWED_TOOLS = {
+            'fastqc', 'samtools', 'bwa', 'bowtie', 'bowtie2', 'hisat2', 'star',
+            'kallisto', 'salmon', 'picard', 'gatk', 'bcftools', 'bedtools',
+            'deeptools', 'macs2', 'macs3', 'htseq', 'featurecounts', 'multiqc',
+            'trimmomatic', 'cutadapt', 'trim_galore', 'nextflow', 'snakemake',
+            'python', 'python3', 'java', 'perl'
+        }
+        
+        tool_lower = tool.lower()
+        if tool_lower not in ALLOWED_TOOLS:
+            return ToolResult(
+                success=False,
+                tool_name="run_command",
+                error=f"Tool '{tool}' not in allowed list",
+                message=f"❌ '{tool}' is not in the list of allowed tools. Allowed: {', '.join(sorted(ALLOWED_TOOLS))}"
+            )
+        
+        # Check if tool is installed
+        tool_path = shutil.which(tool)
+        if check_installed or not tool_path:
+            if tool_path:
+                return ToolResult(
+                    success=True,
+                    tool_name="run_command",
+                    data={"tool": tool, "path": tool_path, "installed": True},
+                    message=f"✅ {tool} is installed at: {tool_path}"
+                )
+            else:
+                return ToolResult(
+                    success=False,
+                    tool_name="run_command",
+                    error=f"Tool '{tool}' not found",
+                    message=f"❌ {tool} is not installed or not in PATH."
+                )
+        
+        # Build command
+        cmd = [tool]
+        if args:
+            # Handle args as string or list
+            if isinstance(args, str):
+                cmd.extend(args.split())
+            elif isinstance(args, list):
+                cmd.extend(args)
+        
+        # Security: only allow safe arguments (version, help, etc.)
+        SAFE_ARGS = {'--version', '-v', '-V', '--help', '-h', 'version', 'help'}
+        if args and not any(arg in SAFE_ARGS for arg in cmd[1:]):
+            return ToolResult(
+                success=False,
+                tool_name="run_command",
+                error="Unsafe arguments",
+                message="❌ For security, only --version, --help, -v, -h are allowed for direct command execution."
+            )
+        
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=30,
+                cwd="/tmp"  # Run in safe directory
+            )
+            
+            output = result.stdout or result.stderr
+            return ToolResult(
+                success=result.returncode == 0,
+                tool_name="run_command",
+                data={
+                    "tool": tool,
+                    "args": args,
+                    "output": output.strip(),
+                    "returncode": result.returncode
+                },
+                message=f"**{tool} {args or ''}**\n```\n{output.strip()}\n```"
+            )
+        except subprocess.TimeoutExpired:
+            return ToolResult(
+                success=False,
+                tool_name="run_command",
+                error="Command timed out",
+                message=f"❌ Command '{tool}' timed out after 30 seconds."
+            )
+        except Exception as e:
+            return ToolResult(
+                success=False,
+                tool_name="run_command",
+                error=str(e),
+                message=f"❌ Failed to run {tool}: {e}"
+            )
     
     # =========================================================================
     # DATABASE CLIENT IMPLEMENTATIONS (Phase 2)

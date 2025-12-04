@@ -640,3 +640,67 @@
 {"timestamp": "2025-12-03T07:50:44.044363", "query": "How do I correlate gene expression with chromatin accessibility?", "intent": "EDUCATION_EXPLAIN", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T07:50:44.067377", "query": "Create a workflow for the RNA-seq part first", "intent": "WORKFLOW_CREATE", "confidence": 0.8501262626262626, "user": "anonymous", "type": "confirmation"}
 {"timestamp": "2025-12-03T07:50:47.720267", "query": "Now create the ATAC-seq workflow", "intent": "WORKFLOW_CREATE", "confidence": 0.94, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:47:06.330910", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:47:30.752218", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:47:44.252231", "query": "Create RNA-seq workflow @#$%^&*()", "intent": "WORKFLOW_CREATE", "confidence": 0.6489025798791186, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:47:50.365892", "query": "Create a workflow for RNA-seq analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7753640384590451, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:48:15.773477", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:48:17.063590", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:48:19.189846", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:48:22.610601", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:48:25.993331", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:48:27.382022", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:48:29.429311", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T14:57:33.751167", "query": "Create an RNA-seq workflow for differential expression", "intent": "WORKFLOW_CREATE", "confidence": 0.7044572605027669, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:02:05.342404", "query": "Create a ChIP-seq workflow for H3K27ac", "intent": "WORKFLOW_CREATE", "confidence": 0.6622139712783639, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:02:10.275833", "query": "What jobs are running?", "intent": "JOB_LIST", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:02:10.381130", "query": "Submit the latest workflow", "intent": "JOB_SUBMIT", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:02:13.586443", "query": "Scan /home/sdodl001_odu_edu/BioPipelines/data for samples", "intent": "DATA_SCAN", "confidence": 0.5170698960622151, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:02:16.220239", "query": "Run fastqc --version", "intent": "JOB_SUBMIT", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:10:04.715442", "query": "Check if human reference genome is available", "intent": "REFERENCE_CHECK", "confidence": 0.8522727272727273, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:10:09.060266", "query": "What version of samtools?", "intent": "EDUCATION_HELP", "confidence": 0.9, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T15:16:08.405304", "query": "Check if human reference genome is available", "intent": "REFERENCE_CHECK", "confidence": 0.8522727272727273, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:48:15.430504", "query": "Run fastqc --version", "intent": "SYSTEM_COMMAND", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:48:18.880816", "query": "What version of samtools?", "intent": "SYSTEM_COMMAND", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:48:20.288702", "query": "Is bwa installed?", "intent": "SYSTEM_COMMAND", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:48:20.321209", "query": "Check if human reference genome is available", "intent": "REFERENCE_CHECK", "confidence": 0.8522727272727273, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:49:17.599374", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:49:19.095208", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:49:21.778819", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:49:25.500313", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:49:27.958754", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:49:28.054432", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:49:30.613636", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:50:59.704029", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:51:23.904771", "query": "Create a workflow for RNA-seq differential expression analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7665554699676453, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:51:37.383724", "query": "Create RNA-seq workflow @#$%^&*()", "intent": "WORKFLOW_CREATE", "confidence": 0.6489025798791186, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:51:43.574187", "query": "Create a workflow for RNA-seq analysis", "intent": "WORKFLOW_CREATE", "confidence": 0.7753640384590451, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:52:09.215901", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:52:10.501265", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:52:12.483372", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:52:16.433703", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:52:18.561414", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:52:18.633273", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:52:20.832123", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:55:07.667860", "query": "Create a ChIP-seq workflow for H3K27ac", "intent": "WORKFLOW_CREATE", "confidence": 0.6622139712783639, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:55:10.645680", "query": "What jobs are running?", "intent": "JOB_LIST", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:55:10.744616", "query": "Scan /tmp for data", "intent": "DATA_SCAN", "confidence": 0.602909513314565, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:55:10.906747", "query": "Run fastqc --version", "intent": "SYSTEM_COMMAND", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T16:55:10.942762", "query": "Is hg38 reference available?", "intent": "REFERENCE_CHECK", "confidence": 0.5466412697173795, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T23:21:02.137054", "query": "run fastqc --version", "intent": "SYSTEM_COMMAND", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T23:21:06.457391", "query": "is samtools installed", "intent": "SYSTEM_COMMAND", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-03T23:21:08.977096", "query": "check if human reference genome is available", "intent": "REFERENCE_CHECK", "confidence": 0.85, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:34:36.363547", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:34:37.621940", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:34:41.715083", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:34:46.301357", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:34:49.327170", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:34:49.430995", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:34:53.321305", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:36:55.759533", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:36:57.108124", "query": "what is RNA-seq", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5562136912866765, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:37:00.669659", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:37:04.400606", "query": "explain what RNA-seq is", "intent": "EDUCATION_EXPLAIN", "confidence": 0.5465399899486312, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:37:07.209404", "query": "show help", "intent": "EDUCATION_HELP", "confidence": 0.95, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:37:07.285867", "query": "list jobs", "intent": "JOB_LIST", "confidence": 0.5249999999999999, "user": "anonymous", "type": "confirmation"}
+{"timestamp": "2025-12-04T00:37:10.453635", "query": "get help", "intent": "EDUCATION_HELP", "confidence": 0.6, "user": "anonymous", "type": "confirmation"}
