@@ -17,7 +17,7 @@ import json
 from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
 
-from src.workflow_composer.agents.specialists import (
+from workflow_composer.agents.specialists import (
     PlannerAgent,
     CodeGenAgent,
     ValidatorAgent,
@@ -30,7 +30,7 @@ from src.workflow_composer.agents.specialists import (
     WorkflowState,
     ValidationResult,
 )
-from src.workflow_composer.agents.specialists.qc import QCMetric, QCReport
+from workflow_composer.agents.specialists.qc import QCMetric, QCReport
 
 
 class TestPlannerAgent:

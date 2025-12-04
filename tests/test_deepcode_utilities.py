@@ -16,7 +16,7 @@ import time
 from unittest.mock import Mock, MagicMock, patch
 
 # Import the modules we're testing
-from src.workflow_composer.agents.utils import (
+from workflow_composer.agents.utils import (
     # JSON repair
     repair_json,
     safe_json_loads,

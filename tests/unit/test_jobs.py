@@ -15,7 +15,7 @@ class TestCeleryConfiguration:
     
     def test_celery_app_creation(self):
         """Test that Celery app is created correctly."""
-        from src.workflow_composer.jobs.celery_app import celery_app, get_celery_app
+        from workflow_composer.jobs.celery_app import celery_app, get_celery_app
         
         app = get_celery_app()
         
@@ -24,7 +24,7 @@ class TestCeleryConfiguration:
     
     def test_celery_queues_configured(self):
         """Test that queues are configured."""
-        from src.workflow_composer.jobs.celery_app import celery_app
+        from workflow_composer.jobs.celery_app import celery_app
         
         queues = celery_app.conf.task_queues
         queue_names = [q.name for q in queues]
@@ -37,7 +37,7 @@ class TestCeleryConfiguration:
     
     def test_task_routing(self):
         """Test that task routing is configured."""
-        from src.workflow_composer.jobs.celery_app import celery_app
+        from workflow_composer.jobs.celery_app import celery_app
         
         routes = celery_app.conf.task_routes
         
@@ -51,7 +51,7 @@ class TestSyncTaskExecutor:
     @pytest.fixture
     def executor(self):
         """Create a sync executor instance."""
-        from src.workflow_composer.jobs.celery_app import SyncTaskExecutor
+        from workflow_composer.jobs.celery_app import SyncTaskExecutor
         return SyncTaskExecutor()
     
     def test_execute_simple_task(self, executor):
@@ -112,7 +112,7 @@ class TestCeleryHealthCheck:
     
     def test_health_check_without_workers(self):
         """Test health check when no workers are running."""
-        from src.workflow_composer.jobs.celery_app import CeleryHealthCheck
+        from workflow_composer.jobs.celery_app import CeleryHealthCheck
         
         health = CeleryHealthCheck()
         
@@ -129,31 +129,31 @@ class TestTaskDefinitions:
     
     def test_generate_workflow_task_registered(self):
         """Test that generate_workflow_task is registered."""
-        from src.workflow_composer.jobs.tasks import generate_workflow_task
+        from workflow_composer.jobs.tasks import generate_workflow_task
         
         assert generate_workflow_task.name == "workflow.generate"
     
     def test_search_tools_task_registered(self):
         """Test that search_tools_task is registered."""
-        from src.workflow_composer.jobs.tasks import search_tools_task
+        from workflow_composer.jobs.tasks import search_tools_task
         
         assert search_tools_task.name == "search.tools"
     
     def test_validate_workflow_task_registered(self):
         """Test that validate_workflow_task is registered."""
-        from src.workflow_composer.jobs.tasks import validate_workflow_task
+        from workflow_composer.jobs.tasks import validate_workflow_task
         
         assert validate_workflow_task.name == "validation.workflow"
     
     def test_execute_workflow_task_registered(self):
         """Test that execute_workflow_task is registered."""
-        from src.workflow_composer.jobs.tasks import execute_workflow_task
+        from workflow_composer.jobs.tasks import execute_workflow_task
         
         assert execute_workflow_task.name == "execution.workflow"
     
     def test_cleanup_task_registered(self):
         """Test that cleanup task is registered."""
-        from src.workflow_composer.jobs.tasks import cleanup_expired_jobs
+        from workflow_composer.jobs.tasks import cleanup_expired_jobs
         
         assert cleanup_expired_jobs.name == "maintenance.cleanup"
 
@@ -163,7 +163,7 @@ class TestTaskExecution:
     
     def test_execute_workflow_task_returns_expected_structure(self):
         """Test execute_workflow_task returns expected structure."""
-        from src.workflow_composer.jobs.tasks import execute_workflow_task
+        from workflow_composer.jobs.tasks import execute_workflow_task
         import uuid
         
         # Call the run method directly without mocking request
@@ -181,7 +181,7 @@ class TestTaskExecution:
     
     def test_validate_workflow_task_structure(self):
         """Test validate_workflow_task returns expected structure."""
-        from src.workflow_composer.jobs.tasks import validate_workflow_task
+        from workflow_composer.jobs.tasks import validate_workflow_task
         
         # Call run method directly - it will handle missing modules gracefully
         result = validate_workflow_task.run(
@@ -197,7 +197,7 @@ class TestTaskExecution:
     
     def test_cleanup_task_structure(self):
         """Test cleanup_expired_jobs returns expected structure."""
-        from src.workflow_composer.jobs.tasks import cleanup_expired_jobs
+        from workflow_composer.jobs.tasks import cleanup_expired_jobs
         
         result = cleanup_expired_jobs()
         
@@ -214,7 +214,7 @@ class TestTaskHelpers:
     )
     def test_get_task_status(self):
         """Test get_task_status function."""
-        from src.workflow_composer.jobs.tasks import get_task_status
+        from workflow_composer.jobs.tasks import get_task_status
         
         # Test with non-existent task
         status = get_task_status("non-existent-task-id")
@@ -228,7 +228,7 @@ class TestTaskHelpers:
     )
     def test_revoke_task(self):
         """Test revoke_task function."""
-        from src.workflow_composer.jobs.tasks import revoke_task
+        from workflow_composer.jobs.tasks import revoke_task
         
         result = revoke_task("task-to-revoke")
         
@@ -237,7 +237,7 @@ class TestTaskHelpers:
     
     def test_task_helpers_exist(self):
         """Test that task helper functions are importable."""
-        from src.workflow_composer.jobs.tasks import get_task_status, revoke_task
+        from workflow_composer.jobs.tasks import get_task_status, revoke_task
         
         assert callable(get_task_status)
         assert callable(revoke_task)
@@ -248,7 +248,7 @@ class TestBaseTaskWithRetry:
     
     def test_retry_configuration(self):
         """Test that retry configuration is set."""
-        from src.workflow_composer.jobs.tasks import BaseTaskWithRetry
+        from workflow_composer.jobs.tasks import BaseTaskWithRetry
         
         assert BaseTaskWithRetry.autoretry_for == (Exception,)
         assert BaseTaskWithRetry.retry_backoff is True

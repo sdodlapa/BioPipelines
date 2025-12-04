@@ -9,7 +9,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 
-from src.workflow_composer.agents.intent.chat_agent import (
+from workflow_composer.agents.intent.chat_agent import (
     ChatAgent,
     AgentConfig,
     AgentCapability,

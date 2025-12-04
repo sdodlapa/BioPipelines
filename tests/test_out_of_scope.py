@@ -8,7 +8,7 @@ import pytest
 import re
 from typing import Dict, Any, Optional, List
 
-from src.workflow_composer.agents.intent.out_of_scope import (
+from workflow_composer.agents.intent.out_of_scope import (
     ScopeCategory,
     DeflectionStrategy,
     Topic,

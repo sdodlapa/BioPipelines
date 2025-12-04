@@ -51,7 +51,7 @@ def test_data_dir() -> Path:
 @pytest.fixture
 def in_memory_db():
     """Create an in-memory SQLite database for testing."""
-    from src.workflow_composer.infrastructure.database import init_db, get_db
+    from workflow_composer.infrastructure.database import init_db, get_db
     
     # Initialize in-memory database
     engine = init_db(url="sqlite:///:memory:")
@@ -68,7 +68,7 @@ def in_memory_db():
 @pytest.fixture
 def mock_user():
     """Create a mock authenticated user."""
-    from src.workflow_composer.auth.models import AuthUser, UserRole
+    from workflow_composer.auth.models import AuthUser, UserRole
     from datetime import datetime
     
     return AuthUser(
@@ -84,7 +84,7 @@ def mock_user():
 @pytest.fixture
 def mock_admin_user():
     """Create a mock admin user."""
-    from src.workflow_composer.auth.models import AuthUser, UserRole
+    from workflow_composer.auth.models import AuthUser, UserRole
     from datetime import datetime
     
     return AuthUser(
@@ -100,7 +100,7 @@ def mock_admin_user():
 @pytest.fixture
 def mock_auth_result(mock_user):
     """Create a mock successful auth result."""
-    from src.workflow_composer.auth.models import AuthResult
+    from workflow_composer.auth.models import AuthResult
     
     return AuthResult(
         success=True,
@@ -111,7 +111,7 @@ def mock_auth_result(mock_user):
 @pytest.fixture
 def auth_service():
     """Create an AuthService instance for testing."""
-    from src.workflow_composer.auth.service import AuthService
+    from workflow_composer.auth.service import AuthService
     return AuthService()
 
 
@@ -122,7 +122,7 @@ def auth_service():
 @pytest.fixture
 def tool_memory():
     """Create a ToolMemory instance with in-memory storage."""
-    from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+    from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
     config = ToolMemoryConfig(use_database=False)
     return ToolMemory(config)
 
@@ -130,21 +130,21 @@ def tool_memory():
 @pytest.fixture
 def arg_memory(tool_memory):
     """Create an ArgumentMemory instance."""
-    from src.workflow_composer.agents.rag.arg_memory import ArgumentMemory
+    from workflow_composer.agents.rag.arg_memory import ArgumentMemory
     return ArgumentMemory(tool_memory=tool_memory)
 
 
 @pytest.fixture
 def rag_tool_selector(tool_memory):
     """Create a RAGToolSelector instance."""
-    from src.workflow_composer.agents.rag.tool_selector import RAGToolSelector
+    from workflow_composer.agents.rag.tool_selector import RAGToolSelector
     return RAGToolSelector(tool_memory=tool_memory)
 
 
 @pytest.fixture
 def rag_orchestrator(tool_memory):
     """Create a RAGOrchestrator instance."""
-    from src.workflow_composer.agents.rag.orchestrator import RAGOrchestrator
+    from workflow_composer.agents.rag.orchestrator import RAGOrchestrator
     return RAGOrchestrator(tool_memory=tool_memory)
 
 
@@ -156,7 +156,7 @@ def rag_orchestrator(tool_memory):
 def test_client():
     """Create a FastAPI test client."""
     from fastapi.testclient import TestClient
-    from src.workflow_composer.api.app import create_app
+    from workflow_composer.api.app import create_app
     
     app = create_app()
     return TestClient(app)
@@ -165,7 +165,7 @@ def test_client():
 @pytest.fixture
 def authenticated_client(test_client, mock_auth_result):
     """Create an authenticated test client."""
-    from src.workflow_composer.auth.dependencies import get_auth_service
+    from workflow_composer.auth.dependencies import get_auth_service
     
     # This fixture provides headers that should work with mocked auth
     class AuthenticatedClient:
@@ -202,7 +202,7 @@ def authenticated_client(test_client, mock_auth_result):
 @pytest.fixture
 def sync_executor():
     """Create a sync task executor for testing."""
-    from src.workflow_composer.jobs.celery_app import SyncTaskExecutor
+    from workflow_composer.jobs.celery_app import SyncTaskExecutor
     return SyncTaskExecutor()
 
 
@@ -222,14 +222,14 @@ def mock_celery_app():
 @pytest.fixture
 def semantic_cache():
     """Create a SemanticCache instance."""
-    from src.workflow_composer.infrastructure.semantic_cache import SemanticCache
+    from workflow_composer.infrastructure.semantic_cache import SemanticCache
     return SemanticCache()
 
 
 @pytest.fixture
 def redis_cache():
     """Create a RedisSemanticCache with fallback."""
-    from src.workflow_composer.infrastructure.redis_cache import RedisSemanticCache
+    from workflow_composer.infrastructure.redis_cache import RedisSemanticCache
     return RedisSemanticCache(fallback_to_memory=True)
 
 
@@ -240,21 +240,21 @@ def redis_cache():
 @pytest.fixture
 def intent_parser():
     """Create an IntentParser instance."""
-    from src.workflow_composer.agents.query_parser import get_intent_parser
+    from workflow_composer.agents.query_parser import get_intent_parser
     return get_intent_parser()
 
 
 @pytest.fixture
 def tool_selector():
     """Create a ToolSelector instance."""
-    from src.workflow_composer.agents.tool_selector import get_tool_selector
+    from workflow_composer.agents.tool_selector import get_tool_selector
     return get_tool_selector()
 
 
 @pytest.fixture
 def workflow_generator():
     """Create a WorkflowGenerator instance."""
-    from src.workflow_composer.agents.workflow_generator import get_workflow_generator
+    from workflow_composer.agents.workflow_generator import get_workflow_generator
     return get_workflow_generator()
 
 
@@ -271,7 +271,7 @@ def sample_query():
 @pytest.fixture
 def sample_parsed_intent(sample_query):
     """Sample parsed intent."""
-    from src.workflow_composer.agents.query_parser import ParsedIntent
+    from workflow_composer.agents.query_parser import ParsedIntent
     
     return ParsedIntent(
         original_query=sample_query,
@@ -286,7 +286,7 @@ def sample_parsed_intent(sample_query):
 @pytest.fixture
 def sample_tools():
     """Sample tool list."""
-    from src.workflow_composer.agents.tool_selector import Tool
+    from workflow_composer.agents.tool_selector import Tool
     
     return [
         Tool(name="salmon", category="alignment"),

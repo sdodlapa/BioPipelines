@@ -20,7 +20,7 @@ class TestHealthEndpoints:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from src.workflow_composer.api.app import create_app
+        from workflow_composer.api.app import create_app
         app = create_app()
         return TestClient(app)
     
@@ -58,8 +58,8 @@ class TestWorkflowEndpoints:
     @pytest.fixture
     def client(self):
         """Create test client with mocked auth."""
-        from src.workflow_composer.api.app import create_app
-        from src.workflow_composer.auth.models import AuthUser, AuthResult, UserRole
+        from workflow_composer.api.app import create_app
+        from workflow_composer.auth.models import AuthUser, AuthResult, UserRole
         from uuid import uuid4
         
         app = create_app()
@@ -108,7 +108,7 @@ class TestSearchEndpoints:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from src.workflow_composer.api.app import create_app
+        from workflow_composer.api.app import create_app
         app = create_app()
         return TestClient(app)
     
@@ -131,7 +131,7 @@ class TestJobEndpoints:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from src.workflow_composer.api.app import create_app
+        from workflow_composer.api.app import create_app
         app = create_app()
         return TestClient(app)
     
@@ -179,7 +179,7 @@ class TestAPIMiddleware:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from src.workflow_composer.api.app import create_app
+        from workflow_composer.api.app import create_app
         app = create_app()
         return TestClient(app)
     
@@ -206,7 +206,7 @@ class TestAPIRouting:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from src.workflow_composer.api.app import create_app
+        from workflow_composer.api.app import create_app
         app = create_app()
         return TestClient(app)
     
@@ -228,7 +228,7 @@ class TestEndToEndWorkflow:
     @pytest.fixture
     def client(self):
         """Create test client."""
-        from src.workflow_composer.api.app import create_app
+        from workflow_composer.api.app import create_app
         app = create_app()
         return TestClient(app)
     

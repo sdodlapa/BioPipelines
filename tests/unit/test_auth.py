@@ -9,14 +9,14 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 from unittest.mock import MagicMock, patch, AsyncMock
 
-from src.workflow_composer.auth.models import (
+from workflow_composer.auth.models import (
     AuthUser,
     APIKey,
     AuthResult,
     KeyScope,
     UserRole,
 )
-from src.workflow_composer.auth.service import AuthService
+from workflow_composer.auth.service import AuthService
 
 
 class TestAuthModels:
@@ -206,7 +206,7 @@ class TestAuthDependencies:
     
     def test_require_scope_returns_callable(self):
         """Test that require_scope returns a callable."""
-        from src.workflow_composer.auth.dependencies import require_scope
+        from workflow_composer.auth.dependencies import require_scope
         
         # Get the dependency function
         scope_dep = require_scope(KeyScope.READ)

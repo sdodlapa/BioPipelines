@@ -11,7 +11,7 @@ Tests for the robust agent features:
 import pytest
 from datetime import datetime, timedelta
 
-from src.workflow_composer.agents.intent.session_memory import (
+from workflow_composer.agents.intent.session_memory import (
     SessionMemory,
     MemoryEntry,
     ActionRecord,
@@ -19,7 +19,7 @@ from src.workflow_composer.agents.intent.session_memory import (
     MemoryPriority,
     get_session_memory,
 )
-from src.workflow_composer.agents.intent.conversation_recovery import (
+from workflow_composer.agents.intent.conversation_recovery import (
     ConversationRecovery,
     RecoveryResponse,
     RecoveryStrategy,

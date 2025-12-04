@@ -104,14 +104,14 @@ class TestTrainingDataLoader:
     
     def test_loader_initialization(self, temp_config_dir):
         """Test loader initializes correctly."""
-        from src.workflow_composer.agents.intent.training_data import TrainingDataLoader
+        from workflow_composer.agents.intent.training_data import TrainingDataLoader
         
         loader = TrainingDataLoader(config_dir=temp_config_dir)
         assert loader.config_dir == temp_config_dir
     
     def test_load_intents(self, temp_config_dir):
         """Test loading intent definitions."""
-        from src.workflow_composer.agents.intent.training_data import TrainingDataLoader
+        from workflow_composer.agents.intent.training_data import TrainingDataLoader
         
         loader = TrainingDataLoader(config_dir=temp_config_dir)
         loader.load_all()
@@ -127,7 +127,7 @@ class TestTrainingDataLoader:
     
     def test_load_entities(self, temp_config_dir):
         """Test loading entity definitions."""
-        from src.workflow_composer.agents.intent.training_data import TrainingDataLoader
+        from workflow_composer.agents.intent.training_data import TrainingDataLoader
         
         loader = TrainingDataLoader(config_dir=temp_config_dir)
         loader.load_all()
@@ -141,7 +141,7 @@ class TestTrainingDataLoader:
     
     def test_entity_alias_map(self, temp_config_dir):
         """Test alias-to-canonical mapping."""
-        from src.workflow_composer.agents.intent.training_data import TrainingDataLoader
+        from workflow_composer.agents.intent.training_data import TrainingDataLoader
         
         loader = TrainingDataLoader(config_dir=temp_config_dir)
         loader.load_all()
@@ -155,7 +155,7 @@ class TestTrainingDataLoader:
     
     def test_normalize_entity(self, temp_config_dir):
         """Test entity normalization."""
-        from src.workflow_composer.agents.intent.training_data import TrainingDataLoader
+        from workflow_composer.agents.intent.training_data import TrainingDataLoader
         
         loader = TrainingDataLoader(config_dir=temp_config_dir)
         loader.load_all()
@@ -166,7 +166,7 @@ class TestTrainingDataLoader:
     
     def test_parse_example_with_slots(self, temp_config_dir):
         """Test parsing examples with slot annotations."""
-        from src.workflow_composer.agents.intent.training_data import TrainingDataLoader
+        from workflow_composer.agents.intent.training_data import TrainingDataLoader
         
         loader = TrainingDataLoader(config_dir=temp_config_dir)
         loader.load_all()
@@ -184,7 +184,7 @@ class TestTrainingDataLoader:
     
     def test_balance_report(self, temp_config_dir):
         """Test training data balance report."""
-        from src.workflow_composer.agents.intent.training_data import TrainingDataLoader
+        from workflow_composer.agents.intent.training_data import TrainingDataLoader
         
         loader = TrainingDataLoader(config_dir=temp_config_dir)
         loader.load_all()
@@ -212,7 +212,7 @@ class TestActiveLearning:
     
     def test_record_correction(self, temp_data_dir):
         """Test recording a correction."""
-        from src.workflow_composer.agents.intent.active_learning import ActiveLearner
+        from workflow_composer.agents.intent.active_learning import ActiveLearner
         
         learner = ActiveLearner(data_dir=temp_data_dir)
         
@@ -232,7 +232,7 @@ class TestActiveLearning:
     
     def test_record_confirmation(self, temp_data_dir):
         """Test recording a confirmation."""
-        from src.workflow_composer.agents.intent.active_learning import ActiveLearner
+        from workflow_composer.agents.intent.active_learning import ActiveLearner
         
         learner = ActiveLearner(data_dir=temp_data_dir)
         
@@ -247,7 +247,7 @@ class TestActiveLearning:
     
     def test_confusion_matrix(self, temp_data_dir):
         """Test confusion matrix tracking."""
-        from src.workflow_composer.agents.intent.active_learning import ActiveLearner
+        from workflow_composer.agents.intent.active_learning import ActiveLearner
         
         learner = ActiveLearner(data_dir=temp_data_dir)
         
@@ -265,7 +265,7 @@ class TestActiveLearning:
     
     def test_top_confused_pairs(self, temp_data_dir):
         """Test getting top confused pairs."""
-        from src.workflow_composer.agents.intent.active_learning import ActiveLearner
+        from workflow_composer.agents.intent.active_learning import ActiveLearner
         
         learner = ActiveLearner(data_dir=temp_data_dir)
         
@@ -283,7 +283,7 @@ class TestActiveLearning:
     
     def test_learning_metrics(self, temp_data_dir):
         """Test aggregated learning metrics."""
-        from src.workflow_composer.agents.intent.active_learning import ActiveLearner
+        from workflow_composer.agents.intent.active_learning import ActiveLearner
         
         learner = ActiveLearner(data_dir=temp_data_dir)
         
@@ -302,7 +302,7 @@ class TestActiveLearning:
     
     def test_export_for_retraining(self, temp_data_dir):
         """Test exporting corrections as training data."""
-        from src.workflow_composer.agents.intent.active_learning import ActiveLearner
+        from workflow_composer.agents.intent.active_learning import ActiveLearner
         
         learner = ActiveLearner(data_dir=temp_data_dir)
         
@@ -325,7 +325,7 @@ class TestSlotPrompting:
     
     def test_check_required_slots(self):
         """Test checking for required slots."""
-        from src.workflow_composer.agents.intent.slot_prompting import SlotPrompter
+        from workflow_composer.agents.intent.slot_prompting import SlotPrompter
         
         prompter = SlotPrompter()
         
@@ -342,7 +342,7 @@ class TestSlotPrompting:
     
     def test_check_with_required_filled(self):
         """Test checking when required slots are filled."""
-        from src.workflow_composer.agents.intent.slot_prompting import SlotPrompter
+        from workflow_composer.agents.intent.slot_prompting import SlotPrompter
         
         prompter = SlotPrompter()
         
@@ -357,7 +357,7 @@ class TestSlotPrompting:
     
     def test_recommended_slot_suggestion(self):
         """Test suggestion for recommended slots."""
-        from src.workflow_composer.agents.intent.slot_prompting import SlotPrompter
+        from workflow_composer.agents.intent.slot_prompting import SlotPrompter
         
         prompter = SlotPrompter()
         
@@ -371,7 +371,7 @@ class TestSlotPrompting:
     
     def test_slot_prompt_templates(self):
         """Test custom prompt templates."""
-        from src.workflow_composer.agents.intent.slot_prompting import (
+        from workflow_composer.agents.intent.slot_prompting import (
             SlotPrompter, PromptStyle
         )
         
@@ -385,7 +385,7 @@ class TestSlotPrompting:
     
     def test_apply_defaults(self):
         """Test applying default values."""
-        from src.workflow_composer.agents.intent.slot_prompting import SlotPrompter
+        from workflow_composer.agents.intent.slot_prompting import SlotPrompter
         
         prompter = SlotPrompter()
         
@@ -399,7 +399,7 @@ class TestSlotPrompting:
     
     def test_dialogue_state_tracking(self):
         """Test multi-turn dialogue state."""
-        from src.workflow_composer.agents.intent.slot_prompting import SlotPrompter
+        from workflow_composer.agents.intent.slot_prompting import SlotPrompter
         
         prompter = SlotPrompter()
         
@@ -432,7 +432,7 @@ class TestBalanceMetrics:
     
     def test_analyze_balanced_data(self):
         """Test analysis of balanced training data."""
-        from src.workflow_composer.agents.intent.balance_metrics import (
+        from workflow_composer.agents.intent.balance_metrics import (
             TrainingDataAnalyzer
         )
         
@@ -453,7 +453,7 @@ class TestBalanceMetrics:
     
     def test_detect_imbalance(self):
         """Test detection of class imbalance."""
-        from src.workflow_composer.agents.intent.balance_metrics import (
+        from workflow_composer.agents.intent.balance_metrics import (
             TrainingDataAnalyzer, MAX_IMBALANCE_RATIO
         )
         
@@ -471,7 +471,7 @@ class TestBalanceMetrics:
     
     def test_underrepresented_warning(self):
         """Test warning for underrepresented intents."""
-        from src.workflow_composer.agents.intent.balance_metrics import (
+        from workflow_composer.agents.intent.balance_metrics import (
             TrainingDataAnalyzer, MIN_EXAMPLES_PER_INTENT
         )
         
@@ -492,7 +492,7 @@ class TestBalanceMetrics:
     
     def test_vocabulary_overlap_detection(self):
         """Test detection of high vocabulary overlap."""
-        from src.workflow_composer.agents.intent.balance_metrics import (
+        from workflow_composer.agents.intent.balance_metrics import (
             TrainingDataAnalyzer
         )
         
@@ -519,7 +519,7 @@ class TestBalanceMetrics:
     
     def test_quality_scores(self):
         """Test quality score computation."""
-        from src.workflow_composer.agents.intent.balance_metrics import (
+        from workflow_composer.agents.intent.balance_metrics import (
             TrainingDataAnalyzer
         )
         
@@ -538,7 +538,7 @@ class TestBalanceMetrics:
     
     def test_suggestions_generated(self):
         """Test that improvement suggestions are generated."""
-        from src.workflow_composer.agents.intent.balance_metrics import (
+        from workflow_composer.agents.intent.balance_metrics import (
             TrainingDataAnalyzer
         )
         
@@ -602,7 +602,7 @@ class TestEntityRoles:
     
     def test_resolve_source_destination(self, temp_config_dir):
         """Test resolving source/destination roles."""
-        from src.workflow_composer.agents.intent.entity_roles import EntityRoleResolver
+        from workflow_composer.agents.intent.entity_roles import EntityRoleResolver
         
         resolver = EntityRoleResolver(config_dir=temp_config_dir)
         
@@ -624,7 +624,7 @@ class TestEntityRoles:
     
     def test_role_from_context(self, temp_config_dir):
         """Test role detection from context patterns."""
-        from src.workflow_composer.agents.intent.entity_roles import EntityRoleResolver
+        from workflow_composer.agents.intent.entity_roles import EntityRoleResolver
         
         resolver = EntityRoleResolver(config_dir=temp_config_dir)
         
@@ -643,7 +643,7 @@ class TestEntityRoles:
     
     def test_suggest_roles_for_type(self, temp_config_dir):
         """Test suggesting roles for entity types."""
-        from src.workflow_composer.agents.intent.entity_roles import EntityRoleResolver
+        from workflow_composer.agents.intent.entity_roles import EntityRoleResolver
         
         resolver = EntityRoleResolver(config_dir=temp_config_dir)
         
@@ -654,7 +654,7 @@ class TestEntityRoles:
     
     def test_default_patterns_without_yaml(self, tmp_path):
         """Test default patterns when YAML is missing."""
-        from src.workflow_composer.agents.intent.entity_roles import EntityRoleResolver
+        from workflow_composer.agents.intent.entity_roles import EntityRoleResolver
         
         # Point to empty directory
         empty_dir = tmp_path / "empty"
@@ -682,7 +682,7 @@ class TestNLUIntegration:
     
     def test_import_all_modules(self):
         """Test that all modules import correctly."""
-        from src.workflow_composer.agents.intent import (
+        from workflow_composer.agents.intent import (
             TrainingDataLoader,
             ActiveLearner,
             SlotPrompter,
@@ -699,7 +699,7 @@ class TestNLUIntegration:
     
     def test_singleton_accessors(self):
         """Test singleton accessor functions."""
-        from src.workflow_composer.agents.intent import (
+        from workflow_composer.agents.intent import (
             get_active_learner,
             get_slot_prompter,
             get_role_resolver,

@@ -16,7 +16,7 @@ class TestToolMemory:
     @pytest.fixture
     def memory(self):
         """Create a fresh ToolMemory instance with in-memory storage."""
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         config = ToolMemoryConfig(use_database=False)
         return ToolMemory(config)
     
@@ -132,7 +132,7 @@ class TestToolMemoryWithPersistence:
     @pytest.fixture
     def memory_with_file(self, tmp_path):
         """Create ToolMemory with file persistence."""
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         config = ToolMemoryConfig(
             use_database=False,
             persistence_path=str(tmp_path / "memory.json"),
@@ -158,8 +158,8 @@ class TestArgumentMemory:
     @pytest.fixture
     def arg_memory(self):
         """Create a fresh ArgumentMemory instance."""
-        from src.workflow_composer.agents.rag.arg_memory import ArgumentMemory
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.arg_memory import ArgumentMemory
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         
         # Create a fresh tool memory
         tool_memory = ToolMemory(ToolMemoryConfig(use_database=False))
@@ -220,8 +220,8 @@ class TestRAGToolSelector:
     @pytest.fixture
     def selector(self):
         """Create a RAGToolSelector instance."""
-        from src.workflow_composer.agents.rag.tool_selector import RAGToolSelector
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.tool_selector import RAGToolSelector
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         
         tool_memory = ToolMemory(ToolMemoryConfig(use_database=False))
         return RAGToolSelector(tool_memory=tool_memory)
@@ -274,8 +274,8 @@ class TestRAGOrchestrator:
     @pytest.fixture
     def orchestrator(self):
         """Create a RAGOrchestrator instance."""
-        from src.workflow_composer.agents.rag.orchestrator import RAGOrchestrator
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.orchestrator import RAGOrchestrator
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         
         tool_memory = ToolMemory(ToolMemoryConfig(use_database=False))
         return RAGOrchestrator(tool_memory=tool_memory)

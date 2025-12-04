@@ -804,7 +804,7 @@ class LifecycleEvaluator:
         """Lazy load parser."""
         if self._parser is None:
             try:
-                from src.workflow_composer.agents.intent.parser import IntentParser
+                from workflow_composer.agents.intent.parser import IntentParser
                 self._parser = IntentParser(llm_client=None, use_semantic=False)
             except ImportError:
                 from workflow_composer.agents.intent.parser import IntentParser

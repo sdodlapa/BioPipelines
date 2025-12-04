@@ -583,10 +583,11 @@ Respond with ONLY valid JSON:
 
 
 # =============================================================================
-# UNIFIED PARSER WITH ARBITER
+# SIMPLE ARBITER PARSER (for internal evaluation only)
+# Note: The production UnifiedIntentParser is in unified_parser.py
 # =============================================================================
 
-class UnifiedIntentParser:
+class SimpleArbiterParser:
     """
     Production parser that combines all methods with LLM arbiter.
     
@@ -739,7 +740,7 @@ class UnifiedIntentParser:
 
 def compare_methods(
     queries: List[Tuple[str, str]],  # (query, expected_intent)
-    parser: UnifiedIntentParser,
+    parser: SimpleArbiterParser,
 ) -> Dict[str, Any]:
     """
     Compare different parsing methods on a set of queries.

@@ -10,7 +10,7 @@ Tests for:
 import pytest
 from unittest.mock import Mock, patch
 
-from src.workflow_composer.agents.memory.token_tracker import (
+from workflow_composer.agents.memory.token_tracker import (
     TokenTracker,
     TokenBudget,
     TokenUsage,
@@ -19,7 +19,7 @@ from src.workflow_composer.agents.memory.token_tracker import (
     create_budget_for_task,
     MODEL_CONTEXT_SIZES,
 )
-from src.workflow_composer.agents.memory.concise_memory import (
+from workflow_composer.agents.memory.concise_memory import (
     ConciseMemory,
     ConciseState,
     CompletedStep,

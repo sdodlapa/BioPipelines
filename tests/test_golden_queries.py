@@ -1049,8 +1049,8 @@ def query_parser():
     """Get the query parser with LLM connection."""
     try:
         _load_api_keys()
-        from src.workflow_composer.core.query_parser import IntentParser
-        from src.workflow_composer.llm.factory import get_llm
+        from workflow_composer.core.query_parser import IntentParser
+        from workflow_composer.llm.factory import get_llm
         llm = get_llm()
         return IntentParser(llm)
     except Exception as e:
@@ -1061,7 +1061,7 @@ def query_parser():
 def ensemble_parser():
     """Get the ensemble query parser."""
     try:
-        from src.workflow_composer.core.query_parser_ensemble import EnsembleQueryParser
+        from workflow_composer.core.query_parser_ensemble import EnsembleQueryParser
         return EnsembleQueryParser()
     except ImportError:
         pytest.skip("EnsembleQueryParser not available")
@@ -1071,7 +1071,7 @@ def ensemble_parser():
 def hybrid_parser():
     """Get the hybrid query parser."""
     try:
-        from src.workflow_composer.agents.intent import HybridQueryParser
+        from workflow_composer.agents.intent import HybridQueryParser
         return HybridQueryParser()
     except ImportError:
         pytest.skip("HybridQueryParser not available")
@@ -1190,7 +1190,7 @@ class TestGoldenQueriesIntegration:
     def biopipelines(self):
         """Get BioPipelines facade."""
         try:
-            from src.workflow_composer.facade import BioPipelines
+            from workflow_composer.facade import BioPipelines
             return BioPipelines()
         except Exception:
             pytest.skip("BioPipelines not available")

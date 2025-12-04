@@ -17,7 +17,7 @@ from unittest.mock import Mock, AsyncMock, patch
 import tempfile
 import os
 
-from src.workflow_composer.observability import (
+from workflow_composer.observability import (
     ProviderMetrics,
     MetricsCollector,
     RequestTracker,

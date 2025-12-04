@@ -15,8 +15,8 @@ class TestRAGPipeline:
     @pytest.fixture
     def rag_orchestrator(self):
         """Create a RAG orchestrator instance."""
-        from src.workflow_composer.agents.rag.orchestrator import RAGOrchestrator
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.orchestrator import RAGOrchestrator
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         
         tool_memory = ToolMemory(ToolMemoryConfig(use_database=False))
         return RAGOrchestrator(tool_memory=tool_memory)
@@ -86,7 +86,7 @@ class TestRAGMemoryLayers:
     
     def test_tool_memory_integration(self):
         """Test ToolMemory integration."""
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         
         memory = ToolMemory(ToolMemoryConfig(use_database=False))
         
@@ -112,8 +112,8 @@ class TestRAGMemoryLayers:
     
     def test_arg_memory_integration(self):
         """Test ArgumentMemory integration."""
-        from src.workflow_composer.agents.rag.arg_memory import ArgumentMemory
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.arg_memory import ArgumentMemory
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         
         tool_memory = ToolMemory(ToolMemoryConfig(use_database=False))
         memory = ArgumentMemory(tool_memory=tool_memory)
@@ -139,8 +139,8 @@ class TestRAGMemoryLayers:
     
     def test_tool_selector_integration(self):
         """Test RAGToolSelector integration."""
-        from src.workflow_composer.agents.rag.tool_selector import RAGToolSelector
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.agents.rag.tool_selector import RAGToolSelector
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
         
         tool_memory = ToolMemory(ToolMemoryConfig(use_database=False))
         selector = RAGToolSelector(tool_memory=tool_memory)
@@ -159,9 +159,9 @@ class TestRAGCaching:
     
     def test_cache_integration(self):
         """Test RAG with semantic cache integration."""
-        from src.workflow_composer.agents.rag.orchestrator import RAGOrchestrator
-        from src.workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
-        from src.workflow_composer.infrastructure.semantic_cache import SemanticCache
+        from workflow_composer.agents.rag.orchestrator import RAGOrchestrator
+        from workflow_composer.agents.rag.memory import ToolMemory, ToolMemoryConfig
+        from workflow_composer.infrastructure.semantic_cache import SemanticCache
         
         tool_memory = ToolMemory(ToolMemoryConfig(use_database=False))
         rag = RAGOrchestrator(tool_memory=tool_memory)

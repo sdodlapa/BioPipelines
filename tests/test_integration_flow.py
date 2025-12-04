@@ -62,8 +62,8 @@ def api_keys_loaded():
 def intent_parser(api_keys_loaded):
     """Get IntentParser with LLM."""
     try:
-        from src.workflow_composer.core.query_parser import IntentParser
-        from src.workflow_composer.llm.factory import get_llm
+        from workflow_composer.core.query_parser import IntentParser
+        from workflow_composer.llm.factory import get_llm
         llm = get_llm()
         return IntentParser(llm)
     except Exception as e:
@@ -74,7 +74,7 @@ def intent_parser(api_keys_loaded):
 def tool_selector():
     """Get ToolSelector."""
     try:
-        from src.workflow_composer.core.tool_selector import ToolSelector
+        from workflow_composer.core.tool_selector import ToolSelector
         from pathlib import Path
         catalog_path = Path(__file__).parent.parent / "data" / "tool_catalog"
         return ToolSelector(str(catalog_path))
@@ -86,7 +86,7 @@ def tool_selector():
 def module_mapper():
     """Get ModuleMapper."""
     try:
-        from src.workflow_composer.core.module_mapper import ModuleMapper
+        from workflow_composer.core.module_mapper import ModuleMapper
         from pathlib import Path
         module_dir = Path(__file__).parent.parent / "nextflow-modules"
         return ModuleMapper(str(module_dir))
@@ -98,7 +98,7 @@ def module_mapper():
 def workflow_generator(api_keys_loaded):
     """Get WorkflowGenerator."""
     try:
-        from src.workflow_composer.core.workflow_generator import WorkflowGenerator
+        from workflow_composer.core.workflow_generator import WorkflowGenerator
         from pathlib import Path
         module_base = Path(__file__).parent.parent / "nextflow-modules"
         return WorkflowGenerator(module_base_path=str(module_base))
@@ -110,7 +110,7 @@ def workflow_generator(api_keys_loaded):
 def composer(api_keys_loaded):
     """Get Composer for end-to-end tests."""
     try:
-        from src.workflow_composer.composer import Composer
+        from workflow_composer.composer import Composer
         return Composer()
     except Exception as e:
         pytest.skip(f"Composer not available: {e}")
@@ -120,7 +120,7 @@ def composer(api_keys_loaded):
 def biopipelines(api_keys_loaded):
     """Get BioPipelines facade for end-to-end tests."""
     try:
-        from src.workflow_composer.facade import BioPipelines
+        from workflow_composer.facade import BioPipelines
         return BioPipelines()
     except Exception as e:
         pytest.skip(f"BioPipelines not available: {e}")
