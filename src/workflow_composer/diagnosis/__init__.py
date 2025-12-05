@@ -43,7 +43,7 @@ from .log_collector import LogCollector, CollectedLogs
 from .agent import ErrorDiagnosisAgent, diagnose_job, diagnose_log
 from .auto_fix import AutoFixEngine, FixResult, get_auto_fix_engine
 from .gemini_adapter import GeminiAdapter, get_gemini, check_gemini_available
-from .lightning_adapter import LightningDiagnosisAdapter, get_lightning_adapter
+# Lightning adapter removed - use workflow_composer.llm.lightning_adapter instead
 from .github_agent import GitHubCopilotAgent, get_github_copilot_agent
 from .history import DiagnosisHistory, DiagnosisRecord, get_diagnosis_history, record_diagnosis
 from .monitor import (
@@ -81,8 +81,7 @@ __all__ = [
     "GeminiAdapter",
     "get_gemini",
     "check_gemini_available",
-    "LightningDiagnosisAdapter",
-    "get_lightning_adapter",
+    # Lightning adapter removed - use workflow_composer.llm.lightning_adapter instead
     # GitHub Integration
     "GitHubCopilotAgent",
     "get_github_copilot_agent",

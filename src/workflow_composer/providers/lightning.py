@@ -3,13 +3,20 @@ Lightning.ai Provider
 =====================
 
 FREE tier with 30M tokens/month.
-Supports multiple models through unified API.
+Supports multiple models through the litai SDK.
 
-Uses OpenAI-compatible endpoint for reliability.
+STATUS (Dec 2025): ✅ WORKING - Uses litai SDK (not OpenAI-compatible API)
 
-⚠️ STATUS (Dec 2025): Lightning.ai API returns empty responses (HTTP 200, 0 bytes).
-   This provider is disabled in registry.py until the issue is resolved.
-   Use alternative providers (Gemini, Cerebras, Groq, OpenRouter) instead.
+This provider wraps the working LightningAdapter from llm/lightning_adapter.py
+which uses the litai SDK for proper authentication.
+
+Working Models:
+    - lightning-ai/gpt-oss-20b (FREE - Lightning's own model)
+    - lightning-ai/gpt-oss-120b (FREE - larger variant)
+    - openai/gpt-4o (via Lightning)
+    - openai/gpt-4-turbo
+    - openai/gpt-4
+    - openai/gpt-3.5-turbo
 """
 
 import os
@@ -22,102 +29,91 @@ from .base import BaseProvider, Message, ProviderResponse, ProviderError
 logger = logging.getLogger(__name__)
 
 
+# Import the working adapter
+try:
+    from ..llm.lightning_adapter import LightningAdapter, WORKING_MODELS
+    HAS_LIGHTNING_ADAPTER = True
+except ImportError:
+    HAS_LIGHTNING_ADAPTER = False
+    WORKING_MODELS = []
+
+
 class LightningProvider(BaseProvider):
     """
     Provider for Lightning.ai API.
     
-    ⚠️ CURRENTLY BROKEN: API returns empty responses (HTTP 200, 0 bytes) for all models.
-       Disabled in registry.py until fixed.
+    ✅ WORKING (Dec 2025): Uses litai SDK for proper authentication.
     
     Lightning.ai offers 30M FREE tokens/month with access to many models.
     
-    Uses OpenAI-compatible API endpoint for reliability.
-    
-    Supported models (via Lightning.ai):
-        - lightning-ai/DeepSeek-V3.1 (best value, excellent for code)
-        - lightning-ai/llama-3.3-70b (general purpose)
-        - openai/gpt-4o (high quality)
-        - anthropic/claude-3-5-sonnet-20240620 (scientific)
-        - google/gemini-2.5-flash-lite-preview-06-17
-    
-    Note: Requires credits in your Lightning.ai account.
-    Free tier gives 30M tokens/month.
+    Supported models (confirmed working):
+        - lightning-ai/gpt-oss-20b (FREE)
+        - lightning-ai/gpt-oss-120b (FREE)
+        - openai/gpt-4o
+        - openai/gpt-4-turbo
+        - openai/gpt-4
+        - openai/gpt-3.5-turbo
     """
     
     name = "lightning"
-    default_model = "lightning-ai/DeepSeek-V3.1"
-    supports_streaming = True
-    
-    # Correct base URL for Lightning.ai Models API
-    DEFAULT_BASE_URL = "https://lightning.ai/api/v1"
+    default_model = "lightning-ai/gpt-oss-20b"
+    supports_streaming = False  # litai SDK doesn't support streaming yet
     
     def __init__(
         self,
         model: Optional[str] = None,
         api_key: Optional[str] = None,
-        base_url: Optional[str] = None,
         **kwargs
     ):
-        super().__init__(model=model, **kwargs)
-        self.api_key = api_key or os.environ.get("LIGHTNING_API_KEY")
-        self.base_url = base_url or self.DEFAULT_BASE_URL
-        self._client = None
-        self._init_client()
+        super().__init__(model=model or self.default_model, **kwargs)
+        self.api_key = api_key or self._load_api_key()
+        self._adapter = None
+        self._init_adapter()
     
-    def _init_client(self):
-        """Initialize OpenAI-compatible client."""
+    def _load_api_key(self) -> Optional[str]:
+        """Load API key from environment or secrets file."""
+        # Check environment first
+        if os.environ.get("LIGHTNING_API_KEY"):
+            return os.environ["LIGHTNING_API_KEY"]
+        
+        # Check secrets file
+        secrets_path = os.path.join(
+            os.path.dirname(__file__),
+            "..", "..", "..", ".secrets", "lightning_key"
+        )
+        if os.path.exists(secrets_path):
+            with open(secrets_path) as f:
+                return f.read().strip()
+        
+        return None
+    
+    def _init_adapter(self):
+        """Initialize the Lightning adapter."""
+        if not HAS_LIGHTNING_ADAPTER:
+            logger.warning("LightningAdapter not available")
+            return
+        
         if not self.api_key:
+            logger.warning("LIGHTNING_API_KEY not set")
             return
         
         try:
-            from openai import OpenAI
-            self._client = OpenAI(
-                base_url=self.base_url,
+            self._adapter = LightningAdapter(
+                model=self.model,
                 api_key=self.api_key,
             )
-            logger.debug("Lightning.ai OpenAI-compatible client initialized")
-        except ImportError:
-            logger.warning("openai package not installed, using requests fallback")
-            self._client = None
+            logger.debug(f"Lightning adapter initialized with model: {self.model}")
+        except Exception as e:
+            logger.warning(f"Failed to initialize Lightning adapter: {e}")
+            self._adapter = None
     
     def is_available(self) -> bool:
-        """Check if Lightning.ai is configured and working.
-        
-        NOTE: As of Dec 2025, Lightning.ai API returns empty responses.
-        This method will return False to prevent usage.
-        """
+        """Check if Lightning.ai is configured and working."""
         if not self.api_key:
             return False
-        
-        # Test with a real request to check if API is working
-        try:
-            import requests
-            headers = {
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            }
-            payload = {
-                "model": self.default_model,
-                "messages": [{"role": "user", "content": "test"}],
-                "max_tokens": 5,
-            }
-            resp = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=10,
-            )
-            # Check if response has actual content (not empty)
-            if resp.status_code == 200 and len(resp.content) == 0:
-                logger.warning(
-                    "Lightning.ai API returns empty responses (HTTP 200, 0 bytes). "
-                    "Provider is non-functional. Using fallback providers instead."
-                )
-                return False
-            return resp.status_code == 200 and len(resp.content) > 0
-        except Exception as e:
-            logger.debug(f"Lightning.ai availability check failed: {e}")
+        if not HAS_LIGHTNING_ADAPTER:
             return False
+        return self._adapter is not None
     
     def complete(
         self,
@@ -134,51 +130,50 @@ class LightningProvider(BaseProvider):
         messages: List[Message],
         **kwargs
     ) -> ProviderResponse:
-        """Generate chat response using Lightning.ai."""
+        """Generate chat response using Lightning.ai via litai SDK."""
         if not self.api_key:
             raise ProviderError(
                 self.name,
-                "LIGHTNING_API_KEY not set. Get free key at https://lightning.ai/models",
+                "LIGHTNING_API_KEY not set. Get free key at https://lightning.ai",
+                retriable=False,
+            )
+        
+        if not self._adapter:
+            raise ProviderError(
+                self.name,
+                "Lightning adapter not initialized",
                 retriable=False,
             )
         
         messages = self._normalize_messages(messages)
         start = time.time()
         
-        # Use OpenAI-compatible client if available
-        if self._client:
-            return self._chat_with_openai_client(messages, start, **kwargs)
-        else:
-            return self._chat_with_requests(messages, start, **kwargs)
-    
-    def _chat_with_openai_client(
-        self,
-        messages: List[Message],
-        start: float,
-        **kwargs
-    ) -> ProviderResponse:
-        """Use OpenAI-compatible client for chat."""
         try:
-            response = self._client.chat.completions.create(
-                model=kwargs.get("model", self.model),
-                messages=[m.to_dict() for m in messages],
-                max_tokens=kwargs.get("max_tokens", self.max_tokens),
-                temperature=kwargs.get("temperature", self.temperature),
-            )
+            # Convert to adapter message format
+            from ..llm.base import Message as LLMMessage
             
-            content = response.choices[0].message.content
-            usage = response.usage
+            llm_messages = []
+            for m in messages:
+                if m.role == "system":
+                    llm_messages.append(LLMMessage.system(m.content))
+                elif m.role == "user":
+                    llm_messages.append(LLMMessage.user(m.content))
+                elif m.role == "assistant":
+                    llm_messages.append(LLMMessage.assistant(m.content))
+            
+            # Call the adapter
+            response = self._adapter.chat(llm_messages)
             
             return ProviderResponse(
-                content=content,
+                content=response.content,
                 provider=self.name,
                 model=self.model,
-                tokens_used=usage.total_tokens if usage else 0,
-                prompt_tokens=usage.prompt_tokens if usage else 0,
-                completion_tokens=usage.completion_tokens if usage else 0,
+                tokens_used=response.tokens_used,
+                prompt_tokens=response.prompt_tokens,
+                completion_tokens=response.completion_tokens,
                 latency_ms=(time.time() - start) * 1000,
-                finish_reason=response.choices[0].finish_reason,
-                raw_response=response.model_dump() if hasattr(response, 'model_dump') else None,
+                finish_reason="stop",
+                raw_response=response.raw_response,
             )
             
         except Exception as e:
@@ -188,63 +183,7 @@ class LightningProvider(BaseProvider):
                 retriable=True,
             )
     
-    def _chat_with_requests(
-        self,
-        messages: List[Message],
-        start: float,
-        **kwargs
-    ) -> ProviderResponse:
-        """Fallback to requests library."""
-        import requests
-        
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
-        
-        payload = {
-            "model": kwargs.get("model", self.model),
-            "messages": [m.to_dict() for m in messages],
-            "max_tokens": kwargs.get("max_tokens", self.max_tokens),
-            "temperature": kwargs.get("temperature", self.temperature),
-        }
-        
-        try:
-            response = requests.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
-                timeout=120,
-            )
-            
-            if response.status_code != 200:
-                raise ProviderError(
-                    self.name,
-                    f"API error: {response.status_code} - {response.text[:200]}",
-                    retriable=response.status_code >= 500,
-                    status_code=response.status_code,
-                )
-            
-            data = response.json()
-            
-            content = data["choices"][0]["message"]["content"]
-            usage = data.get("usage", {})
-            
-            return ProviderResponse(
-                content=content,
-                provider=self.name,
-                model=self.model,
-                tokens_used=usage.get("total_tokens", 0),
-                prompt_tokens=usage.get("prompt_tokens", 0),
-                completion_tokens=usage.get("completion_tokens", 0),
-                latency_ms=(time.time() - start) * 1000,
-                finish_reason=data["choices"][0].get("finish_reason", "stop"),
-                raw_response=data,
-            )
-            
-        except requests.exceptions.RequestException as e:
-            raise ProviderError(
-                self.name,
-                f"Request failed: {e}",
-                retriable=True,
-            )
+    @classmethod
+    def get_available_models(cls) -> List[str]:
+        """Get list of available models."""
+        return WORKING_MODELS if WORKING_MODELS else [cls.default_model]
