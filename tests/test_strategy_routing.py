@@ -508,5 +508,57 @@ class TestEdgeCases:
         assert orch.get_current_profile() is not None
 
 
+# =============================================================================
+# Debug Routing Tests
+# =============================================================================
+
+class TestDebugRouting:
+    """Test debug routing functionality."""
+    
+    def test_debug_routing_config_flag(self):
+        """Test debug_routing flag in config."""
+        from workflow_composer.llm.strategies import StrategyConfig
+        
+        config = StrategyConfig(debug_routing=True)
+        assert config.debug_routing == True
+        
+        config2 = StrategyConfig(debug_routing=False)
+        assert config2.debug_routing == False
+    
+    def test_development_profile_has_debug_enabled(self):
+        """Test development profile has debug_routing enabled."""
+        from workflow_composer.llm import load_profile
+        
+        config = load_profile("development")
+        assert config.debug_routing == True
+    
+    def test_orchestrator_log_routing_decision_method(self):
+        """Test _log_routing_decision method exists."""
+        from workflow_composer.llm import ModelOrchestrator
+        
+        orch = ModelOrchestrator()
+        assert hasattr(orch, "_log_routing_decision")
+    
+    def test_routing_decision_to_json(self):
+        """Test RoutingDecision serialization."""
+        from workflow_composer.llm.metrics import RoutingDecision
+        
+        decision = RoutingDecision(
+            task_type="code",
+            query_length=100,
+            strategy_profile="test",
+            model_key="coder",
+            model_id="Qwen-Coder-7B",
+            provider="vllm",
+            success=True,
+            latency_ms=150.0,
+        )
+        
+        json_str = decision.to_json()
+        assert "code" in json_str
+        assert "coder" in json_str
+        assert "150.0" in json_str
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

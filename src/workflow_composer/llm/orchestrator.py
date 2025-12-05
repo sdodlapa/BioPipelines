@@ -52,7 +52,7 @@ from .strategies import (
     load_profile,
 )
 from .resource_detector import ResourceDetector, ResourceStatus
-from .metrics import RoutingMetrics, MetricsContext, get_metrics
+from .metrics import RoutingMetrics, RoutingDecision, MetricsContext, get_metrics
 
 # Task-based router for T4 vLLM servers (optional - may not be installed in all envs)
 try:
@@ -64,6 +64,9 @@ except ImportError:
     T4_ROUTER_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
+
+# Debug routing logger (separate from main logger for filtering)
+routing_logger = logging.getLogger("workflow_composer.routing")
 
 
 # =============================================================================
@@ -388,6 +391,14 @@ class ModelOrchestrator:
             response = await self.ensemble(prompt, model, temperature=temperature, max_tokens=max_tokens, **kwargs)
         else:  # AUTO
             response = await self._complete_auto(prompt, model, temperature, max_tokens, **kwargs)
+        
+        # Debug routing log
+        if self.config.debug_routing:
+            self._log_routing_decision(
+                prompt=prompt,
+                response=response,
+                task_type=kwargs.get("task_type", "general"),
+            )
         
         # Update stats
         self.stats.add(response)
@@ -806,6 +817,54 @@ class ModelOrchestrator:
             del self._cache[oldest]
         self._cache[key] = response
     
+    def _log_routing_decision(
+        self,
+        prompt: str,
+        response: OrchestratorResponse,
+        task_type: str = "general",
+        fallback_chain: Optional[List[str]] = None,
+        error: Optional[Exception] = None,
+    ) -> None:
+        """
+        Log detailed routing decision for debugging.
+        
+        Only logs when debug_routing is enabled in config.
+        Writes to both logger and metrics system.
+        """
+        decision = RoutingDecision(
+            task_type=task_type,
+            query_length=len(prompt),
+            strategy_profile=self.config.profile_name or "default",
+            model_key=response.model.split("/")[-1] if "/" in response.model else response.model,
+            model_id=response.model,
+            provider=response.provider,
+            fallback_depth=response.attempts - 1,
+            fallback_reason="primary_failed" if response.fallback_used else None,
+            fallback_chain=fallback_chain or [],
+            success=error is None,
+            error_type=type(error).__name__ if error else None,
+            error_message=str(error) if error else None,
+            latency_ms=response.latency_ms,
+            tokens_generated=response.tokens_used,
+            estimated_cost=response.cost,
+            debug_context={
+                "strategy_used": response.strategy_used.value,
+                "provider_type": response.provider_type.value,
+                "cached": response.cached,
+            }
+        )
+        
+        # Log to dedicated routing logger
+        routing_logger.info(
+            f"ROUTING: {task_type} -> {response.provider}/{response.model} "
+            f"[{response.latency_ms:.0f}ms, fallback={response.fallback_used}]"
+        )
+        routing_logger.debug(f"ROUTING_DETAIL: {decision.to_json()}")
+        
+        # Also record in metrics
+        if self.metrics:
+            self.metrics.log(decision)
+    
     # =========================================================================
     # Task-Based Routing (T4 Fleet)
     # =========================================================================
@@ -884,33 +943,44 @@ class ModelOrchestrator:
                 tokens_used=result.get("usage", {}).get("total_tokens", 0),
                 latency_ms=latency_ms,
                 cost=0.0 if is_local else self._estimate_cloud_cost(result),
+                fallback_used=not is_local,
             )
             
             self.stats.add(response)
             
-            # Record metrics
-            if self.metrics:
-                self.metrics.record_request(
-                    provider=result.get("model_name", "t4-vllm"),
-                    model=result.get("model", "unknown"),
-                    strategy=self.strategy.value,
-                    latency_ms=latency_ms,
-                    is_fallback=not is_local,
-                    success=True,
+            # Debug routing log
+            if self.config.debug_routing:
+                self._log_routing_decision(
+                    prompt=prompt,
+                    response=response,
+                    task_type=task,
                 )
             
             return response
             
         except Exception as e:
-            if self.metrics:
-                self.metrics.record_request(
+            latency_ms = (time.time() - start_time) * 1000
+            
+            # Log error in debug mode
+            if self.config.debug_routing:
+                error_decision = RoutingDecision(
+                    task_type=task,
+                    query_length=len(prompt),
+                    strategy_profile=self.config.profile_name or "default",
+                    model_key="unknown",
+                    model_id="unknown",
                     provider="t4-router",
-                    model="unknown",
-                    strategy=self.strategy.value,
-                    latency_ms=(time.time() - start_time) * 1000,
-                    is_fallback=False,
                     success=False,
+                    error_type=type(e).__name__,
+                    error_message=str(e),
+                    latency_ms=latency_ms,
                 )
+                routing_logger.error(f"ROUTING_ERROR: {task} failed - {e}")
+                routing_logger.debug(f"ROUTING_ERROR_DETAIL: {error_decision.to_json()}")
+                
+                if self.metrics:
+                    self.metrics.log(error_decision)
+            
             raise
     
     def _estimate_cloud_cost(self, result: Dict[str, Any]) -> float:
