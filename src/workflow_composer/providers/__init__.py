@@ -126,6 +126,25 @@ from .model_registry import (
     get_recommended_model,
 )
 
+# Local Model Registry (<10B models for local deployment)
+from .local_model_registry import (
+    LocalModelRegistry,
+    LocalModel,
+    TaskCategory,
+    get_local_registry,
+    get_model_for_task,
+    get_deployment_config,
+    recommend_models_for_vram,
+)
+
+# T4 Fleet Router (routes requests to vLLM servers on T4 GPUs)
+from .t4_router import (
+    T4ModelRouter,
+    TaskCategory as T4TaskCategory,
+    ModelEndpoint,
+    CloudProvider,
+)
+
 # Factory functions
 from .factory import (
     get_provider,
@@ -204,4 +223,19 @@ __all__ = [
     "get_model",
     "get_free_models",
     "get_recommended_model",
+    
+    # Local Model Registry
+    "LocalModelRegistry",
+    "LocalModel",
+    "TaskCategory",
+    "get_local_registry",
+    "get_model_for_task",
+    "get_deployment_config",
+    "recommend_models_for_vram",
+    
+    # T4 Fleet Router
+    "T4ModelRouter",
+    "T4TaskCategory",
+    "ModelEndpoint",
+    "CloudProvider",
 ]

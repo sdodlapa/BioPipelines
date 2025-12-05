@@ -1,0 +1,1056 @@
+# BioPipelines Local Model Catalog
+# ================================
+# Specialized <10B models for different agentic tasks
+# 
+# Last Updated: 2025-12-05
+# Target Hardware: 10× T4 GPUs (16GB VRAM each)
+# Strategy: Models that fit on single T4 + Cloud API fallback
+
+# ==============================================================================
+# T4-OPTIMIZED QUICK REFERENCE
+# ==============================================================================
+# These are the recommended models for each task that fit on a single T4 (16GB)
+# Use cloud fallback (DeepSeek-V3, Claude-3.5) for tasks needing larger models
+
+t4_optimized_selection:
+  # Models that fit comfortably on T4 in FP16 (≤10GB VRAM with KV cache room)
+  fp16_compatible:
+    - model: "Llama-3.2-3B-Instruct"
+      task: intent_parsing
+      vram: "~7GB"
+      notes: "Primary intent parser, excellent for agentic tasks"
+    
+    - model: "Qwen2.5-Coder-1.5B-Instruct"
+      task: code_validation
+      vram: "~3GB"
+      notes: "Fast syntax checking, can co-locate with other models"
+    
+    - model: "Gemma-2-2B-IT"
+      task: lightweight_tasks
+      vram: "~6GB"
+      notes: "Fallback for intent parsing, quick responses"
+    
+    - model: "Phi-3.5-mini-instruct"
+      task: data_analysis
+      vram: "~8GB"
+      notes: "Strong reasoning for data/viz tasks"
+    
+    - model: "BGE-M3"
+      task: embeddings
+      vram: "~1.5GB"
+      notes: "Best multilingual embeddings, always run in FP16"
+    
+    - model: "Llama-Guard-3-1B"
+      task: safety
+      vram: "~2.5GB"
+      notes: "Content moderation, can co-locate"
+
+  # Models that need INT8 quantization to fit on T4
+  int8_required:
+    - model: "Qwen2.5-Coder-7B-Instruct"
+      task: code_generation
+      vram_int8: "~8GB"
+      vram_fp16: "~16GB"
+      notes: "Best code model at this size, use INT8"
+    
+    - model: "Qwen2.5-Math-7B-Instruct"
+      task: math_statistics
+      vram_int8: "~7.5GB"
+      vram_fp16: "~15GB"
+      notes: "Math-specialized, use INT8"
+    
+    - model: "BioMistral-7B"
+      task: bio_medical
+      vram_int8: "~7.5GB"
+      vram_fp16: "~15GB"
+      notes: "Bio-specialized, use INT8"
+    
+    - model: "Gemma-2-9B-IT"
+      task: documentation
+      vram_int8: "~9.5GB"
+      vram_fp16: "~19GB"
+      notes: "Best writing quality at this size, use INT8"
+
+  # Tasks that should use cloud APIs (models too large for T4)
+  cloud_fallback:
+    - task: orchestration
+      reason: "Orchestrator-8B needs ~17GB FP16, doesn't fit well on T4"
+      recommended_cloud: "deepseek-v3"
+      alternative: "claude-3.5-sonnet"
+    
+    - task: complex_reasoning
+      reason: "Multi-step planning benefits from larger models"
+      recommended_cloud: "deepseek-v3"
+    
+    - task: long_context
+      reason: "Context >32K tokens needs more VRAM for KV cache"
+      recommended_cloud: "gemini-1.5-pro"
+
+# ==============================================================================
+# TASK CATEGORY 1: INTENT PARSING & NLU
+# ==============================================================================
+# Purpose: Query understanding, intent classification, slot filling
+# Requirements: Fast inference, good at structured output, multilingual
+# Used by: agents/intent/parser.py, agents/classification.py
+# T4 Status: ✅ FP16 fits easily
+
+intent_parsing:
+  description: |
+    Intent classification, slot filling, entity recognition from natural language queries.
+    Maps user queries like "run an RNA-seq analysis on human samples" to structured intents.
+  
+  t4_recommendation:
+    model: "Llama-3.2-3B-Instruct"
+    quantization: "FP16"
+    vram_usage: "~7GB"
+    can_colocate: true
+    colocate_with: ["Llama-Guard-3-1B", "BGE-M3"]
+  
+  primary:
+    name: "Llama-3.2-3B-Instruct"
+    huggingface_id: "meta-llama/Llama-3.2-3B-Instruct"
+    parameters: 3.21B
+    vram_fp16: "~7GB"
+    vram_int8: "~4GB"
+    context_length: 128K
+    license: "Llama 3.2 Community License"
+    priority: 1
+    t4_compatible: true
+    priority_rationale: |
+      Purpose-built for agentic tasks. Meta trained this specifically for tool-use,
+      function-calling, and instruction following. 128K context handles long 
+      conversation history. Fast inference enables real-time parsing.
+    strengths:
+      - Optimized for agentic retrieval tasks
+      - Excellent instruction following (IFEval: 59.5%)
+      - 128K context for long conversation history
+      - Fast inference on mobile/edge devices
+    download_cmd: |
+      huggingface-cli download meta-llama/Llama-3.2-3B-Instruct
+    ollama_cmd: "ollama pull llama3.2:3b"
+  
+  fallback:
+    name: "Qwen2.5-7B-Instruct"
+    huggingface_id: "Qwen/Qwen2.5-7B-Instruct"
+    parameters: 7B
+    vram_fp16: "~15GB"
+    vram_int8: "~8GB"
+    context_length: 128K
+    license: "Apache 2.0"
+    priority: 2
+    t4_compatible: true  # With INT8
+    priority_rationale: |
+      Stronger reasoning than Llama-3.2-3B but larger footprint. Excellent 
+      multilingual support. Better for complex, ambiguous queries.
+    strengths:
+      - Stronger reasoning capabilities
+      - Excellent multilingual support
+      - Good for complex queries
+    download_cmd: |
+      huggingface-cli download Qwen/Qwen2.5-7B-Instruct
+    ollama_cmd: "ollama pull qwen2.5:7b"
+
+  tertiary:
+    name: "Gemma-2-2B-IT"
+    huggingface_id: "google/gemma-2-2b-it"
+    parameters: 2.6B
+    vram_fp16: "~6GB"
+    vram_int8: "~3GB"
+    context_length: 8K
+    license: "Gemma License (free commercial)"
+    priority: 3
+    t4_compatible: true
+    priority_rationale: |
+      Smallest option for ultra-constrained scenarios. Good reasoning for 
+      size (MMLU 51.3%). Fast enough for T4 GPUs.
+    strengths:
+      - Smallest footprint for multi-model deployment
+      - Good reasoning for size (MMLU: 51.3%)
+      - Efficient on consumer hardware
+    download_cmd: |
+      huggingface-cli download google/gemma-2-2b-it
+    ollama_cmd: "ollama pull gemma2:2b"
+
+  quaternary:
+    name: "Llama-3.1-8B-Instruct"
+    huggingface_id: "meta-llama/Llama-3.1-8B-Instruct"
+    parameters: 8B
+    vram_fp16: "~17GB"
+    vram_int8: "~9GB"
+    context_length: 128K
+    license: "Llama 3.1 License"
+    priority: 4
+    t4_compatible: false  # FP16 too large, INT8 works but tight
+    priority_rationale: |
+      Most capable but heavy for just parsing. Use if combining parsing 
+      with other tasks to share model instance.
+    strengths:
+      - Most capable at this size
+      - Native tool use
+      - 128K context
+    download_cmd: |
+      huggingface-cli download meta-llama/Llama-3.1-8B-Instruct
+    ollama_cmd: "ollama pull llama3.1:8b"
+
+  # Specialized NER model for entity extraction
+  ner_model:
+    name: "BERT-base-NER"
+    huggingface_id: "dslim/bert-base-NER"
+    parameters: 110M
+    vram: ~500MB
+    task: "Named Entity Recognition"
+    priority: "supplementary"
+    priority_rationale: |
+      Extremely fast inference for pure NER. Can run on CPU.
+      Use for extracting entities before LLM classification.
+    strengths:
+      - Extremely fast inference
+      - Pre-trained on CoNLL-2003
+      - Can run on CPU
+    usage: "Use for extracting entities before LLM classification"
+
+# ==============================================================================
+# TASK CATEGORY 2: CODE GENERATION & WORKFLOW CREATION
+# ==============================================================================
+# Purpose: Generate Snakemake/Nextflow workflows, Python scripts
+# Requirements: Strong coding ability, understands bioinformatics tools
+# Used by: generators/snakemake.py, generators/nextflow.py, specialists/codegen.py
+
+code_generation:
+  description: |
+    Generates complete bioinformatics workflows (Snakemake, Nextflow),
+    Python analysis scripts, and shell commands.
+  
+  primary:
+    name: "Qwen2.5-Coder-7B-Instruct"
+    huggingface_id: "Qwen/Qwen2.5-Coder-7B-Instruct"
+    parameters: 7.61B
+    vram_fp16: ~16GB
+    vram_int8: ~8GB
+    context_length: 128K
+    license: "Apache 2.0"
+    priority: 1
+    priority_rationale: |
+      State-of-the-art open-source coding model. 62.8% HumanEval, 69.6% MBPP.
+      Supports 338 languages including Snakemake, Nextflow DSL. 128K context.
+    strengths:
+      - State-of-the-art code generation (HumanEval: 62.8%)
+      - Matches GPT-4o on coding benchmarks
+      - Excellent at code explanation and debugging
+      - Supports 338 programming languages
+    download_cmd: |
+      huggingface-cli download Qwen/Qwen2.5-Coder-7B-Instruct
+    ollama_cmd: "ollama pull qwen2.5-coder:7b"
+    vllm_cmd: |
+      vllm serve Qwen/Qwen2.5-Coder-7B-Instruct --max-model-len 8192
+  
+  fallback:
+    name: "DeepSeek-Coder-V2-Lite-Instruct"
+    huggingface_id: "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
+    parameters: 16B (2.4B active - MoE)
+    vram_fp16: ~12GB
+    vram_int8: ~6GB
+    context_length: 128K
+    license: "DeepSeek License (commercial allowed)"
+    priority: 2
+    priority_rationale: |
+      MoE architecture = fast inference despite larger total params.
+      Matches GPT-4 Turbo on code benchmarks. Great for complex multi-file generation.
+    strengths:
+      - MoE architecture = fast inference
+      - Matches GPT-4 Turbo on code benchmarks
+      - 338 programming languages
+      - Strong at math and reasoning
+    download_cmd: |
+      huggingface-cli download deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct
+
+  tertiary:
+    name: "StarCoder2-7B"
+    huggingface_id: "bigcode/starcoder2-7b"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    context_length: 16K
+    license: "BigCode OpenRAIL-M"
+    priority: 3
+    priority_rationale: |
+      BigCode's latest model. Strong on code completion and repo-level tasks.
+      Permissive license (BigCode OpenRAIL-M).
+    strengths:
+      - Strong completion capabilities
+      - Good at repo-level understanding
+      - Permissive license
+    download_cmd: |
+      huggingface-cli download bigcode/starcoder2-7b
+
+  quaternary:
+    name: "CodeGemma-7B-IT"
+    huggingface_id: "google/codegemma-7b-it"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    license: "Gemma License"
+    priority: 4
+    priority_rationale: |
+      Google's code specialist. Strong Python/JS/TS. Good integration with 
+      Gemma ecosystem if using other Gemma models.
+    strengths:
+      - Strong Python/JS/TS
+      - Gemma ecosystem integration
+      - Good instruction following
+    download_cmd: |
+      huggingface-cli download google/codegemma-7b-it
+
+  alternative:
+    name: "Magicoder-CL-7B"
+    huggingface_id: "ise-uiuc/Magicoder-CL-7B-Instruct"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    license: "Apache 2.0"
+    priority: 5
+    priority_rationale: |
+      RL-tuned for competitive coding. Good as "second opinion" model for 
+      alternative implementations. Use when primary suggestions don't work.
+    strengths:
+      - RL-tuned for quality
+      - Good for alternative solutions
+      - Apache 2.0 license
+    download_cmd: |
+      huggingface-cli download ise-uiuc/Magicoder-CL-7B-Instruct
+  
+  # Smaller alternative for constrained environments
+  compact:
+    name: "Qwen2.5-Coder-1.5B-Instruct"
+    huggingface_id: "Qwen/Qwen2.5-Coder-1.5B-Instruct"
+    parameters: 1.5B
+    vram_fp16: ~3GB
+    priority: 6
+    priority_rationale: |
+      Tiny but capable. For quick completions when main model is busy.
+      Can run on T4 alongside other models.
+    strengths:
+      - Can run alongside other models
+      - Good for quick code completions
+    ollama_cmd: "ollama pull qwen2.5-coder:1.5b"
+
+# ==============================================================================
+# TASK CATEGORY 3: CODE VALIDATION & ERROR DIAGNOSIS
+# ==============================================================================
+# Purpose: Validate workflow syntax, diagnose errors, suggest fixes
+# Requirements: Strong at error pattern recognition, code understanding
+# Used by: agents/coding_agent.py, specialists/validator.py, diagnosis/
+
+code_validation:
+  description: |
+    Validates Snakemake/Nextflow syntax, diagnoses job failures,
+    identifies error patterns, suggests fixes.
+  
+  primary:
+    name: "Qwen2.5-Coder-7B-Instruct"
+    huggingface_id: "Qwen/Qwen2.5-Coder-7B-Instruct"
+    parameters: 7.61B
+    vram_fp16: ~16GB
+    note: "Same as code generation - can share model instance"
+    strengths:
+      - Strong code review capabilities
+      - Excellent at error explanation
+      - Good at suggesting fixes
+  
+  # Alternative: specialized for debugging
+  fallback:
+    name: "Phi-3.5-mini-instruct"
+    huggingface_id: "microsoft/Phi-3.5-mini-instruct"
+    parameters: 3.8B
+    vram_fp16: ~8GB
+    vram_int8: ~4GB
+    context_length: 128K
+    license: "MIT"
+    strengths:
+      - Strong reasoning (MMLU: 69%)
+      - Good code understanding (HumanEval: 62.8%)
+      - Excellent for debugging chains
+      - 128K context for large log files
+    download_cmd: |
+      huggingface-cli download microsoft/Phi-3.5-mini-instruct
+    ollama_cmd: "ollama pull phi3.5"
+
+# ==============================================================================
+# TASK CATEGORY 4: DATA ANALYSIS & VISUALIZATION
+# ==============================================================================
+# Purpose: Analyze results, interpret statistics, generate plots
+# Requirements: Math/stats understanding, plotting code generation
+# Used by: analysis tasks, result interpretation
+
+data_analysis:
+  description: |
+    Interprets analysis results, generates statistical summaries,
+    creates visualization code (matplotlib, seaborn, plotly).
+  
+  primary:
+    name: "Phi-3.5-mini-instruct"
+    huggingface_id: "microsoft/Phi-3.5-mini-instruct"
+    parameters: 3.8B
+    vram_fp16: ~8GB
+    context_length: 128K
+    license: "MIT"
+    strengths:
+      - Strong mathematical reasoning (MATH: 48.5%)
+      - Good at data interpretation
+      - Efficient for long context (result tables)
+    download_cmd: |
+      huggingface-cli download microsoft/Phi-3.5-mini-instruct
+    ollama_cmd: "ollama pull phi3.5"
+  
+  fallback:
+    name: "Llama-3.2-3B-Instruct"
+    huggingface_id: "meta-llama/Llama-3.2-3B-Instruct"
+    parameters: 3.21B
+    vram_fp16: ~7GB
+    strengths:
+      - Good general reasoning
+      - Fast inference for interactive analysis
+    ollama_cmd: "ollama pull llama3.2:3b"
+
+# ==============================================================================
+# TASK CATEGORY 5: ORCHESTRATION & ROUTING
+# ==============================================================================
+# Purpose: Decide which model/tool to use, route queries, plan workflows
+# Requirements: Strong reasoning, tool calling, cost awareness
+# Used by: llm/orchestrator_8b.py, agents/orchestrator.py
+
+orchestration:
+  description: |
+    Central orchestrator that routes queries to appropriate specialists,
+    plans multi-step workflows, manages tool calling.
+  
+  primary:
+    name: "NVIDIA-Llama-3.1-Nemotron-8B-Orchestrator"
+    huggingface_id: "nvidia/Llama-3.1-Nemotron-8B-Orchestrator"
+    parameters: 8B
+    vram_fp16: ~17GB
+    vram_int8: ~9GB
+    context_length: 128K
+    license: "Llama 3.1 Community License"
+    priority: 1
+    priority_rationale: |
+      Purpose-built for orchestration tasks. Trained on 15M+ agentic trajectories 
+      from ToolOrchestra dataset. Specifically optimized for tool selection, 
+      cost-aware routing, and multi-turn conversations with tools.
+    strengths:
+      - Trained on 15M+ agentic trajectories (ToolOrchestra)
+      - Cost-efficient routing decisions
+      - User preference alignment
+      - Multi-turn tool calling
+    download_cmd: |
+      huggingface-cli download nvidia/Llama-3.1-Nemotron-8B-Orchestrator
+    vllm_cmd: |
+      vllm serve nvidia/Llama-3.1-Nemotron-8B-Orchestrator --max-model-len 4096
+  
+  fallback:
+    name: "Granite-3.3-8B-Instruct"
+    huggingface_id: "ibm-granite/granite-3.3-8b-instruct"
+    parameters: 8B
+    vram_fp16: ~17GB
+    vram_int8: ~9GB
+    context_length: 128K
+    license: "Apache 2.0"
+    priority: 2
+    priority_rationale: |
+      IBM's Apache-2.0 licensed alternative with strong tool-calling and RAG 
+      support. Better for enterprises needing permissive licensing. Excellent 
+      for structured output generation.
+    strengths:
+      - Apache 2.0 license (fully permissive)
+      - Excellent tool calling and RAG
+      - Enterprise-grade reliability
+      - Strong structured output
+    download_cmd: |
+      huggingface-cli download ibm-granite/granite-3.3-8b-instruct
+
+  tertiary:
+    name: "Yi-1.5-9B-Chat"
+    huggingface_id: "01-ai/Yi-1.5-9B-Chat"
+    parameters: 9B
+    vram_fp16: ~19GB
+    vram_int8: ~10GB
+    context_length: 4K
+    license: "Apache 2.0"
+    priority: 3
+    priority_rationale: |
+      Strong reasoning and planning capabilities. Apache-2.0 license. 
+      Excellent for complex multi-step planning. Bilingual (EN/CN) if needed.
+    strengths:
+      - Strong reasoning
+      - Apache 2.0 license
+      - Good at planning
+      - Bilingual support
+    download_cmd: |
+      huggingface-cli download 01-ai/Yi-1.5-9B-Chat
+
+  quaternary:
+    name: "Llama-3.1-8B-Instruct"
+    huggingface_id: "meta-llama/Llama-3.1-8B-Instruct"
+    parameters: 8B
+    vram_fp16: ~17GB
+    vram_int8: ~9GB
+    context_length: 128K
+    license: "Llama 3.1 Community License"
+    priority: 4
+    priority_rationale: |
+      Reliable fallback with native tool-use support. Large community, 
+      well-tested, many deployment examples available.
+    strengths:
+      - Excellent general capabilities
+      - Native tool use support
+      - Wide community adoption
+    download_cmd: |
+      huggingface-cli download meta-llama/Llama-3.1-8B-Instruct
+    ollama_cmd: "ollama pull llama3.1:8b"
+
+# ==============================================================================
+# TASK CATEGORY 6: DOCUMENTATION & EXPLANATION
+# ==============================================================================
+# Purpose: Generate docs, explain workflows, educational content
+# Requirements: Clear writing, good at explanations
+# Used by: specialists/docs.py, educational tasks
+
+documentation:
+  description: |
+    Generates documentation, explains bioinformatics concepts,
+    creates tutorials and user guides.
+  
+  primary:
+    name: "Gemma-2-9B-IT"
+    huggingface_id: "google/gemma-2-9b-it"
+    parameters: 9B
+    vram_fp16: ~19GB
+    vram_int8: ~10GB
+    license: "Gemma License"
+    priority: 1
+    priority_rationale: |
+      Best writing quality at this size. Strong reasoning, good long-form 
+      coherence. Produces professional-quality documentation.
+    strengths:
+      - Excellent writing quality
+      - Strong reasoning
+      - Good long-form coherence
+    download_cmd: |
+      huggingface-cli download google/gemma-2-9b-it
+    ollama_cmd: "ollama pull gemma2:9b"
+  
+  fallback:
+    name: "Yi-1.5-9B-Chat"
+    huggingface_id: "01-ai/Yi-1.5-9B-Chat"
+    parameters: 9B
+    vram_fp16: ~19GB
+    vram_int8: ~10GB
+    license: "Apache 2.0"
+    priority: 2
+    priority_rationale: |
+      Strong reading comprehension and reasoning. Good multi-purpose writer. 
+      Apache-2.0 license for commercial use.
+    strengths:
+      - Strong reading comprehension
+      - Apache 2.0 license
+      - Good reasoning
+    download_cmd: |
+      huggingface-cli download 01-ai/Yi-1.5-9B-Chat
+
+  tertiary:
+    name: "Llama-3.2-3B-Instruct"
+    huggingface_id: "meta-llama/Llama-3.2-3B-Instruct"
+    parameters: 3.21B
+    vram_fp16: ~7GB
+    priority: 3
+    priority_rationale: |
+      Very fast for short docs. Good for comments, commit messages, 
+      quick explanations. Low VRAM footprint.
+    strengths:
+      - Good writing quality
+      - Fast for interactive explanations
+      - Summarization capability
+    ollama_cmd: "ollama pull llama3.2:3b"
+  
+  quaternary:
+    name: "Gemma-2-2B-IT"
+    huggingface_id: "google/gemma-2-2b-it"
+    parameters: 2.6B
+    vram_fp16: ~6GB
+    priority: 4
+    priority_rationale: |
+      Smallest option for constrained scenarios. Good general language 
+      quality for basic documentation tasks.
+    strengths:
+      - Efficient for batch documentation
+      - Good general language quality
+    ollama_cmd: "ollama pull gemma2:2b"
+
+# ==============================================================================
+# TASK CATEGORY 7: MATH & STATISTICAL REASONING
+# ==============================================================================
+# Purpose: Statistical tests, uncertainty quantification, mathematical derivations
+# Requirements: Strong mathematical reasoning, contest-level problem solving
+# Used by: Statistical analysis, power calculations, method comparisons
+
+math_statistics:
+  description: |
+    Performs statistical reasoning, hypothesis testing, power analysis,
+    Bayesian inference, and mathematical derivations.
+  
+  primary:
+    name: "Qwen2.5-Math-7B-Instruct"
+    huggingface_id: "Qwen/Qwen2.5-Math-7B-Instruct"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    context_length: 4K
+    license: "Apache 2.0"
+    priority: 1
+    priority_rationale: |
+      Dedicated math model that outperforms even larger models on MATH benchmark 
+      (83.6-85.3% with CoT). Contest-level problem solving capability.
+    strengths:
+      - State-of-the-art math reasoning
+      - Contest-level problem solving
+      - Strong at proofs and derivations
+    download_cmd: |
+      huggingface-cli download Qwen/Qwen2.5-Math-7B-Instruct
+
+  fallback:
+    name: "DeepSeek-Math-7B-Instruct"
+    huggingface_id: "deepseek-ai/deepseek-math-7b-instruct"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    license: "DeepSeek License"
+    priority: 2
+    priority_rationale: |
+      Strong symbolic manipulation and proofs. Widely used and tested. 
+      Good alternative to Qwen for math tasks.
+    strengths:
+      - Strong symbolic manipulation
+      - Good at proofs
+      - Well-tested
+    download_cmd: |
+      huggingface-cli download deepseek-ai/deepseek-math-7b-instruct
+
+  tertiary:
+    name: "Mathstral-7B-v0.1"
+    huggingface_id: "mistralai/Mathstral-7B-v0.1"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    license: "Apache 2.0"
+    priority: 3
+    priority_rationale: |
+      Mistral-7B fine-tuned for math/science. Good general math but 
+      less specialized than Qwen or DeepSeek math models.
+    strengths:
+      - Mistral base (reliable)
+      - Good general math
+      - Apache 2.0 license
+    download_cmd: |
+      huggingface-cli download mistralai/Mathstral-7B-v0.1
+
+  lightweight:
+    name: "Phi-3.5-mini-instruct"
+    huggingface_id: "microsoft/Phi-3.5-mini-instruct"
+    parameters: 3.8B
+    vram_fp16: ~8GB
+    priority: 4
+    priority_rationale: |
+      Lightweight option for basic stats. Good for simple descriptive 
+      statistics but struggles with advanced mathematical topics.
+    strengths:
+      - Small footprint
+      - Good for basic stats
+      - MIT license
+    download_cmd: |
+      huggingface-cli download microsoft/Phi-3.5-mini-instruct
+
+# ==============================================================================
+# TASK CATEGORY 8: BIO/MEDICAL DOMAIN REASONING
+# ==============================================================================
+# Purpose: Explain biological mechanisms, compare methods, summarize papers
+# Requirements: Domain-specific knowledge, biomedical terminology
+# Used by: Domain explanations, method recommendations, literature outputs
+
+bio_medical:
+  description: |
+    Explains biological mechanisms, compares analysis methods,
+    summarizes papers, provides domain-specific knowledge.
+  
+  primary:
+    name: "BioMistral-7B"
+    huggingface_id: "BioMistral/BioMistral-7B"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    license: "Apache 2.0"
+    priority: 1
+    priority_rationale: |
+      Best bio/clinical performance at this size. Significantly improves over 
+      Mistral-7B on MedQA, MedMCQA, PubMedQA. Understands biomedical terminology.
+    strengths:
+      - Strong on MedQA, MedMCQA, PubMedQA
+      - Understands biomedical terminology
+      - Apache 2.0 license
+    download_cmd: |
+      huggingface-cli download BioMistral/BioMistral-7B
+    warning: |
+      NOT approved for clinical decision-making. For research purposes only.
+
+  fallback:
+    name: "Llama3-Med42-8B"
+    huggingface_id: "m42-health/Llama3-Med42-8B"
+    parameters: 8B
+    vram_fp16: ~17GB
+    vram_int8: ~9GB
+    license: "Llama 3 License"
+    priority: 2
+    priority_rationale: |
+      Llama-3-8B adapted to clinical QA. Strong Elo ratings on medical benchmarks. 
+      Better for clinical-style questions.
+    strengths:
+      - Strong clinical QA
+      - Llama 3 base (reliable)
+      - Good Elo ratings on medical benchmarks
+    download_cmd: |
+      huggingface-cli download m42-health/Llama3-Med42-8B
+    warning: |
+      NOT approved for clinical decision-making. For research purposes only.
+
+  tertiary:
+    name: "Meditron-7B"
+    huggingface_id: "epfl-llm/meditron-7b"
+    parameters: 7B
+    vram_fp16: ~15GB
+    vram_int8: ~8GB
+    license: "Llama 2 License"
+    priority: 3
+    priority_rationale: |
+      Domain-pretrained on PubMed/full-text. Good base for fine-tuning on 
+      custom corpora. Less instruction-tuned but strong domain knowledge.
+    strengths:
+      - Pre-trained on PubMed
+      - Good for fine-tuning
+      - Strong domain knowledge
+    download_cmd: |
+      huggingface-cli download epfl-llm/meditron-7b
+
+  lightweight:
+    name: "BioGPT-Large"
+    huggingface_id: "microsoft/BioGPT-Large"
+    parameters: 1.5B
+    vram_fp16: ~3GB
+    license: "MIT"
+    priority: 4
+    priority_rationale: |
+      Tiny MIT-licensed option. Good for entity-rich biomedical text generation. 
+      Can run alongside everything else due to small footprint.
+    strengths:
+      - Very small footprint
+      - MIT license
+      - Good for biomedical entities
+    download_cmd: |
+      huggingface-cli download microsoft/BioGPT-Large
+
+# ==============================================================================
+# TASK CATEGORY 9: EMBEDDINGS & RETRIEVAL (RAG)
+# ==============================================================================
+# Purpose: Semantic search over papers, code, logs, configs, metadata
+# Requirements: High-quality embeddings, support for long documents
+# Used by: agents/rag/, knowledge_base.py, similarity search
+
+embeddings:
+  description: |
+    Generates embeddings for semantic search, RAG retrieval,
+    document similarity, and clustering.
+  
+  primary:
+    name: "BGE-M3"
+    huggingface_id: "BAAI/bge-m3"
+    parameters: 0.6B
+    vram_fp16: ~2GB
+    vram_int8: ~1GB
+    license: "MIT"
+    priority: 1
+    priority_rationale: |
+      Best hybrid retrieval model. Supports dense + sparse + ColBERT in one model.
+      Multilingual support. Up to 8K token documents.
+    strengths:
+      - Dense + sparse + ColBERT hybrid
+      - Multilingual (100+ languages)
+      - Up to 8K token documents
+      - MIT license
+    download_cmd: |
+      huggingface-cli download BAAI/bge-m3
+  
+  fallback:
+    name: "BGE-base-en-v1.5"
+    huggingface_id: "BAAI/bge-base-en-v1.5"
+    parameters: 0.1B
+    vram_fp16: ~0.5GB
+    license: "MIT"
+    priority: 2
+    priority_rationale: |
+      Smaller, English-only option. Top MTEB performance for its size. 
+      Very fast inference. Good for English-only deployments.
+    strengths:
+      - Very small footprint
+      - Top MTEB performance
+      - Fast inference
+    download_cmd: |
+      huggingface-cli download BAAI/bge-base-en-v1.5
+
+  high_quality:
+    name: "Llama-Embed-Nemotron-8B"
+    huggingface_id: "nvidia/Llama-3.1-Nemotron-8B-Embedding"
+    parameters: 8B
+    vram_fp16: ~17GB
+    license: "Llama 3.1 License"
+    priority: 3
+    priority_rationale: |
+      Higher quality but heavy. Universal embedding with instruction awareness. 
+      Use for critical retrieval tasks where quality is paramount.
+    strengths:
+      - Highest quality embeddings
+      - Instruction-aware
+      - Universal embeddings
+    download_cmd: |
+      huggingface-cli download nvidia/Llama-3.1-Nemotron-8B-Embedding
+
+  instruction_aware:
+    name: "E5-mistral-7b-instruct"
+    huggingface_id: "intfloat/e5-mistral-7b-instruct"
+    parameters: 7B
+    vram_fp16: ~15GB
+    license: "MIT"
+    priority: 4
+    priority_rationale: |
+      Strong instruction-following embeddings. Good for nuanced queries 
+      that require understanding of search intent.
+    strengths:
+      - Instruction-following
+      - Good for nuanced queries
+      - MIT license
+    download_cmd: |
+      huggingface-cli download intfloat/e5-mistral-7b-instruct
+
+# ==============================================================================
+# TASK CATEGORY 10: SAFETY & GUARDRAILS
+# ==============================================================================
+# Purpose: Filter unsafe inputs/outputs, classify content, enforce policies
+# Requirements: Reliable safety classification, low false positive rate
+# Used by: Input validation, output filtering, content safety
+
+safety:
+  description: |
+    Filters unsafe inputs and outputs, classifies content,
+    enforces content policies and guardrails.
+  
+  primary:
+    name: "Nemotron-Safety-8B-V3"
+    huggingface_id: "nvidia/Llama-3.1-Nemotron-Safety-8B-V3"
+    parameters: 8B
+    vram_fp16: ~17GB
+    vram_int8: ~9GB
+    license: "Llama 3.1 License"
+    priority: 1
+    priority_rationale: |
+      Purpose-built safety classifier from NVIDIA. Integrates with NeMo Guardrails. 
+      Trained specifically for open-source LLM output classification.
+    strengths:
+      - Purpose-built for safety
+      - NeMo Guardrails integration
+      - Low false positive rate
+    download_cmd: |
+      huggingface-cli download nvidia/Llama-3.1-Nemotron-Safety-8B-V3
+  
+  fallback:
+    name: "Llama-Guard-3-8B"
+    huggingface_id: "meta-llama/Llama-Guard-3-8B"
+    parameters: 8B
+    vram_fp16: ~17GB
+    vram_int8: ~9GB
+    license: "Llama 3.1 License"
+    priority: 2
+    priority_rationale: |
+      Meta's safety classifier. Good at content categorization. 
+      Works well with Llama models and ecosystem.
+    strengths:
+      - Meta's official safety model
+      - Good content categorization
+      - Works well with Llama stack
+    download_cmd: |
+      huggingface-cli download meta-llama/Llama-Guard-3-8B
+
+  note: |
+    For simple cases, rule-based regex + keyword filters are faster and cheaper.
+    Use ML-based safety models for nuanced or ambiguous content.
+    Always have rule-based fallback for obvious violations.
+
+# ==============================================================================
+# RECOMMENDED DEPLOYMENT CONFIGURATIONS
+# ==============================================================================
+
+deployment_configs:
+  # Minimal: Single L4 (24GB) - run one model at a time
+  minimal_l4:
+    description: "Single L4 GPU, swap models as needed"
+    total_vram: 24GB
+    models:
+      - name: "Qwen2.5-Coder-7B-Instruct"
+        role: "Code generation + validation"
+        vram: ~16GB
+      - name: "Llama-3.2-3B-Instruct"
+        role: "Parsing + docs (swap with coder)"
+        vram: ~7GB
+    strategy: "Load Qwen2.5-Coder by default, swap to Llama-3.2 for NLU"
+  
+  # Standard: Single L4 with quantization - run 2-3 models
+  standard_l4:
+    description: "Single L4 GPU with INT8 quantization"
+    total_vram: 24GB
+    models:
+      - name: "Llama-3.2-3B-Instruct (INT8)"
+        role: "Intent parsing"
+        vram: ~4GB
+      - name: "Qwen2.5-Coder-7B-Instruct (INT8)"
+        role: "Code generation"
+        vram: ~8GB
+      - name: "Phi-3.5-mini-instruct (INT8)"
+        role: "Analysis/validation"
+        vram: ~4GB
+    total: ~16GB (room for KV cache)
+    strategy: "Run all three simultaneously"
+  
+  # Multi-GPU: 2x L4 or 1x A100
+  multi_gpu:
+    description: "2x L4 GPUs (48GB) or 1x A100 (40/80GB)"
+    models:
+      # GPU 1: Orchestration + NLU
+      - name: "Nemotron-8B-Orchestrator"
+        role: "Orchestration"
+        vram: ~17GB
+        gpu: 0
+      - name: "Llama-3.2-3B-Instruct"
+        role: "Intent parsing"
+        vram: ~7GB
+        gpu: 0
+      # GPU 2: Code specialists
+      - name: "Qwen2.5-Coder-7B-Instruct"
+        role: "Code generation"
+        vram: ~16GB
+        gpu: 1
+      - name: "BERT-base-NER"
+        role: "Entity extraction"
+        vram: ~0.5GB
+        gpu: 1
+    strategy: "Orchestrator routes to specialists on GPU 2"
+
+# ==============================================================================
+# QUICK REFERENCE: MODEL COMPARISON
+# ==============================================================================
+
+quick_reference:
+  # Sorted by task suitability
+  
+  intent_parsing:
+    recommended: "Llama-3.2-3B-Instruct"
+    reason: "Best agentic capabilities at small size"
+    alternatives: ["Gemma-2-2B-IT", "Phi-3.5-mini"]
+  
+  code_generation:
+    recommended: "Qwen2.5-Coder-7B-Instruct"
+    reason: "State-of-the-art coding at 7B"
+    alternatives: ["DeepSeek-Coder-V2-Lite", "Qwen2.5-Coder-1.5B"]
+  
+  code_validation:
+    recommended: "Qwen2.5-Coder-7B-Instruct"
+    reason: "Share instance with code generation"
+    alternatives: ["Phi-3.5-mini"]
+  
+  data_analysis:
+    recommended: "Phi-3.5-mini-instruct"
+    reason: "Best math reasoning at small size"
+    alternatives: ["Llama-3.2-3B"]
+  
+  orchestration:
+    recommended: "Nemotron-8B-Orchestrator"
+    reason: "Purpose-built for tool orchestration"
+    alternatives: ["Llama-3.1-8B-Instruct"]
+  
+  documentation:
+    recommended: "Llama-3.2-3B-Instruct"
+    reason: "Good writing, fast inference"
+    alternatives: ["Gemma-2-2B-IT"]
+
+# ==============================================================================
+# VRAM REQUIREMENTS SUMMARY
+# ==============================================================================
+
+vram_summary:
+  # FP16 (full precision)
+  fp16:
+    "Llama-3.2-1B": "~3GB"
+    "Gemma-2-2B": "~5GB"
+    "Llama-3.2-3B": "~7GB"
+    "Phi-3.5-mini (3.8B)": "~8GB"
+    "Qwen2.5-Coder-7B": "~16GB"
+    "Llama-3.1-8B": "~17GB"
+    "Nemotron-8B-Orchestrator": "~17GB"
+    "DeepSeek-Coder-V2-Lite (16B MoE)": "~12GB"
+  
+  # INT8 quantized (~50% reduction)
+  int8:
+    "Llama-3.2-1B": "~1.5GB"
+    "Gemma-2-2B": "~3GB"
+    "Llama-3.2-3B": "~4GB"
+    "Phi-3.5-mini (3.8B)": "~4GB"
+    "Qwen2.5-Coder-7B": "~8GB"
+    "Llama-3.1-8B": "~8GB"
+    "Nemotron-8B-Orchestrator": "~8GB"
+  
+  # 4-bit quantized (~75% reduction)
+  int4:
+    "Llama-3.2-3B": "~2GB"
+    "Phi-3.5-mini (3.8B)": "~2GB"
+    "Qwen2.5-Coder-7B": "~4GB"
+    "Llama-3.1-8B": "~5GB"
+
+# ==============================================================================
+# DOWNLOAD ALL RECOMMENDED MODELS
+# ==============================================================================
+
+batch_download:
+  script: |
+    #!/bin/bash
+    # Download all recommended models for BioPipelines
+    
+    echo "=== Downloading Intent Parsing Model ==="
+    huggingface-cli download meta-llama/Llama-3.2-3B-Instruct
+    
+    echo "=== Downloading Code Generation Model ==="
+    huggingface-cli download Qwen/Qwen2.5-Coder-7B-Instruct
+    
+    echo "=== Downloading Analysis Model ==="
+    huggingface-cli download microsoft/Phi-3.5-mini-instruct
+    
+    echo "=== Downloading Orchestrator Model ==="
+    huggingface-cli download nvidia/Llama-3.1-Nemotron-8B-Orchestrator
+    
+    echo "=== Downloading NER Model ==="
+    huggingface-cli download dslim/bert-base-NER
+    
+    echo "=== All models downloaded! ==="
+  
+  ollama_alternative: |
+    #!/bin/bash
+    # Using Ollama for easier model management
+    
+    ollama pull llama3.2:3b        # Intent parsing
+    ollama pull qwen2.5-coder:7b   # Code generation
+    ollama pull phi3.5             # Analysis/validation
+    ollama pull llama3.1:8b        # Orchestration fallback
