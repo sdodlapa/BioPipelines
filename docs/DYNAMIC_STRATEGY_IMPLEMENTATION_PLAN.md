@@ -1995,6 +1995,135 @@ Both Claude and ChatGPT agree on this implementation order:
 4. **Wire T4ModelRouter** into existing provider cascade
 5. **Add complexity routing later** (RouteLLM for CODE_GEN/BIO)
 
+### Risk Mitigation: The 4-Model Assumption
+
+The 4-model approach assumes the Generalist (Qwen-2.5-7B) can handle intent parsing, 
+data analysis, documentation, and safety checks adequately. This is a calculated risk.
+
+**What to monitor after Phase 1 deployment:**
+
+| Task | Quality Metric | Threshold | Action if Failed |
+|------|----------------|-----------|------------------|
+| Intent Parsing | Classification accuracy | <90% | Consider Llama-3.2-3B (specialized) |
+| Safety Checks | False negative rate | >5% | Add Llama-Guard-3-1B |
+| Biomedical QA | Factual accuracy | <85% | Add BioMistral-7B |
+| Documentation | Coherence score | User complaints | Keep as-is (low priority) |
+
+**Recommended Phase 1 Baseline:**
+```python
+# Track these metrics from day 1
+metrics = {
+    "intent_accuracy": [],      # Compare to UnifiedIntentParser gold labels
+    "safety_catches": [],       # Log flagged vs missed content
+    "bio_hallucinations": [],   # Manual spot-check for known-wrong facts
+    "user_regenerations": [],   # How often users ask "try again"
+}
+```
+
+### Future Research Worth Pursuing
+
+Beyond the core implementation, these optimizations have high ROI:
+
+#### 1. RouteLLM for Complexity Routing (Phase 2)
+
+The UC Berkeley RouteLLM paper shows **85% cost savings** by routing simple queries 
+to small models. Worth implementing for CODE_GEN and BIO tasks only.
+
+```python
+# Conceptual implementation
+from routellm import Router
+
+router = Router(
+    strong_model="deepseek-v3",
+    weak_model="t4-coder",
+    threshold=0.7,  # Tune based on quality metrics
+)
+
+# Only for code_generation and biomedical
+if task in ["code_generation", "biomedical"]:
+    model = router.route(query)
+else:
+    model = default_model_for_task(task)
+```
+
+#### 2. Prefix Caching for Bioinformatics Reference Data
+
+Bioinformatics queries often share common context (gene names, pathway databases, 
+organism references). vLLM's prefix caching can dramatically reduce TTFT:
+
+```bash
+# Enable in vLLM server
+python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-7B-Instruct-AWQ \
+    --enable-prefix-caching \
+    --max-prefix-cache-size 4096
+```
+
+**Estimated benefit:** 40-60% TTFT reduction for queries with shared prefixes.
+
+#### 3. Speculative Decoding with Medusa (Phase 3)
+
+Medusa heads can provide 2-3× generation speedup. However:
+- Requires model fine-tuning to add Medusa heads
+- Best for models with stable output patterns (code, structured data)
+- Skip for conversational/creative tasks
+
+**Recommended approach:** Add Medusa to `t4-coder` only, where structured output 
+(code, YAML, JSON) benefits most.
+
+### Operational Considerations
+
+#### vLLM Server Stability
+
+Static long-running vLLM servers need operational care:
+
+```yaml
+# systemd service example (or SLURM persistent allocation)
+[Service]
+Restart=always
+RestartSec=10
+Environment="CUDA_VISIBLE_DEVICES=0"
+ExecStart=/opt/vllm/bin/python -m vllm.entrypoints.openai.api_server \
+    --model Qwen/Qwen2.5-7B-Instruct-AWQ \
+    --port 8001 \
+    --max-model-len 8192
+```
+
+**Health monitoring script:**
+```python
+# cron job every 5 minutes
+SERVERS = ["t4-generalist:8001", "t4-coder:8002", "t4-math:8003", "t4-embeddings:8004"]
+
+for server in SERVERS:
+    try:
+        r = requests.get(f"http://{server}/health", timeout=5)
+        if not r.ok:
+            alert(f"{server} unhealthy: {r.status_code}")
+            restart_server(server)
+    except Exception as e:
+        alert(f"{server} unreachable: {e}")
+        restart_server(server)
+```
+
+#### SLURM Persistent Allocation Strategy
+
+For university HPC environments, reserve T4 nodes for extended periods:
+
+```bash
+# Request 24-hour allocation for vLLM servers
+sbatch --partition=t4flex \
+       --gres=gpu:1 \
+       --time=24:00:00 \
+       --job-name=vllm-generalist \
+       scripts/llm/start_vllm_server.sh generalist
+```
+
+**Alternative: SLURM job arrays for redundancy:**
+```bash
+# 4 servers as job array
+sbatch --array=0-3 scripts/llm/start_vllm_fleet.sh
+```
+
 ### Final Recommendation
 
 **Start simple, measure, then optimize.**
@@ -2011,6 +2140,35 @@ profile switching + cloud fallback.
 
 ---
 
-*Document Version: 2.0 (Post Peer Review)*
-*Last Updated: $(date)*
+## Implementation Roadmap Summary
+
+Based on all analysis above, here is the consolidated implementation roadmap:
+
+### Phase 1: Foundation (Week 1) — IMPLEMENT NOW
+- Deploy 4 static vLLM servers (Generalist, Coder, Math, Embeddings)
+- Create minimal ResourceDetector (health checks only)
+- Extend StrategyConfig with `profile_name`, `allow_cloud`, `debug_routing`
+- Create 4 YAML profile files
+- Basic metrics collection
+
+### Phase 2: Integration (Week 2) — IMPLEMENT NOW  
+- Add `switch_strategy()` to ModelOrchestrator
+- Wire T4ModelRouter into CascadingProviderRouter
+- Add CLI `--strategy` flag
+- Integration tests with actual vLLM servers
+
+### Phase 3: Optimization (Week 3-4) — AFTER VALIDATION
+- Add complexity routing for CODE_GEN/BIO (RouteLLM)
+- Enable prefix caching for bioinformatics context
+- Add debug routing logs with full context
+
+### Phase 4: Specialized Models (Month 2) — ONLY IF METRICS WARRANT
+- Add BioMistral-7B if biomedical accuracy <85%
+- Add Llama-Guard-3 if safety false negatives >5%
+- Evaluate speculative decoding for t4-coder
+
+---
+
+*Document Version: 2.1 (Refined with Implementation Roadmap)*
+*Last Updated: December 5, 2025*
 *Authors: Claude (primary), ChatGPT (peer review)*
