@@ -19,6 +19,9 @@ from workflow_composer.mcp.server import (
     create_server,
     ToolDefinition,
     ResourceDefinition,
+    PromptDefinition,
+    PromptArgument,
+    ToolAnnotations,
 )
 
 
@@ -425,6 +428,294 @@ class TestMCPServerUnit:
         
         assert len(server.resources) == initial_count + 1
         assert "test://resource" in server.resources
+
+
+class TestMCPPrompts:
+    """Tests for MCP prompts functionality."""
+    
+    def test_server_has_prompts(self):
+        """Test that server has registered prompts."""
+        server = create_server()
+        assert hasattr(server, 'prompts')
+        assert len(server.prompts) > 0
+    
+    def test_get_prompts_list_format(self):
+        """Test prompts list format."""
+        server = create_server()
+        prompts = server.get_prompts_list()
+        
+        assert isinstance(prompts, list)
+        assert len(prompts) > 0
+        
+        for prompt in prompts:
+            assert "name" in prompt
+            assert "description" in prompt
+    
+    def test_expected_prompts_present(self):
+        """Test that expected prompts are registered."""
+        server = create_server()
+        prompt_names = [p["name"] for p in server.get_prompts_list()]
+        
+        expected_prompts = [
+            "analyze_rnaseq",
+            "debug_workflow",
+            "find_datasets",
+            "design_pipeline",
+            "explain_results",
+        ]
+        
+        for expected in expected_prompts:
+            assert expected in prompt_names, f"Missing prompt: {expected}"
+    
+    def test_register_prompt(self):
+        """Test prompt registration."""
+        from workflow_composer.mcp.server import PromptArgument
+        
+        server = create_server()
+        initial_count = len(server.prompts)
+        
+        async def dummy_handler(**kwargs):
+            return {"description": "test", "messages": []}
+        
+        server._register_prompt(
+            name="test_prompt",
+            description="A test prompt",
+            handler=dummy_handler,
+            arguments=[PromptArgument(name="arg1", description="Arg 1")]
+        )
+        
+        assert len(server.prompts) == initial_count + 1
+        assert "test_prompt" in server.prompts
+    
+    @pytest.mark.asyncio
+    async def test_get_prompt(self):
+        """Test getting a prompt."""
+        server = create_server()
+        
+        result = await server.get_prompt("analyze_rnaseq", {
+            "data_path": "/test/path",
+            "organism": "human"
+        })
+        
+        assert "error" not in result
+        assert "messages" in result
+        assert len(result["messages"]) > 0
+    
+    @pytest.mark.asyncio
+    async def test_get_unknown_prompt(self):
+        """Test getting an unknown prompt."""
+        server = create_server()
+        
+        result = await server.get_prompt("nonexistent_prompt")
+        
+        assert "error" in result
+        assert "Unknown prompt" in result["error"]
+
+
+class TestMCPToolAnnotations:
+    """Tests for MCP tool annotations (2025-06-18 spec)."""
+    
+    def test_tools_with_annotations(self):
+        """Test that tools can have annotations."""
+        from workflow_composer.mcp.server import ToolAnnotations
+        
+        server = create_server()
+        tools = server.get_tools_list()
+        
+        # Check that some tools have annotations
+        annotated_tools = [t for t in tools if "annotations" in t]
+        
+        # We should have tools with annotations now
+        assert len(annotated_tools) > 0, "Expected at least some tools to have annotations"
+    
+    def test_annotation_structure(self):
+        """Test that annotations have correct structure."""
+        server = create_server()
+        tools = server.get_tools_list()
+        
+        for tool in tools:
+            if "annotations" in tool:
+                ann = tool["annotations"]
+                assert "readOnly" in ann
+                assert "requiresConfirmation" in ann
+                assert "destructive" in ann
+                assert "idempotent" in ann
+                assert "category" in ann
+    
+    def test_output_schemas(self):
+        """Test that some tools have output schemas."""
+        server = create_server()
+        tools = server.get_tools_list()
+        
+        # Check for tools with output schemas
+        tools_with_schemas = [t for t in tools if "outputSchema" in t]
+        
+        assert len(tools_with_schemas) > 0, "Expected at least some tools to have output schemas"
+        
+        # Validate schema structure
+        for tool in tools_with_schemas:
+            schema = tool["outputSchema"]
+            assert "type" in schema
+
+
+class TestMCPProtocolPrompts:
+    """Tests for prompts-related MCP protocol handlers."""
+    
+    @pytest.mark.asyncio
+    async def test_prompts_list_request(self):
+        """Test prompts/list request."""
+        server = create_server()
+        
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "prompts/list"
+        }
+        
+        response = await server._handle_request(request)
+        
+        assert response["jsonrpc"] == "2.0"
+        assert response["id"] == 1
+        assert "result" in response
+        assert "prompts" in response["result"]
+        assert len(response["result"]["prompts"]) > 0
+    
+    @pytest.mark.asyncio
+    async def test_prompts_get_request(self):
+        """Test prompts/get request."""
+        server = create_server()
+        
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "prompts/get",
+            "params": {
+                "name": "analyze_rnaseq",
+                "arguments": {
+                    "data_path": "/test/data",
+                    "organism": "mouse"
+                }
+            }
+        }
+        
+        response = await server._handle_request(request)
+        
+        assert response["jsonrpc"] == "2.0"
+        assert response["id"] == 1
+        assert "result" in response
+        assert "messages" in response["result"]
+    
+    @pytest.mark.asyncio
+    async def test_prompts_get_unknown_request(self):
+        """Test prompts/get with unknown prompt."""
+        server = create_server()
+        
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "prompts/get",
+            "params": {
+                "name": "nonexistent"
+            }
+        }
+        
+        response = await server._handle_request(request)
+        
+        assert response["jsonrpc"] == "2.0"
+        assert response["id"] == 1
+        assert "error" in response
+
+
+class TestMCPJobManagement:
+    """Tests for job management tools."""
+    
+    def test_job_tools_present(self):
+        """Test that job management tools are registered."""
+        server = create_server()
+        tool_names = [t["name"] for t in server.get_tools_list()]
+        
+        job_tools = [
+            "submit_job",
+            "list_jobs",
+            "cancel_job",
+            "get_job_logs",
+        ]
+        
+        for tool in job_tools:
+            assert tool in tool_names, f"Missing job tool: {tool}"
+    
+    def test_submit_job_annotations(self):
+        """Test that submit_job has correct annotations."""
+        server = create_server()
+        tools = server.get_tools_list()
+        
+        submit_job = next((t for t in tools if t["name"] == "submit_job"), None)
+        assert submit_job is not None
+        
+        if "annotations" in submit_job:
+            ann = submit_job["annotations"]
+            # Submit is not read-only, not destructive
+            assert ann["readOnly"] == False
+            assert ann["destructive"] == False
+
+
+class TestMCPStrategyTools:
+    """Tests for LLM strategy tools."""
+    
+    def test_strategy_tools_present(self):
+        """Test that strategy management tools are registered."""
+        server = create_server()
+        tool_names = [t["name"] for t in server.get_tools_list()]
+        
+        strategy_tools = [
+            "get_llm_strategy",
+            "set_llm_strategy",
+        ]
+        
+        for tool in strategy_tools:
+            assert tool in tool_names, f"Missing strategy tool: {tool}"
+
+
+class TestMCPInitializeCapabilities:
+    """Tests for enhanced initialize capabilities."""
+    
+    @pytest.mark.asyncio
+    async def test_initialize_includes_prompts_capability(self):
+        """Test that initialize returns prompts capability."""
+        server = create_server()
+        
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize"
+        }
+        
+        response = await server._handle_request(request)
+        
+        assert "result" in response
+        result = response["result"]
+        
+        assert "capabilities" in result
+        capabilities = result["capabilities"]
+        
+        assert "prompts" in capabilities, "Initialize should expose prompts capability"
+        assert "tools" in capabilities
+        assert "resources" in capabilities
+    
+    @pytest.mark.asyncio
+    async def test_server_version_updated(self):
+        """Test that server version is 2.0.0."""
+        server = create_server()
+        
+        request = {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize"
+        }
+        
+        response = await server._handle_request(request)
+        
+        assert response["result"]["serverInfo"]["version"] == "2.0.0"
 
 
 if __name__ == "__main__":

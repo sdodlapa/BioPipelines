@@ -1,8 +1,13 @@
 # BioPipelines MCP Integration Guide
 
+> **See Also**: [MCP Enhancement Plan](./MCP_ENHANCEMENT_PLAN.md) for roadmap and future improvements.
+
 ## Overview
 
 BioPipelines provides a Model Context Protocol (MCP) server that exposes its bioinformatics tools to MCP-compatible clients like Claude Code, Cursor, and other AI coding assistants.
+
+**Protocol Version**: 2024-11-05 (upgrading to 2025-06-18)  
+**Status**: Production-ready with 12 tools, 3 resources
 
 ## Quick Start
 
