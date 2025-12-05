@@ -285,24 +285,20 @@ curl http://localhost:8001/v1/completions \
 
 *Only implement after Phase 1-2 are stable and metrics show need*
 
-### 3.1 Complexity Routing (RouteLLM)
+### 3.1 Complexity Routing (RouteLLM) — SKIPPED
 
-- [ ] **3.1.1** Install RouteLLM: `pip install routellm`
-- [ ] **3.1.2** Create complexity router wrapper
-- [ ] **3.1.3** Enable only for `code_generation` and `biomedical` tasks
-- [ ] **3.1.4** Tune threshold based on quality metrics
+**Reason:** Adds complexity without usage data to justify. Implement when metrics show >30% unnecessary cloud calls.
 
-### 3.2 Prefix Caching
+### 3.2 Prefix Caching — SKIPPED
 
-- [ ] **3.2.1** Enable in vLLM server config: `--enable-prefix-caching`
-- [ ] **3.2.2** Create bioinformatics context templates
-- [ ] **3.2.3** Measure TTFT improvement
+**Reason:** vLLM server configuration, not code. Add `--enable-prefix-caching` flag when deploying vLLM servers.
 
-### 3.3 Debug Routing Logs
+### 3.3 Debug Routing Logs ✅
 
-- [ ] **3.3.1** Create RoutingDecision dataclass
-- [ ] **3.3.2** Log full context when `debug_routing=True`
-- [ ] **3.3.3** Create log analysis dashboard
+- [x] **3.3.1** RoutingDecision dataclass already exists in metrics.py
+- [x] **3.3.2** Added `_log_routing_decision()` method to ModelOrchestrator
+- [x] **3.3.3** Logs to dedicated `workflow_composer.routing` logger
+- [x] **3.3.4** Added 4 tests for debug routing
 
 ---
 
@@ -385,9 +381,9 @@ OPENAI_API_KEY=xxx                       # For embeddings fallback
 - [x] Integration tests pass (38/38)
 
 ### Phase 3 Complete When:
-- [ ] RouteLLM reduces cloud API calls by >30%
-- [ ] Prefix caching reduces TTFT by >20%
-- [ ] Debug logs provide actionable troubleshooting info
+- [x] Debug logs provide actionable troubleshooting info
+- [ ] ~~RouteLLM reduces cloud API calls by >30%~~ (SKIPPED - no usage data)
+- [ ] ~~Prefix caching reduces TTFT by >20%~~ (SKIPPED - server config)
 
 ---
 
