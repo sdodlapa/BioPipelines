@@ -1,0 +1,59 @@
+# BioPipelines Strategy Profile: Cloud Only
+# ==========================================
+#
+# Use cloud APIs exclusively - no local GPU required.
+# Useful for:
+#   - Development without GPU access
+#   - CI/CD pipelines
+#   - Testing cloud providers
+#   - When local GPUs are unavailable
+#
+# Cost Warning:
+#   This profile uses paid cloud APIs for ALL requests.
+#   Monitor costs carefully with max_cost_per_request.
+
+profile_name: cloud_only
+profile_description: "Cloud APIs only - no local GPUs required"
+
+# Core settings
+strategy: cloud_only
+fallback_enabled: true
+allow_cloud: true
+
+# Timeouts
+max_retries: 2
+timeout_seconds: 60.0
+
+# No local endpoints
+vllm_endpoints: {}
+
+# All tasks route to cloud
+task_routing:
+  intent_parsing: cloud
+  data_analysis: cloud
+  documentation: cloud
+  biomedical: cloud
+  safety: cloud
+  code_generation: cloud
+  code_validation: cloud
+  math_statistics: cloud
+  embeddings: cloud
+  orchestration: cloud
+
+# Cloud provider fallback chain
+# Ordered by: cost-effectiveness, reliability, quality
+fallback_chain:
+  - deepseek-v3        # Best cost/quality ratio
+  - gpt-4o-mini        # Good for simple tasks
+  - claude-3.5-sonnet  # Best for complex reasoning
+  - gpt-4o             # Fallback for edge cases
+
+# Cost controls - IMPORTANT for cloud-only
+prefer_cheaper: true
+max_cost_per_request: 0.50  # Higher limit for cloud
+
+# Caching (critical for cost reduction)
+cache_responses: true
+
+# Debugging
+debug_routing: false

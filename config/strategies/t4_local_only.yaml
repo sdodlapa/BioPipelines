@@ -1,0 +1,62 @@
+# BioPipelines Strategy Profile: T4 Local Only
+# =============================================
+#
+# PHI-safe strategy - NO cloud API calls.
+# All processing stays on local T4 GPUs.
+#
+# Use this profile when:
+#   - Working with PHI (Protected Health Information)
+#   - Working with sensitive sample IDs or clinical metadata
+#   - Network isolation is required
+#   - Cloud API costs must be zero
+#
+# Limitations:
+#   - No fallback if local models are unavailable
+#   - Orchestration tasks may fail (typically cloud-only)
+#   - Quality may be lower for complex reasoning tasks
+
+profile_name: t4_local_only
+profile_description: "T4 vLLM fleet only - no cloud (PHI safe)"
+
+# Core settings
+strategy: local_only
+fallback_enabled: false  # No fallback - fail if local unavailable
+allow_cloud: false       # CRITICAL: Never send to cloud
+
+# Timeouts (longer since no fallback)
+max_retries: 3
+timeout_seconds: 120.0
+
+# vLLM endpoints
+vllm_endpoints:
+  generalist: "http://localhost:8001"
+  coder: "http://localhost:8002"
+  math: "http://localhost:8003"
+  embeddings: "http://localhost:8004"
+
+# Task routing - all tasks must use local models
+task_routing:
+  intent_parsing: generalist
+  data_analysis: generalist
+  documentation: generalist
+  biomedical: generalist
+  safety: generalist
+  code_generation: coder
+  code_validation: coder
+  math_statistics: math
+  embeddings: embeddings
+  # Note: orchestration will fail - generalist will attempt but may be poor quality
+  orchestration: generalist
+
+# No fallback chain (local only)
+fallback_chain: []
+
+# Cost controls (all local = $0)
+prefer_cheaper: true
+max_cost_per_request: 0.0
+
+# Caching (important for local efficiency)
+cache_responses: true
+
+# Debugging
+debug_routing: false

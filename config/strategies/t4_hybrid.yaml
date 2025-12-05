@@ -1,0 +1,66 @@
+# BioPipelines Strategy Profile: T4 Hybrid
+# =========================================
+#
+# Primary strategy for ODU HPC with T4 GPUs.
+# Uses local vLLM servers with cloud fallback.
+#
+# Deployment:
+#   1. Start vLLM servers: ./scripts/llm/deploy_core_models.sh start
+#   2. Use this profile: --strategy t4_hybrid
+#
+# Data Governance:
+#   - allow_cloud: true (safe for non-PHI data)
+#   - For PHI data, use t4_local_only.yaml instead
+
+profile_name: t4_hybrid
+profile_description: "T4 vLLM fleet with DeepSeek cloud fallback"
+
+# Core settings
+strategy: local_first
+fallback_enabled: true
+allow_cloud: true
+debug_routing: false
+
+# Timeouts and retries
+max_retries: 2
+timeout_seconds: 60.0
+
+# vLLM endpoints (update hostnames after deployment)
+# These will be updated by deploy_core_models.sh in .model_connections/
+vllm_endpoints:
+  generalist: "http://localhost:8001"
+  coder: "http://localhost:8002"
+  math: "http://localhost:8003"
+  embeddings: "http://localhost:8004"
+
+# Task routing - which model handles which task
+task_routing:
+  # Intent & general
+  intent_parsing: generalist
+  data_analysis: generalist
+  documentation: generalist
+  biomedical: generalist
+  safety: generalist
+  
+  # Code tasks
+  code_generation: coder
+  code_validation: coder
+  
+  # Specialized
+  math_statistics: math
+  embeddings: embeddings
+  
+  # Cloud-only (no good local option)
+  orchestration: cloud
+
+# Fallback chain when local fails or task requires cloud
+fallback_chain:
+  - deepseek-v3
+  - claude-3.5-sonnet
+
+# Cost controls
+prefer_cheaper: true
+max_cost_per_request: 0.10  # $0.10 max per request
+
+# Caching
+cache_responses: true

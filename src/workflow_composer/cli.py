@@ -24,6 +24,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from workflow_composer import Composer, Config
 from workflow_composer.llm import get_llm, list_providers, check_providers
+from workflow_composer.llm import Strategy, get_orchestrator, load_profile
 
 
 def setup_logging(verbose: bool = False):
@@ -34,6 +35,39 @@ def setup_logging(verbose: bool = False):
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%H:%M:%S"
     )
+
+
+def setup_strategy(strategy_arg: Optional[str] = None):
+    """
+    Configure LLM strategy based on CLI argument.
+    
+    Args:
+        strategy_arg: Strategy name, profile name, or None for auto
+        
+    Returns:
+        Configured ModelOrchestrator
+    """
+    if not strategy_arg:
+        # Auto-detect
+        return get_orchestrator(strategy=Strategy.AUTO)
+    
+    # Check if it's a Strategy enum value
+    strategy_name = strategy_arg.upper().replace("-", "_")
+    try:
+        strategy = Strategy[strategy_name]
+        return get_orchestrator(strategy=strategy)
+    except KeyError:
+        pass
+    
+    # Try as profile name
+    try:
+        config = load_profile(strategy_arg)
+        return get_orchestrator(strategy=config.strategy)
+    except FileNotFoundError:
+        print(f"⚠ Unknown strategy/profile: {strategy_arg}")
+        print("  Available strategies: LOCAL_ONLY, LOCAL_FIRST, CLOUD_ONLY, ENSEMBLE, AUTO")
+        print("  Available profiles: t4_hybrid, t4_local_only, development, cloud_only")
+        sys.exit(1)
 
 
 def cmd_generate(args):
@@ -457,6 +491,117 @@ def cmd_ui(args):
         sys.exit(1)
 
 
+def cmd_strategy(args):
+    """Manage LLM routing strategies."""
+    setup_logging(args.verbose)
+    
+    if args.list:
+        # List available strategies and profiles
+        print("\n📋 LLM Routing Strategies\n")
+        print("=" * 60)
+        
+        print("\n🔹 Strategy Modes:")
+        strategies = [
+            ("LOCAL_ONLY", "Use only local T4 vLLM servers"),
+            ("LOCAL_FIRST", "Try local first, fallback to cloud"),
+            ("CLOUD_ONLY", "Use only cloud APIs (OpenAI, Anthropic, etc.)"),
+            ("ENSEMBLE", "Consult multiple models for consensus"),
+            ("CASCADE", "Try providers in sequence until success"),
+            ("AUTO", "Auto-detect best strategy from resources"),
+        ]
+        for name, desc in strategies:
+            print(f"  {name:<15} - {desc}")
+        
+        print("\n🔹 Configuration Profiles:")
+        from pathlib import Path
+        profile_dir = Path(__file__).parent.parent.parent / "config" / "strategies"
+        if profile_dir.exists():
+            for profile_file in sorted(profile_dir.glob("*.yaml")):
+                name = profile_file.stem
+                print(f"  {name:<15} - config/strategies/{name}.yaml")
+        else:
+            print("  (No profiles found in config/strategies/)")
+        
+        print("\n💡 Usage:")
+        print("  biocomposer generate --strategy LOCAL_FIRST 'RNA-seq analysis'")
+        print("  biocomposer generate --strategy t4_hybrid 'ChIP-seq pipeline'")
+        print("")
+    
+    elif args.check:
+        # Check current resources and recommend strategy
+        print("\n🔍 Checking LLM Resources...\n")
+        
+        from workflow_composer.llm import ResourceDetector
+        
+        detector = ResourceDetector()
+        status = detector.detect()
+        
+        # Count healthy vLLM endpoints
+        vllm_healthy = len([v for v in status.vllm_endpoints.values() if v])
+        vllm_total = len(status.vllm_endpoints)
+        
+        print(f"Deployment Mode: {status.deployment_mode}")
+        print(f"SLURM Available: {'✓' if status.slurm_available else '✗'}")
+        print(f"vLLM Servers:    {vllm_healthy}/{vllm_total}")
+        print(f"Cloud APIs:      {', '.join(status.available_cloud_apis) or 'None'}")
+        
+        recommended = detector.get_best_strategy()
+        print(f"\n✨ Recommended Strategy: {recommended}")
+        
+        if status.available_models:
+            print("\n🟢 Available local models:")
+            for name in status.available_models:
+                url = status.vllm_urls.get(name, "unknown")
+                print(f"   - {name}: {url}")
+    
+    elif args.test:
+        # Test strategy with a simple query
+        print(f"\n🧪 Testing Strategy: {args.test}\n")
+        
+        import asyncio
+        
+        orch = setup_strategy(args.test)
+        print(f"  Strategy: {orch.strategy.value}")
+        print(f"  Profile:  {orch.get_current_profile()}")
+        print(f"  Local:    {'available' if orch.local.is_available() else 'unavailable'}")
+        print(f"  Cloud:    {'available' if orch.cloud.is_available() else 'unavailable'}")
+        
+        if args.query:
+            print(f"\n  Running test query...")
+            try:
+                async def test():
+                    response = await orch.complete(args.query)
+                    print(f"\n  Provider: {response.provider}")
+                    print(f"  Model:    {response.model}")
+                    print(f"  Latency:  {response.latency_ms:.0f}ms")
+                    print(f"  Response: {response.content[:200]}...")
+                
+                asyncio.run(test())
+                print("\n  ✓ Test passed")
+            except Exception as e:
+                print(f"\n  ✗ Test failed: {e}")
+    
+    else:
+        # Default: show help
+        print("""
+📋 LLM Routing Strategy Management
+===================================
+
+Strategies control how requests are routed between local T4 vLLM servers
+and cloud APIs (OpenAI, Anthropic, etc.).
+
+Commands:
+  biocomposer strategy --list          List available strategies and profiles
+  biocomposer strategy --check         Check resources and get recommendation
+  biocomposer strategy --test LOCAL_FIRST --query "Hello"
+                                       Test a strategy with optional query
+
+Usage with other commands:
+  biocomposer generate --strategy t4_hybrid "RNA-seq analysis"
+  biocomposer chat --strategy LOCAL_ONLY
+""")
+
+
 def main():
     """Main entry point."""
     parser = argparse.ArgumentParser(
@@ -473,6 +618,7 @@ def main():
     gen_parser.add_argument("-o", "--output", help="Output directory")
     gen_parser.add_argument("-l", "--llm", help="LLM provider (ollama, openai, anthropic)")
     gen_parser.add_argument("-m", "--model", help="Model name")
+    gen_parser.add_argument("-s", "--strategy", help="LLM strategy (LOCAL_ONLY, LOCAL_FIRST, t4_hybrid, etc.)")
     gen_parser.add_argument("--no-auto-create", action="store_true", help="Don't auto-create missing modules")
     gen_parser.add_argument("--show", action="store_true", help="Show generated code")
     gen_parser.add_argument("--agents", action="store_true", 
@@ -485,6 +631,7 @@ def main():
     chat_parser = subparsers.add_parser("chat", help="Interactive chat mode")
     chat_parser.add_argument("-l", "--llm", help="LLM provider")
     chat_parser.add_argument("-m", "--model", help="Model name")
+    chat_parser.add_argument("-s", "--strategy", help="LLM strategy (LOCAL_ONLY, LOCAL_FIRST, t4_hybrid, etc.)")
     chat_parser.set_defaults(func=cmd_chat)
     
     # Tools command
@@ -518,6 +665,14 @@ def main():
     ui_parser.add_argument("--host", default="0.0.0.0", help="Host to bind")
     ui_parser.add_argument("--share", action="store_true", help="Create public link (Gradio only)")
     ui_parser.set_defaults(func=cmd_ui)
+    
+    # Strategy command
+    strat_parser = subparsers.add_parser("strategy", help="Manage LLM routing strategies")
+    strat_parser.add_argument("-l", "--list", action="store_true", help="List available strategies and profiles")
+    strat_parser.add_argument("-c", "--check", action="store_true", help="Check resources and recommend strategy")
+    strat_parser.add_argument("-t", "--test", metavar="STRATEGY", help="Test a strategy")
+    strat_parser.add_argument("-q", "--query", metavar="TEXT", help="Query for testing (with --test)")
+    strat_parser.set_defaults(func=cmd_strategy)
     
     args = parser.parse_args()
     

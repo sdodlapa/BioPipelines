@@ -49,7 +49,19 @@ from .strategies import (
     StrategyConfig,
     EnsembleMode,
     get_preset,
+    load_profile,
 )
+from .resource_detector import ResourceDetector, ResourceStatus
+from .metrics import RoutingMetrics, MetricsContext, get_metrics
+
+# Task-based router for T4 vLLM servers (optional - may not be installed in all envs)
+try:
+    from workflow_composer.providers.t4_router import T4ModelRouter, TaskCategory
+    T4_ROUTER_AVAILABLE = True
+except ImportError:
+    T4ModelRouter = None
+    TaskCategory = None
+    T4_ROUTER_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
@@ -152,8 +164,10 @@ class ModelOrchestrator:
         self,
         strategy: Strategy = Strategy.AUTO,
         config: Optional[StrategyConfig] = None,
+        profile: Optional[str] = None,
         local_provider: Optional[LocalProvider] = None,
         cloud_provider: Optional[CloudProvider] = None,
+        auto_detect: bool = False,
     ):
         """
         Initialize orchestrator.
@@ -161,10 +175,22 @@ class ModelOrchestrator:
         Args:
             strategy: Primary routing strategy
             config: Detailed configuration (overrides strategy if provided)
+            profile: Load config from named profile (e.g., 't4_hybrid')
             local_provider: Custom local provider
             cloud_provider: Custom cloud provider
+            auto_detect: Auto-detect best strategy from resources
         """
-        self.config = config or StrategyConfig(strategy=strategy)
+        # Load configuration
+        if profile:
+            self.config = load_profile(profile)
+            logger.info(f"Loaded profile: {profile}")
+        elif config:
+            self.config = config
+        elif auto_detect:
+            self.config = self._auto_detect_config()
+        else:
+            self.config = StrategyConfig(strategy=strategy)
+        
         self.strategy = self.config.strategy
         
         # Initialize providers
@@ -174,11 +200,112 @@ class ModelOrchestrator:
         # Usage tracking
         self.stats = UsageStats()
         
+        # Metrics collection (v2.1)
+        self.metrics = get_metrics()
+        
         # Response cache (simple in-memory)
         self._cache: Dict[str, OrchestratorResponse] = {}
         self._cache_max_size = 100
         
-        logger.info(f"ModelOrchestrator initialized with strategy: {self.strategy.value}")
+        # Resource detector for health checks
+        self._resource_detector = ResourceDetector(
+            vllm_endpoints=self.config.vllm_endpoints or {}
+        )
+        
+        # T4 task-based router (for routing to specialized vLLM servers)
+        self._t4_router: Optional[T4ModelRouter] = None
+        if T4_ROUTER_AVAILABLE and self.config.vllm_endpoints:
+            try:
+                self._t4_router = T4ModelRouter()
+                logger.debug("T4ModelRouter initialized for task-based routing")
+            except Exception as e:
+                logger.warning(f"Failed to initialize T4ModelRouter: {e}")
+        
+        profile_name = self.config.profile_name or "default"
+        logger.info(f"ModelOrchestrator initialized: strategy={self.strategy.value}, profile={profile_name}")
+    
+    def _auto_detect_config(self) -> StrategyConfig:
+        """
+        Auto-detect best configuration from available resources.
+        
+        Returns config based on:
+        1. Available vLLM endpoints
+        2. Configured cloud API keys
+        3. SLURM availability
+        """
+        detector = ResourceDetector()
+        status = detector.detect()
+        
+        profile_name = detector.get_best_strategy()
+        logger.info(f"Auto-detected strategy profile: {profile_name} (mode: {status.deployment_mode})")
+        
+        return load_profile(profile_name)
+    
+    # =========================================================================
+    # Strategy Switching (v2.1)
+    # =========================================================================
+    
+    def switch_strategy(self, profile_or_strategy: str | Strategy | StrategyConfig) -> None:
+        """
+        Switch to a different strategy at runtime.
+        
+        Args:
+            profile_or_strategy: One of:
+                - Profile name (str): e.g., 't4_hybrid', 'cloud_only'
+                - Strategy enum: Strategy.LOCAL_FIRST
+                - StrategyConfig: Full configuration object
+        
+        Examples:
+            orch.switch_strategy("t4_local_only")  # PHI mode
+            orch.switch_strategy(Strategy.CLOUD_ONLY)
+            orch.switch_strategy(my_custom_config)
+        """
+        if isinstance(profile_or_strategy, StrategyConfig):
+            new_config = profile_or_strategy
+        elif isinstance(profile_or_strategy, Strategy):
+            new_config = StrategyConfig(strategy=profile_or_strategy)
+        else:
+            new_config = load_profile(profile_or_strategy)
+        
+        old_profile = self.config.profile_name or "default"
+        new_profile = new_config.profile_name or "default"
+        
+        self.config = new_config
+        self.strategy = new_config.strategy
+        
+        # Update resource detector with new endpoints
+        if new_config.vllm_endpoints:
+            self._resource_detector = ResourceDetector(
+                vllm_endpoints=new_config.vllm_endpoints
+            )
+        
+        logger.info(f"Switched strategy: {old_profile} -> {new_profile} (strategy={self.strategy.value})")
+    
+    def get_current_profile(self) -> str:
+        """Get the name of the current strategy profile."""
+        return self.config.profile_name or "default"
+    
+    def get_resource_status(self) -> ResourceStatus:
+        """
+        Get current resource availability status.
+        
+        Useful for debugging and monitoring.
+        """
+        return self._resource_detector.detect()
+    
+    def can_use_cloud(self, task_type: Optional[str] = None) -> bool:
+        """
+        Check if cloud APIs can be used (respects data governance).
+        
+        Args:
+            task_type: Optional task type for per-task governance
+        
+        Returns:
+            True if cloud is allowed for this request
+        """
+        if task_type:
+            return self.config.can_use_cloud_for_task(task_type)
+        return self.config.allow_cloud
     
     # =========================================================================
     # Properties
@@ -678,6 +805,152 @@ class ModelOrchestrator:
             oldest = next(iter(self._cache))
             del self._cache[oldest]
         self._cache[key] = response
+    
+    # =========================================================================
+    # Task-Based Routing (T4 Fleet)
+    # =========================================================================
+    
+    def has_task_router(self) -> bool:
+        """Check if task-based T4 routing is available."""
+        return self._t4_router is not None
+    
+    async def complete_with_task(
+        self,
+        task: str,
+        prompt: str,
+        max_tokens: int = 4096,
+        temperature: float = 0.7,
+        **kwargs,
+    ) -> OrchestratorResponse:
+        """
+        Complete using task-based routing to specialized models.
+        
+        This routes the request to the appropriate vLLM server based on
+        the task type (code, math, general, embeddings).
+        
+        Args:
+            task: Task category - one of:
+                  'code', 'math', 'general', 'embeddings', 'reasoning'
+            prompt: The prompt to complete
+            max_tokens: Maximum tokens to generate
+            temperature: Sampling temperature
+            **kwargs: Additional arguments
+        
+        Returns:
+            OrchestratorResponse with completion
+        
+        Raises:
+            RuntimeError: If task router not available
+            
+        Example:
+            response = await orch.complete_with_task(
+                task="code",
+                prompt="Write a Python function to parse FASTQ files"
+            )
+        """
+        if not self._t4_router:
+            if not self.config.allow_cloud:
+                raise RuntimeError(
+                    "T4 task router not available and cloud is disabled. "
+                    "Deploy vLLM servers with scripts/llm/deploy_core_models.sh"
+                )
+            # Fallback to generic completion
+            logger.warning("T4 router not available, falling back to generic completion")
+            return await self.complete(prompt, temperature=temperature, max_tokens=max_tokens, **kwargs)
+        
+        start_time = time.time()
+        
+        try:
+            result = await self._t4_router.complete(
+                task=task,
+                prompt=prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                **kwargs
+            )
+            
+            latency_ms = (time.time() - start_time) * 1000
+            
+            # Determine provider type based on result
+            is_local = result.get("is_local", True)
+            provider_type = ProviderType.LOCAL if is_local else ProviderType.CLOUD
+            
+            response = OrchestratorResponse(
+                content=result["content"],
+                model=result.get("model", "unknown"),
+                provider=result.get("model_name", "t4-vllm"),
+                provider_type=provider_type,
+                strategy_used=self.strategy,
+                tokens_used=result.get("usage", {}).get("total_tokens", 0),
+                latency_ms=latency_ms,
+                cost=0.0 if is_local else self._estimate_cloud_cost(result),
+            )
+            
+            self.stats.add(response)
+            
+            # Record metrics
+            if self.metrics:
+                self.metrics.record_request(
+                    provider=result.get("model_name", "t4-vllm"),
+                    model=result.get("model", "unknown"),
+                    strategy=self.strategy.value,
+                    latency_ms=latency_ms,
+                    is_fallback=not is_local,
+                    success=True,
+                )
+            
+            return response
+            
+        except Exception as e:
+            if self.metrics:
+                self.metrics.record_request(
+                    provider="t4-router",
+                    model="unknown",
+                    strategy=self.strategy.value,
+                    latency_ms=(time.time() - start_time) * 1000,
+                    is_fallback=False,
+                    success=False,
+                )
+            raise
+    
+    def _estimate_cloud_cost(self, result: Dict[str, Any]) -> float:
+        """Estimate cost for cloud API call based on usage."""
+        usage = result.get("usage", {})
+        input_tokens = usage.get("prompt_tokens", 0)
+        output_tokens = usage.get("completion_tokens", 0)
+        model = result.get("model", "")
+        
+        # Rough cost estimates per 1K tokens
+        if "gpt-4" in model:
+            return (input_tokens * 0.01 + output_tokens * 0.03) / 1000
+        elif "gpt-3.5" in model:
+            return (input_tokens * 0.0005 + output_tokens * 0.0015) / 1000
+        elif "claude" in model:
+            return (input_tokens * 0.008 + output_tokens * 0.024) / 1000
+        elif "deepseek" in model:
+            return (input_tokens * 0.0001 + output_tokens * 0.0002) / 1000
+        return 0.0
+    
+    async def embed_with_task(
+        self,
+        texts: List[str],
+    ) -> List[List[float]]:
+        """
+        Get embeddings using the T4 embedding model.
+        
+        Args:
+            texts: List of texts to embed
+            
+        Returns:
+            List of embedding vectors
+            
+        Raises:
+            RuntimeError: If embedding model not available
+        """
+        if not self._t4_router:
+            raise RuntimeError("T4 task router not available for embeddings")
+        
+        return await self._t4_router.embed(texts)
 
 
 # =============================================================================
@@ -690,6 +963,8 @@ _default_orchestrator: Optional[ModelOrchestrator] = None
 def get_orchestrator(
     strategy: Strategy = Strategy.AUTO,
     preset: Optional[str] = None,
+    profile: Optional[str] = None,
+    auto_detect: bool = False,
     **kwargs,
 ) -> ModelOrchestrator:
     """
@@ -698,13 +973,37 @@ def get_orchestrator(
     Args:
         strategy: Orchestration strategy
         preset: Use a preset configuration (development, production, critical, etc.)
+        profile: Load from YAML profile (t4_hybrid, t4_local_only, cloud_only, etc.)
+        auto_detect: Auto-detect best strategy from available resources
         **kwargs: Additional arguments for ModelOrchestrator
         
     Returns:
         ModelOrchestrator instance
+        
+    Examples:
+        # Basic usage
+        orch = get_orchestrator()
+        
+        # With profile
+        orch = get_orchestrator(profile="t4_hybrid")
+        
+        # Auto-detect from environment
+        orch = get_orchestrator(auto_detect=True)
+        
+        # Legacy preset
+        orch = get_orchestrator(preset="production")
     """
     global _default_orchestrator
     
+    # Profile takes precedence (v2.1)
+    if profile:
+        return ModelOrchestrator(profile=profile, **kwargs)
+    
+    # Auto-detect (v2.1)
+    if auto_detect:
+        return ModelOrchestrator(auto_detect=True, **kwargs)
+    
+    # Legacy preset support
     if preset:
         config = get_preset(preset)
         return ModelOrchestrator(config=config, **kwargs)

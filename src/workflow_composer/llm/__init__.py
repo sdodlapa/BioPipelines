@@ -59,6 +59,25 @@ from .strategies import (
     StrategyConfig,
     PRESETS,
     get_preset,
+    load_profile,
+)
+
+# === Resource Detection (v2.1) ===
+from .resource_detector import (
+    ResourceDetector,
+    ResourceStatus,
+    detect_resources,
+    is_vllm_available,
+    get_available_cloud_apis,
+)
+
+# === Routing Metrics (v2.1) ===
+from .metrics import (
+    RoutingDecision as RoutingMetricDecision,  # Avoid conflict with orchestrator_8b
+    RoutingMetrics,
+    MetricsContext,
+    get_metrics,
+    log_routing_decision,
 )
 
 # === Task Router (v2.0) ===
@@ -69,6 +88,20 @@ from .task_router import (
     TaskRouter,
     RouterConfig,
 )
+
+# === T4 Fleet Router (v2.1) - For task-based routing to vLLM servers ===
+try:
+    from workflow_composer.providers.t4_router import (
+        T4ModelRouter,
+        TaskCategory as T4TaskCategory,
+        ModelEndpoint,
+    )
+    T4_ROUTER_AVAILABLE = True
+except ImportError:
+    T4ModelRouter = None
+    T4TaskCategory = None
+    ModelEndpoint = None
+    T4_ROUTER_AVAILABLE = False
 
 # === Cost Tracker (v2.0) ===
 from .cost_tracker import (
@@ -141,6 +174,21 @@ __all__ = [
     "StrategyConfig",
     "PRESETS",
     "get_preset",
+    "load_profile",
+    
+    # === Resource Detection API ===
+    "ResourceDetector",
+    "ResourceStatus",
+    "detect_resources",
+    "is_vllm_available",
+    "get_available_cloud_apis",
+    
+    # === Routing Metrics API ===
+    "RoutingMetricDecision",
+    "RoutingMetrics",
+    "MetricsContext",
+    "get_metrics",
+    "log_routing_decision",
     
     # === Task Router API ===
     "TaskType",
@@ -148,6 +196,12 @@ __all__ = [
     "TaskAnalysis",
     "TaskRouter",
     "RouterConfig",
+    
+    # === T4 Fleet Router API (when available) ===
+    "T4ModelRouter",
+    "T4TaskCategory",
+    "ModelEndpoint",
+    "T4_ROUTER_AVAILABLE",
     
     # === Cost Tracker API ===
     "CostTracker",

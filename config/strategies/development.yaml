@@ -1,0 +1,61 @@
+# BioPipelines Strategy Profile: Development
+# ===========================================
+#
+# Optimized for fast development iteration.
+# Features:
+#   - Verbose debug logging
+#   - Lower timeouts (fail fast)
+#   - Minimal cost controls
+#   - Local-first with cloud fallback
+#
+# Use this profile during:
+#   - Feature development
+#   - Debugging routing issues
+#   - Testing new task types
+
+profile_name: development
+profile_description: "Development mode - verbose logging, fast iteration"
+
+# Core settings
+strategy: local_first
+fallback_enabled: true
+allow_cloud: true
+
+# VERBOSE DEBUGGING ENABLED
+debug_routing: true
+
+# Fast timeouts (fail fast during development)
+max_retries: 1
+timeout_seconds: 30.0
+
+# vLLM endpoints (may not be running in dev)
+vllm_endpoints:
+  generalist: "http://localhost:8001"
+  coder: "http://localhost:8002"
+  math: "http://localhost:8003"
+  embeddings: "http://localhost:8004"
+
+# Task routing
+task_routing:
+  intent_parsing: generalist
+  data_analysis: generalist
+  documentation: generalist
+  biomedical: generalist
+  safety: generalist
+  code_generation: coder
+  code_validation: coder
+  math_statistics: math
+  embeddings: embeddings
+  orchestration: cloud
+
+# Fallback for when local isn't available
+fallback_chain:
+  - deepseek-v3
+  - gpt-4o-mini
+
+# Low cost limit for development
+prefer_cheaper: true
+max_cost_per_request: 0.05
+
+# Disable caching during development (fresh responses)
+cache_responses: false
