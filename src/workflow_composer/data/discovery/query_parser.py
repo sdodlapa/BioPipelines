@@ -271,9 +271,24 @@ class QueryParser:
                 break
         
         # Extract keywords (remaining significant words)
+        # Expanded stop words to filter conversational/non-biological terms
         stop_words = {
+            # Action/request words
             "find", "get", "download", "search", "data", "from", "in",
             "the", "a", "an", "and", "or", "for", "with", "to", "of",
+            "want", "need", "looking", "please", "help", "show", "list",
+            "give", "can", "where", "what", "how", "using", "about",
+            # Data-related generic terms
+            "dataset", "datasets", "sample", "samples", "file", "files",
+            "source", "sources", "online", "available", "database", "databases",
+            "public", "open", "access", "free", "type", "kind", "category",
+            # File format/read type descriptors (not biological)
+            "pair", "paired", "single", "ended", "end", "raw", "processed",
+            "aligned", "unaligned", "trimmed", "quality", "fastq", "bam", "bed",
+            # Database names (handled by source selection)
+            "encode", "geo", "sra", "ncbi", "ensembl", "tcga", "gdc",
+            # Common adjectives
+            "good", "best", "latest", "recent", "new", "old", "all", "any", "some",
         }
         keywords = [
             word for word in query_lower.split()

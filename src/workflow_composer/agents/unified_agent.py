@@ -94,6 +94,9 @@ from .intent import (
     get_conversation_recovery,
 )
 
+# Response validation for quality control
+from .response_validator import ResponseValidator, ContextAwareResponseBuilder
+
 # Observability - distributed tracing
 from workflow_composer.infrastructure.observability import get_tracer, traced, get_metrics
 
@@ -468,6 +471,10 @@ class UnifiedAgent:
         self._session_memory: Optional[SessionMemory] = None
         self._recovery: Optional[ConversationRecovery] = None
         
+        # Response validation (quality control)
+        self._response_validator: Optional[ResponseValidator] = None
+        self._response_builder: Optional[ContextAwareResponseBuilder] = None
+        
         # Execution history
         self._history: List[AgentResponse] = []
         
@@ -482,6 +489,16 @@ class UnifiedAgent:
         if self._tools is None:
             self._tools = get_agent_tools()
         return self._tools
+    
+    @property
+    def response_validator(self) -> ResponseValidator:
+        """Get or initialize the response validator for quality control."""
+        if self._response_validator is None:
+            self._response_validator = ResponseValidator(
+                llm_client=self._orchestrator,
+                context_memory=self._session_memory
+            )
+        return self._response_validator
     
     @property
     def rag(self) -> RAGOrchestrator:
@@ -822,6 +839,11 @@ class UnifiedAgent:
             # Store search results for "download all" support
             if tool_name == ToolName.SEARCH_DATABASES and result.success:
                 self._store_search_results(result)
+            
+            # Store job context for "get logs" / "cancel job" without explicit ID
+            if tool_name in (ToolName.SUBMIT_JOB, ToolName.GET_JOB_STATUS, ToolName.WATCH_JOB, 
+                           ToolName.CANCEL_JOB, ToolName.RESUBMIT_JOB) and result.success:
+                self._store_job_context(tool_name, kwargs, result)
             
             # Record successful execution in RAG system for learning
             if result.success and self.rag:
@@ -1243,6 +1265,50 @@ class UnifiedAgent:
                 executions=[execution],
                 query=query,
             )
+            
+            # ================================================================
+            # RESPONSE VALIDATION: Check if response actually answers query
+            # This catches cases where:
+            # - Wrong tool was called
+            # - Response asks for info already provided
+            # - Response is irrelevant to user's question
+            # ================================================================
+            try:
+                validation = self.response_validator.validate_response(
+                    query=query,
+                    response=response.message,
+                    tool_used=_get_tool_name(detected_tool) if detected_tool else None,
+                    tool_result=execution.result.data if execution.result else None,
+                    history=self.context.turns[-10:] if self.context else None,
+                )
+                
+                if not validation.is_valid or not validation.is_relevant:
+                    logger.warning(f"Response validation failed: {validation.issues}")
+                    
+                    # Use refined response if available
+                    if validation.refined_response:
+                        response = AgentResponse(
+                            success=response.success,
+                            message=validation.refined_response,
+                            response_type=response.response_type,
+                            task_type=task_type,
+                            tool_executions=response.tool_executions,
+                            suggestions=validation.suggestions or response.suggestions,
+                        )
+                    elif validation.issues:
+                        # Log issue but still return original response with suggestions
+                        if validation.suggestions:
+                            response = AgentResponse(
+                                success=response.success,
+                                message=response.message,
+                                response_type=response.response_type,
+                                task_type=task_type,
+                                tool_executions=response.tool_executions,
+                                suggestions=validation.suggestions,
+                            )
+            except Exception as val_err:
+                logger.debug(f"Response validation failed (continuing): {val_err}")
+            
             span.add_tag("response_success", response.success)
             
             # Active learning: Record successful query-intent-slots mapping for potential retraining
@@ -1448,9 +1514,45 @@ class UnifiedAgent:
                     if entity.entity_type == "DATASET_ID":
                         params["dataset_id"] = entity.text
                         break
+            
+            # Fallback: extract dataset ID directly from query using regex
+            if not params.get("dataset_id"):
+                import re
+                dataset_patterns = [
+                    r'\b(GSE\d+)\b',           # GEO
+                    r'\b(ENCSR[A-Z0-9]+)\b',   # ENCODE
+                    r'\b(TCGA-[A-Z]+)\b',      # TCGA
+                    r'\b(SRR\d+)\b',           # SRA
+                    r'\b(SRP\d+)\b',           # SRA project
+                    r'\b(PRJNA\d+)\b',         # BioProject
+                ]
+                
+                # First, check for multiple IDs (from "download datasets: ID1, ID2, ID3")
+                # Pattern: "download datasets: ID1, ID2, ID3..."
+                multi_id_match = re.search(r'download datasets?:\s*(.+)', original_query, re.IGNORECASE)
+                if multi_id_match:
+                    id_string = multi_id_match.group(1)
+                    # Extract all dataset IDs from the comma-separated list
+                    extracted_ids = []
+                    for pattern in dataset_patterns:
+                        for match in re.finditer(pattern, id_string, re.IGNORECASE):
+                            extracted_ids.append(match.group(1).upper())
+                    if extracted_ids:
+                        params["dataset_ids"] = extracted_ids
+                        params["download_all"] = True
+                        logger.info(f"Extracted {len(extracted_ids)} dataset IDs from augmented query")
+                
+                # If no multi-ID match, try single ID extraction
+                if not params.get("dataset_ids"):
+                    for pattern in dataset_patterns:
+                        match = re.search(pattern, original_query, re.IGNORECASE)
+                        if match:
+                            params["dataset_id"] = match.group(1).upper()
+                            logger.info(f"Extracted dataset_id from query: {params['dataset_id']}")
+                            break
                         
             # Check for "download all" / "execute commands" / "run downloads"
-            if not params.get("dataset_id"):
+            if not params.get("dataset_id") and not params.get("dataset_ids"):
                 query_lower = original_query.lower()
                 # Extended patterns for "download all" and "execute commands"
                 download_all_patterns = [
@@ -1513,6 +1615,49 @@ class UnifiedAgent:
             self.context.update_state("last_search_query", result.data.get("query", ""))
             
             logger.info(f"Stored {len(dataset_ids)} dataset IDs in conversation context")
+    
+    def _store_job_context(self, tool_name: ToolName, params: Dict[str, Any], result: ToolResult) -> None:
+        """Store job context for follow-up queries like 'get logs' or 'cancel job'."""
+        job_id = None
+        job_name = None
+        
+        # Extract job_id from params or result
+        if "job_id" in params:
+            job_id = str(params["job_id"])
+        
+        # Try to get from result data
+        if result.data:
+            # Submit job returns job_id in result
+            if "job_id" in result.data:
+                job_id = str(result.data["job_id"])
+            elif "jobs" in result.data and result.data["jobs"]:
+                # Job status returns list of jobs
+                first_job = result.data["jobs"][0] if isinstance(result.data["jobs"], list) else None
+                if first_job:
+                    job_id = str(first_job.get("job_id", first_job.get("id", "")))
+                    job_name = first_job.get("name", first_job.get("job_name", ""))
+            elif "job_info" in result.data:
+                # Watch job returns job_info
+                job_info = result.data["job_info"]
+                job_id = str(job_info.get("job_id", job_info.get("id", "")))
+                job_name = job_info.get("name", job_info.get("job_name", ""))
+        
+        if job_id:
+            # Store in conversation context
+            self.context.update_state("last_job_id", job_id)
+            if job_name:
+                self.context.update_state("last_job_name", job_name)
+            
+            # Also track in jobs dict
+            jobs = self.context.get_state("jobs") or {}
+            jobs[job_id] = {
+                "id": job_id,
+                "name": job_name,
+                "last_operation": tool_name.value,
+            }
+            self.context.update_state("jobs", jobs)
+            
+            logger.info(f"Stored job context: job_id={job_id}, name={job_name}")
     
     def _build_params_from_args(self, tool: ToolName, args: List[str]) -> Dict[str, Any]:
         """
@@ -1591,8 +1736,17 @@ class UnifiedAgent:
         # Extract job IDs
         job_match = re.search(r'\b(\d{6,})\b', query)
         if job_match and tool in [ToolName.GET_JOB_STATUS, ToolName.CANCEL_JOB, 
-                                   ToolName.WATCH_JOB, ToolName.RESUBMIT_JOB]:
+                                   ToolName.WATCH_JOB, ToolName.RESUBMIT_JOB, ToolName.GET_LOGS]:
             params["job_id"] = job_match.group(1)
+        
+        # Fallback: If no job_id extracted but tool needs one, use last_job_id from context
+        if "job_id" not in params and tool in [ToolName.GET_JOB_STATUS, ToolName.CANCEL_JOB,
+                                                 ToolName.WATCH_JOB, ToolName.RESUBMIT_JOB, 
+                                                 ToolName.GET_LOGS, ToolName.DIAGNOSE_ERROR]:
+            last_job_id = self.context.get_state("last_job_id")
+            if last_job_id:
+                params["job_id"] = last_job_id
+                logger.debug(f"Using last_job_id from context: {last_job_id}")
             
         # Extract analysis types - only for workflow tools
         if tool in [ToolName.GENERATE_WORKFLOW]:

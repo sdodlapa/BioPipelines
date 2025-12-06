@@ -651,6 +651,124 @@ class ChatAgent:
             logger.error(f"Sync UnifiedAgent execution error: {e}")
             return None
     
+    def _store_result_context(
+        self, 
+        session: Session, 
+        unified_result: Dict[str, Any],
+        query: str
+    ) -> None:
+        """
+        Store search/scan results in session context for future reference.
+        
+        This enables conversational context like:
+        - "download all 10 datasets" after a search
+        - "show details for ENCSR407TGO" referencing previous results
+        - "run analysis on those samples" after a scan
+        
+        Args:
+            session: Current chat session
+            unified_result: Result from UnifiedAgent execution
+            query: Original query for context
+        """
+        try:
+            result_data = unified_result.get("data", {})
+            tools_executed = unified_result.get("tools_executed", [])
+            
+            # Detect what type of result this is
+            is_search = any(t in tools_executed for t in ["search_databases", "search_encode", "search_geo"])
+            is_scan = any(t in tools_executed for t in ["scan_data", "describe_files"])
+            is_download = any(t in tools_executed for t in ["download_dataset", "download_data"])
+            
+            if is_search and result_data:
+                # Store search results for "download all" or "show details"
+                results = result_data.get("results", [])
+                if results:
+                    session.context["last_search_results"] = results
+                    session.context["last_search_query"] = query
+                    session.context["last_search_ids"] = [
+                        r.get("id") or r.get("accession") 
+                        for r in results if r.get("id") or r.get("accession")
+                    ]
+                    session.context["last_search_count"] = len(results)
+                    logger.info(f"Stored {len(results)} search results in session context")
+            
+            elif is_scan and result_data:
+                # Store scan results for "run analysis on this data"
+                samples = result_data.get("samples", [])
+                data_path = result_data.get("path") or result_data.get("data_path")
+                if samples or data_path:
+                    session.context["last_scan_results"] = samples
+                    session.context["last_scan_path"] = data_path
+                    session.context["last_scan_count"] = len(samples) if samples else 0
+                    logger.info(f"Stored scan results in session context (path: {data_path})")
+            
+            elif is_download and result_data:
+                # Store download info for follow-up queries
+                dataset_id = result_data.get("dataset_id") or result_data.get("accession")
+                output_path = result_data.get("output_path") or result_data.get("path")
+                if dataset_id:
+                    session.context["last_download_id"] = dataset_id
+                    session.context["last_download_path"] = output_path
+                    logger.info(f"Stored download context: {dataset_id}")
+            
+            # Always store the last successful result for general reference
+            session.context["last_result"] = {
+                "query": query,
+                "tools": tools_executed,
+                "data": result_data,
+                "timestamp": datetime.now().isoformat()
+            }
+            
+        except Exception as e:
+            logger.debug(f"Failed to store result context: {e}")
+    
+    def _get_context_for_query(self, session: Session, query: str) -> Dict[str, Any]:
+        """
+        Get relevant context for a query based on session history.
+        
+        Enables queries like:
+        - "download all" → returns last_search_results
+        - "run analysis" → returns last_scan_path
+        - "show details for ENCSR..." → looks up in last_search_results
+        
+        Args:
+            session: Current chat session
+            query: User's query
+            
+        Returns:
+            Dict with relevant context for the query
+        """
+        context = {}
+        query_lower = query.lower()
+        
+        # Check for "download all" pattern
+        if any(phrase in query_lower for phrase in ["download all", "download them", "get all", "fetch all"]):
+            if session.context.get("last_search_results"):
+                context["datasets_to_download"] = session.context["last_search_ids"]
+                context["search_results"] = session.context["last_search_results"]
+                context["original_query"] = session.context.get("last_search_query", "")
+                logger.info(f"Resolved 'download all' to {len(context['datasets_to_download'])} datasets")
+        
+        # Check for references to specific IDs from previous search
+        if session.context.get("last_search_ids"):
+            for dataset_id in session.context["last_search_ids"]:
+                if dataset_id.lower() in query_lower:
+                    # User is referencing a specific dataset from previous search
+                    context["referenced_dataset"] = dataset_id
+                    # Find full result
+                    for result in session.context.get("last_search_results", []):
+                        if (result.get("id") or result.get("accession", "")).lower() == dataset_id.lower():
+                            context["referenced_result"] = result
+                            break
+        
+        # Check for "that data" / "the samples" references
+        if any(phrase in query_lower for phrase in ["that data", "the data", "those samples", "the samples", "this data"]):
+            if session.context.get("last_scan_path"):
+                context["data_path"] = session.context["last_scan_path"]
+                context["samples"] = session.context.get("last_scan_results", [])
+        
+        return context
+    
     # =========================================================================
     # Skill-Based Tool Suggestions (Claude Scientific Skills Integration)
     # =========================================================================
@@ -1019,11 +1137,35 @@ class ChatAgent:
         # This delegates actual tool execution (workflow gen, data scan, etc.)
         unified_result = None
         if self._is_tool_query(message.content, intent_detected):
-            unified_result = self._execute_via_unified_agent_sync(message.content)
+            # ================================================================
+            # CONTEXT RESOLUTION: Resolve references from previous turns
+            # Handles: "download all", "those datasets", "that data"
+            # ================================================================
+            query_context = self._get_context_for_query(session, message.content)
+            
+            # Build augmented query if context references are found
+            augmented_query = message.content
+            if query_context.get("datasets_to_download"):
+                # User said "download all" - inject the dataset IDs
+                dataset_ids = query_context["datasets_to_download"]
+                augmented_query = f"download datasets: {', '.join(dataset_ids[:10])}"
+                logger.info(f"Augmented query with {len(dataset_ids)} dataset IDs from context")
+            elif query_context.get("data_path"):
+                # User said "that data" - inject the path
+                data_path = query_context["data_path"]
+                augmented_query = f"{message.content} (path: {data_path})"
+            
+            unified_result = self._execute_via_unified_agent_sync(augmented_query)
             if unified_result and unified_result.get("success"):
                 response_content = unified_result.get("message", "")
                 suggestions = unified_result.get("suggestions", [])
                 context["unified_result"] = unified_result
+                
+                # ============================================================
+                # CONTEXT PERSISTENCE: Store search results for future queries
+                # This enables "download all 10" or "show details for ENCSR..."
+                # ============================================================
+                self._store_result_context(session, unified_result, message.content)
         
         # Step 8: Default response generation (if no tool result)
         if not response_content:

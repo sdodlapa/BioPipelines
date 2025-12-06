@@ -815,7 +815,12 @@ class AgentTools:
         
         try:
             tool_func = self._tool_dispatch[tool_name]
-            result = tool_func(**kwargs)
+            
+            # Filter out invalid parameters that the tool doesn't accept
+            # This prevents errors like "got an unexpected keyword argument 'query'"
+            filtered_kwargs = self._filter_valid_params(tool_name, kwargs)
+            
+            result = tool_func(**filtered_kwargs)
             return result
         except Exception as e:
             logger.error(f"Tool {tool_name} failed: {e}", exc_info=True)
@@ -825,6 +830,62 @@ class AgentTools:
                 error=str(e),
                 message=f"❌ Error executing {tool_name}: {e}"
             )
+    
+    # Complete mapping of tool names to ALL valid argument names
+    _TOOL_VALID_PARAMS = {
+        "scan_data": {"path", "data_type", "scanner", "manifest"},
+        "search_databases": {"query", "source", "limit", "filters", "organism"},
+        "search_tcga": {"query", "cancer_type", "data_type"},
+        "get_dataset_details": {"dataset_id", "source"},
+        "describe_files": {"path", "samples", "manifest"},
+        "validate_dataset": {"path", "dataset_type"},
+        "download_dataset": {"dataset_id", "destination", "source", "dataset_ids", "download_all"},
+        "download_reference": {"genome", "output_dir", "annotation"},
+        "build_index": {"reference", "tool", "threads"},
+        "generate_workflow": {"pipeline_type", "input_dir", "output_dir", "params", "samples"},
+        "check_references": {"genome", "annotation"},
+        "submit_job": {"workflow_dir", "profile", "params"},
+        "get_job_status": {"job_id"},
+        "get_logs": {"job_id", "lines", "log_type", "tail_lines"},
+        "cancel_job": {"job_id"},
+        "diagnose_error": {"job_id", "log_content", "error_type"},
+        "explain_concept": {"concept", "topic", "question"},
+        "analyze_results": {"path", "results_dir"},
+        "compare_samples": {"samples", "sample_list"},
+        "watch_job": {"job_id", "interval"},
+        "resubmit_job": {"job_id", "params"},
+        "list_jobs": {"state", "user"},
+        # Database clients
+        "search_uniprot": {"query", "organism", "limit"},
+        "get_protein": {"accession"},
+        "search_string": {"query", "organism", "limit"},
+        "get_interactions": {"proteins", "organism", "score"},
+        "get_enrichment": {"genes", "organism"},
+        "search_kegg": {"query", "database"},
+        "get_pathway": {"pathway_id"},
+        "search_reactome": {"query", "species"},
+        "analyze_genes": {"genes", "species"},
+        "search_pubmed": {"query", "limit"},
+        "get_article": {"pmid"},
+        "search_clinvar": {"query", "limit"},
+        "get_variants": {"gene", "significance", "limit"},
+    }
+    
+    def _filter_valid_params(self, tool_name: str, kwargs: dict) -> dict:
+        """Filter kwargs to only include parameters that the tool accepts."""
+        valid_params = self._TOOL_VALID_PARAMS.get(tool_name)
+        if valid_params is None:
+            # Unknown tool - pass all params and let it fail naturally
+            return kwargs
+        
+        filtered = {k: v for k, v in kwargs.items() if k in valid_params}
+        
+        # Log if we filtered anything
+        removed = set(kwargs.keys()) - set(filtered.keys())
+        if removed:
+            logger.debug(f"Filtered invalid params for {tool_name}: {removed}")
+        
+        return filtered
     
     # Mapping of tool names to their primary argument names
     _TOOL_ARG_MAPPING = {

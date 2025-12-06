@@ -95,15 +95,15 @@ while [[ $# -gt 0 ]]; do
             echo "  (default)      Auto: use existing vLLM or cloud fallback"
             echo "  --gpu, -g      Start local vLLM with 4x H100 (MiniMax-M2, 15-25 min)"
             echo "  --small, -s    Start local vLLM with 2x H100 (Qwen3-Coder-30B, 2-4 min)"
-            echo "  --single, -1   Start local vLLM with 1x H100 (DeepSeek-Coder-V2-Lite, 1-2 min)"
+            echo "  --single, -1   Start local vLLM with 1x H100 (Qwen2.5-72B, 3-5 min) ⭐RECOMMENDED"
             echo "  --cloud, -c    Use cloud LLM only (no GPU)"
             echo "  --status       Check if vLLM is running"
             echo "  --stop         Stop vLLM server"
             echo ""
             echo "Model comparison:"
-            echo "  MiniMax-M2 (4 GPU)        - Best reasoning, tool-use, 456B MoE"
+            echo "  Qwen2.5-72B (1 GPU)       - Best quality/speed, 72B AWQ ⭐RECOMMENDED"
             echo "  Qwen3-Coder-30B (2 GPU)   - Best for coding/agentic tasks, 30B MoE"
-            echo "  DeepSeek-Coder-V2 (1 GPU) - Fast coding, 16B MoE"
+            echo "  MiniMax-M2 (4 GPU)        - Best reasoning, tool-use, 456B MoE"
             echo ""
             exit 0 ;;
         *) shift ;;
@@ -266,14 +266,15 @@ if [ "$MODE" = "gpu" ]; then
         USE_CONTAINER=false
         
         if [ "$MODEL_SIZE" = "single" ]; then
-            # DeepSeek-Coder-V2-Lite: Fast coding model for 1x H100
-            # 16B MoE, fits in single 80GB GPU
+            # Qwen2.5-72B-Instruct: Best quality model for 1x H100
+            # 72B dense model fits in 80GB with AWQ quantization
+            # Excellent reasoning, coding, and tool-use capabilities
             PARTITION="h100flex"
             NUM_GPUS=1
-            MODEL="deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct"
-            MEM="100G"
-            CPUS=16
-            LOAD_TIME="1-2 minutes"
+            MODEL="Qwen/Qwen2.5-72B-Instruct-AWQ"
+            MEM="200G"
+            CPUS=12
+            LOAD_TIME="3-5 minutes"
         elif [ "$MODEL_SIZE" = "small" ]; then
             # Qwen3-Coder-30B-A3B: Best coding model for 2x H100
             # MoE with only 3B active params = fast inference

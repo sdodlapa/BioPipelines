@@ -608,15 +608,62 @@ class SessionMemory:
 
 
 # =============================================================================
-# SINGLETON
+# SINGLETON - Session-aware memory management
 # =============================================================================
 
-_session_memory: Optional[SessionMemory] = None
+# Cache of SessionMemory instances by session_id
+_session_memories: Dict[str, SessionMemory] = {}
+# Default session memory for backward compatibility
+_default_session_memory: Optional[SessionMemory] = None
 
 
 def get_session_memory(session_id: str = "default") -> SessionMemory:
-    """Get the singleton session memory instance."""
-    global _session_memory
-    if _session_memory is None or _session_memory.session_id != session_id:
-        _session_memory = SessionMemory(session_id=session_id)
-    return _session_memory
+    """
+    Get or create a SessionMemory for the given session_id.
+    
+    Uses a cache to preserve memory across calls within the same session.
+    This fixes the context loss issue where search results were forgotten.
+    
+    Args:
+        session_id: Session identifier (from web session, API call, etc.)
+        
+    Returns:
+        SessionMemory instance for this session
+    """
+    global _session_memories, _default_session_memory
+    
+    # Handle default session specially for backward compatibility
+    if session_id == "default":
+        if _default_session_memory is None:
+            _default_session_memory = SessionMemory(session_id="default")
+        return _default_session_memory
+    
+    # Look up or create session-specific memory
+    if session_id not in _session_memories:
+        _session_memories[session_id] = SessionMemory(session_id=session_id)
+        logger.debug(f"Created new SessionMemory for session: {session_id}")
+    
+    return _session_memories[session_id]
+
+
+def clear_session_memory(session_id: str = None):
+    """
+    Clear session memory for a specific session or all sessions.
+    
+    Args:
+        session_id: Session to clear, or None to clear all
+    """
+    global _session_memories, _default_session_memory
+    
+    if session_id is None:
+        # Clear all
+        _session_memories.clear()
+        _default_session_memory = None
+        logger.info("Cleared all session memories")
+    elif session_id == "default":
+        _default_session_memory = None
+        logger.info("Cleared default session memory")
+    elif session_id in _session_memories:
+        del _session_memories[session_id]
+        logger.info(f"Cleared session memory for: {session_id}")
+

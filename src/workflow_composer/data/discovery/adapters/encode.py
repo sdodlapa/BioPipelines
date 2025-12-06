@@ -35,6 +35,112 @@ from workflow_composer.infrastructure.resilience import (
 logger = logging.getLogger(__name__)
 
 
+# Words to filter out from search queries (non-biological/conversational)
+ENCODE_STOP_WORDS = {
+    # Conversational/action words
+    "search", "find", "get", "download", "fetch", "want", "need", "looking",
+    "where", "what", "how", "can", "please", "help", "data", "dataset", "datasets",
+    "sample", "samples", "file", "files", "source", "sources", "online", "available",
+    "from", "for", "with", "about", "using", "give", "show", "list",
+    # Common adjectives
+    "good", "best", "latest", "recent", "new", "old", "all", "any", "some",
+    "pair", "paired", "single", "ended", "end", "raw", "processed", "aligned",
+    # Database names (handled separately)
+    "encode", "geo", "sra", "ncbi", "ensembl", "tcga", "gdc", "database",
+    # Articles and prepositions
+    "the", "a", "an", "of", "in", "on", "to", "and", "or", "is", "are",
+    # File-related
+    "fastq", "bam", "bed", "bigwig", "vcf", "fasta",
+    # Common phrases
+    "public", "open", "access", "free", "type", "kind", "category",
+}
+
+# Valid biological terms to keep
+ENCODE_BIOLOGICAL_TERMS = {
+    # Organisms
+    "human", "mouse", "rat", "fly", "worm", "yeast", "zebrafish", "drosophila",
+    "homo", "sapiens", "mus", "musculus",
+    # Assay types
+    "chip-seq", "chipseq", "rna-seq", "rnaseq", "atac-seq", "atacseq",
+    "dnase-seq", "hi-c", "hic", "wgbs", "wgs", "wes", "cut&run", "cut&tag",
+    "scrna-seq", "scrnaseq", "single-cell", "bulk", "methylation", "bisulfite",
+    # Tissues/organs
+    "liver", "brain", "heart", "kidney", "lung", "muscle", "blood", "skin",
+    "spleen", "intestine", "colon", "stomach", "pancreas", "thymus", "bone",
+    "marrow", "lymph", "placenta", "embryo", "fetal", "adult",
+    # Cell types
+    "neuron", "hepatocyte", "fibroblast", "epithelial", "endothelial",
+    "macrophage", "monocyte", "lymphocyte", "stem", "progenitor",
+    # Cell lines
+    "k562", "hela", "hepg2", "gm12878", "a549", "mcf7", "imr90", "h1",
+    # Histone modifications
+    "h3k27ac", "h3k4me3", "h3k4me1", "h3k27me3", "h3k36me3", "h3k9me3",
+    "h3k9ac", "h3k79me2", "h4k20me1", "histone",
+    # TFs and targets  
+    "ctcf", "p300", "pol2", "rnapii", "polymerase", "transcription", "factor",
+    # Cancer-related
+    "cancer", "tumor", "carcinoma", "adenocarcinoma", "melanoma", "leukemia",
+}
+
+
+def sanitize_encode_query(query: str) -> str:
+    """
+    Sanitize a search query by removing non-biological/conversational terms.
+    
+    Args:
+        query: Raw query string (e.g., "Hi-C online sources pair ended")
+        
+    Returns:
+        Sanitized query with only biological terms (e.g., "Hi-C")
+    """
+    if not query:
+        return ""
+    
+    query_lower = query.lower()
+    terms = query.split()
+    
+    # Keep terms that are:
+    # 1. Known biological terms, OR
+    # 2. Not in stop words list and appear biological (contains hyphens, numbers, caps)
+    sanitized = []
+    for term in terms:
+        term_lower = term.lower().strip(".,;:!?\"'()")
+        
+        # Skip if empty or too short
+        if len(term_lower) < 2:
+            continue
+        
+        # Keep if it's a known biological term
+        if term_lower in ENCODE_BIOLOGICAL_TERMS:
+            sanitized.append(term)
+            continue
+        
+        # Skip if it's a stop word
+        if term_lower in ENCODE_STOP_WORDS:
+            continue
+        
+        # Keep if it looks like a biological term (contains hyphen like "Hi-C", "RNA-seq")
+        if "-" in term and any(c.isupper() for c in term):
+            sanitized.append(term)
+            continue
+        
+        # Keep if it's a likely scientific term (mixed case, has digits, short acronym)
+        if len(term) <= 8 and any(c.isupper() for c in term):
+            sanitized.append(term)
+            continue
+        
+        # Keep if term is title-cased and not a stop word (likely proper noun like cell line)
+        if term[0].isupper() and term_lower not in ENCODE_STOP_WORDS:
+            sanitized.append(term)
+    
+    result = " ".join(sanitized)
+    
+    if result != query:
+        logger.debug(f"Sanitized ENCODE query: '{query}' -> '{result}'")
+    
+    return result
+
+
 # Map ENCODE file types to our FileType enum
 ENCODE_FILE_TYPE_MAP = {
     "fastq": FileType.FASTQ_GZ,
@@ -208,15 +314,26 @@ class ENCODEAdapter(BaseAdapter):
             if query.organism:
                 search_terms.append(query.organism)
             
-            # Also add keywords
+            # Also add keywords, but sanitize them first to remove conversational terms
             if query.keywords:
-                search_terms.extend(query.keywords)
+                # Sanitize each keyword individually
+                for kw in query.keywords:
+                    sanitized = sanitize_encode_query(kw)
+                    if sanitized:
+                        search_terms.append(sanitized)
             
             if not search_terms:
                 return []
             
             # Simple search URL - combine terms with + for AND search
             search_term = " ".join(search_terms)
+            
+            # Final sanitization pass on combined terms
+            search_term = sanitize_encode_query(search_term)
+            if not search_term:
+                logger.warning("No valid search terms after sanitization")
+                return []
+            
             # Limit to 25 results max for reliability
             max_results = min(query.max_results, 25)
             url = f"{self.BASE_URL}/search/?type=Experiment&format=json&limit={max_results}&status=released&searchTerm={requests.utils.quote(search_term)}"
@@ -370,16 +487,26 @@ class ENCODEAdapter(BaseAdapter):
         if query.organism:
             search_parts.append(query.organism)
         
-        # Keywords
+        # Keywords - sanitize to remove conversational terms
         if query.keywords:
-            # Only use first 3 keywords to avoid overly long URLs
-            search_parts.extend(query.keywords[:3])
+            # Sanitize each keyword and filter out empties
+            sanitized_keywords = []
+            for kw in query.keywords[:5]:  # Process more, filter later
+                sanitized = sanitize_encode_query(kw)
+                if sanitized:
+                    sanitized_keywords.append(sanitized)
+            # Only use first 3 sanitized keywords
+            search_parts.extend(sanitized_keywords[:3])
         
         # Combine into single searchTerm
         if search_parts:
             # Use only unique terms
             unique_terms = list(dict.fromkeys(search_parts))  # Preserves order, removes dupes
-            params.append(("searchTerm", " ".join(unique_terms)))
+            # Final sanitization pass
+            combined = " ".join(unique_terms)
+            sanitized_combined = sanitize_encode_query(combined)
+            if sanitized_combined:
+                params.append(("searchTerm", sanitized_combined))
         
         return params
     

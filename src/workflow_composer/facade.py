@@ -395,6 +395,36 @@ class BioPipelines:
         """
         return self.supervisor.execute_sync(description, output_dir)
     
+    async def generate_with_agents_streaming(
+        self,
+        description: str,
+        output_dir: Optional[str] = None,
+    ) -> AsyncIterator[Dict[str, Any]]:
+        """
+        Generate a workflow with streaming progress updates.
+        
+        Yields progress updates as the multi-agent system works:
+        - Planning phase
+        - Code generation phase
+        - Validation phase (with fix attempts)
+        - Documentation phase
+        
+        Args:
+            description: Natural language description
+            output_dir: Directory to save generated files
+            
+        Yields:
+            Dict with phase, status, and progress info
+            
+        Example:
+            async for update in bp.generate_with_agents_streaming("RNA-seq"):
+                print(f"{update['phase']}: {update['status']}")
+                if update['phase'] == 'complete':
+                    result = update['result']
+        """
+        async for update in self.supervisor.execute_streaming(description, output_dir):
+            yield update
+    
     def health_check(self) -> Dict[str, Any]:
         """
         Check system health and component availability.

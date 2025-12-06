@@ -193,6 +193,18 @@ COMMON_SLOTS: Dict[str, SlotDefinition] = {
         }
     ),
     
+    "dataset_id": SlotDefinition(
+        name="dataset_id",
+        description="dataset accession ID",
+        priority=SlotPriority.REQUIRED,
+        entity_type="DATASET_ID",
+        examples=["GSE12345", "ENCSR000ABC", "TCGA-BRCA", "SRR1234567"],
+        prompt_templates={
+            PromptStyle.QUESTION: "Which dataset would you like to download? (e.g., GSE12345, ENCSR000ABC)",
+            PromptStyle.EXAMPLE: "Provide a dataset ID like: GSE12345 (GEO), ENCSR000ABC (ENCODE), or TCGA-BRCA (GDC)",
+        }
+    ),
+    
     "workflow_type": SlotDefinition(
         name="workflow_type",
         description="workflow type",
@@ -257,9 +269,9 @@ INTENT_SLOT_SCHEMAS: Dict[str, IntentSlotSchema] = {
     
     "DATA_DOWNLOAD": IntentSlotSchema(
         intent="DATA_DOWNLOAD",
-        required_slots=["input_data"],  # Must know what to download
-        recommended_slots=["organism", "data_type"],
-        optional_slots=[],
+        required_slots=[],  # dataset_id is optional - can use context from previous search
+        recommended_slots=["dataset_id"],
+        optional_slots=["organism", "data_type"],
     ),
     
     "WORKFLOW_CREATE": IntentSlotSchema(

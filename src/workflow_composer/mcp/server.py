@@ -1508,30 +1508,68 @@ class BioPipelinesMCPServer:
             logs = {}
             content_parts = []
             
-            # Try to find SLURM output files
+            # Expanded log file patterns - include download jobs, workflow jobs, etc.
             log_patterns = [
+                # Standard SLURM patterns
                 (f"slurm-{job_id}.out", "stdout"),
                 (f"slurm-{job_id}.err", "stderr"),
-                (".nextflow.log", "nextflow")
+                # Download job patterns (dl_XXXXX jobs write to logs/)
+                (f"download_{job_id}.log", "download"),
+                (f"dl_*_{job_id}.log", "download"),  # glob pattern
+                # Workflow/Nextflow patterns
+                (".nextflow.log", "nextflow"),
+                (f"nextflow_{job_id}.log", "nextflow"),
+                # vLLM and service logs
+                (f"vllm_*_{job_id}.log", "vllm"),  # glob pattern
+            ]
+            
+            # Expanded search directories
+            search_dirs = [
+                Path.cwd(),
+                Path.cwd() / "logs",
+                Path.home(),
+                Path.home() / "logs",
+                Path("/scratch") / os.environ.get("USER", ""),
+                Path("/scratch") / os.environ.get("USER", "") / "logs",
             ]
             
             for pattern, log_name in log_patterns:
                 if log_type != "all" and log_type != log_name:
                     continue
                     
-                # Search in common locations
-                for search_dir in [Path.cwd(), Path.home(), Path("/scratch") / os.environ.get("USER", "")]:
-                    log_file = search_dir / pattern
-                    if log_file.exists():
-                        try:
-                            with open(log_file, "r") as f:
-                                lines = f.readlines()
-                                tail = lines[-tail_lines:] if len(lines) > tail_lines else lines
-                                log_content = "".join(tail)
-                                logs[log_name] = log_content
-                                content_parts.append(f"## {log_name.upper()}\n\n```\n{log_content}\n```")
-                        except Exception as e:
-                            logs[log_name] = f"Error reading: {e}"
+                # Search in all locations
+                found = False
+                for search_dir in search_dirs:
+                    if not search_dir.exists():
+                        continue
+                        
+                    # Handle glob patterns (contain *)
+                    if "*" in pattern:
+                        import glob
+                        matches = list(search_dir.glob(pattern))
+                        if matches:
+                            # Use most recent file
+                            log_file = max(matches, key=lambda p: p.stat().st_mtime)
+                        else:
+                            continue
+                    else:
+                        log_file = search_dir / pattern
+                        if not log_file.exists():
+                            continue
+                    
+                    try:
+                        with open(log_file, "r") as f:
+                            lines = f.readlines()
+                            tail = lines[-tail_lines:] if len(lines) > tail_lines else lines
+                            log_content = "".join(tail)
+                            logs[log_name] = log_content
+                            content_parts.append(
+                                f"## {log_name.upper()} ({log_file.name})\n\n```\n{log_content}\n```"
+                            )
+                        found = True
+                        break
+                    except Exception as e:
+                        logs[log_name] = f"Error reading {log_file}: {e}"
                         break
             
             if logs:

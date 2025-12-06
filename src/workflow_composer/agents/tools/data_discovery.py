@@ -582,7 +582,7 @@ SEARCH_DATABASES_PATTERNS = [
 ]
 
 
-def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolResult:
+def search_databases_impl(query: str = None, include_tcga: bool = True, **kwargs) -> ToolResult:
     """
     Search ALL remote databases for datasets in parallel using DataDiscovery orchestrator.
     
@@ -596,10 +596,15 @@ def search_databases_impl(query: str = None, include_tcga: bool = True) -> ToolR
     Args:
         query: Search query (e.g., "human RNA-seq liver", "brain cancer methylation")
         include_tcga: Also search TCGA for cancer-related queries (default: True)
+        **kwargs: Additional parameters (ignored for compatibility)
         
     Returns:
         ToolResult with deduplicated search results from all databases
     """
+    # Log any unexpected parameters for debugging
+    if kwargs:
+        logger.debug(f"search_databases_impl received extra parameters: {list(kwargs.keys())}")
+    
     if not query:
         return ToolResult(
             success=False,
